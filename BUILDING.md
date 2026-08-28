@@ -1,13 +1,13 @@
 # Building JawryTracker
 
-Everything runs from this folder — the repo root, `APP/github/JawryTracker-dev`
-on the current dev box. Markdown rather than `.txt` so it renders on GitHub.
+Every command below runs from the repo root (the folder holding
+`package.json`). Markdown rather than `.txt` so it renders on GitHub.
 
 ---
 
 ## One-time setup
 
-Needed once per machine, already done on the current dev box:
+Needed once per machine:
 
 - **Node.js** (v20+) — `node --version`
 - **Rust toolchain** — `rustc --version`; install from <https://rustup.rs>
@@ -29,7 +29,7 @@ npm install
 |---|---|
 | `npm run tauri dev` | Runs the app with hot reload. Frontend is served from `localhost:1420`. |
 | `npm run check` | TypeScript + Svelte type check. Should report **0 errors**. |
-| `npm run build:app` | Full release build, then copies the artifacts into `APP/builds/`. |
+| `npm run build:app` | Full release build, then copies the artifacts into `builds/`. |
 | `npm run collect` | Re-copies artifacts from a build you already made. No compiling. |
 
 ### Notes on `tauri dev`
@@ -63,9 +63,16 @@ much faster.
 
 ### What comes out
 
-Artifacts are copied to `APP/builds/v<version>/`, where `<version>` comes from
+Artifacts are copied to `builds/v<version>/`, where `<version>` comes from
 `package.json`. Bumping the version starts a new folder rather than
 overwriting the last one.
+
+`builds/` is found by walking up from the repo root until a folder named
+`builds` turns up, so it can live beside the clone rather than inside it; if
+there isn't one, it's created next to the repo. Only bundles stamped with the
+version just built are copied — `target/release/bundle` keeps every installer
+you have ever produced, and without that filter old versions get swept into
+the new release folder.
 
 | File | What it is |
 |---|---|
@@ -74,7 +81,7 @@ overwriting the last one.
 | `JawryTracker_<version>_x64_en-US.msi` | MSI installer, for managed installs |
 | `build-info.json` | Version + timestamp, so an old folder is self-describing |
 
-`APP/builds/` sits deliberately *outside* the git repo, so compiled binaries
+`builds/` sits deliberately *outside* the git repo, so compiled binaries
 can never be accidentally committed.
 
 ### Why the standalone exe is the primary download
@@ -148,7 +155,7 @@ effect on the app.
 1. Bump `version` in `package.json` and run `npm run build:app`.
 2. Create a GitHub release at
    <https://github.com/McJawry/JawryTracker/releases> tagged `v<version>`.
-3. Upload the artifacts from `APP/builds/v<version>/`.
+3. Upload the artifacts from `builds/v<version>/`.
 
 Tag releases as `v<version>` matching `package.json` — that's what the
 in-app notice compares against.
@@ -184,7 +191,7 @@ Committed: `src/`, `src-tauri/` (minus `target/`), `static/`, and the config
 files. Ignored: `node_modules/`, `build/`, `.svelte-kit/`, and
 `src-tauri/target/` — that last one reaches several GB.
 
-`APP/builds/` is outside the repo root entirely, so release artifacts are
+`builds/` is outside the repo root entirely, so release artifacts are
 never committed. Distribute them through GitHub Releases.
 
 ---
