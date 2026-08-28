@@ -1,0 +1,269 @@
+// Ported from dev/app/app.js (getSphereInventoryItemKey, getDungeonSmallKeyName,
+// isOwnDungeonKeyForPath, getSphereReachableLocationSet,
+// getMaximalSphereLogicInventory, getOwnDungeonKeyPotentialPools,
+// getSphereReachabilityWithOwnDungeonKeys, isLogicRequiredItemForLocation,
+// getSphereCalculationInput, getSphereLogicStartingGear,
+// calculateSphereProgression, getSphereBlueChuJellyCount).
+import { WWRSphereEngine, type SphereCalculationInput, type SphereCalculationResult } from "$lib/logic";
+import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
+import { getAreaFromLocation } from "$lib/logic/data-loading";
+import { getAvailableLocations } from "$lib/logic/locations";
+import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+import { data } from "$lib/state/data.svelte";
+import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
+
+const normalize = WWRSphereEngine.normalize;
+const keyDungeonNames = DUNGEON_ENTRANCE_TRACKERS.map((dungeon) => dungeon.name).filter((name) => name !== "Forsaken Fortress");
+
+export function getDungeonSmallKeyName(item: string, location = ""): string {
+  const explicitDungeon = keyDungeonNames.find((name) => normalize(item) === normalize(`${name} Small Key`));
+  if (explicitDungeon) return `${explicitDungeon} Small Key`;
+  if (normalize(item) !== "small key" || !location) return "";
+  const locationArea = getAreaFromLocation(location);
+  const locationDungeon = keyDungeonNames.find((name) => normalize(name) === normalize(locationArea));
+  return locationDungeon ? `${locationDungeon} Small Key` : "";
+}
+
+const ITEM_KEY_ALIASES: Record<string, string> = {
+  bomb: "bombs",
+  sail: "progressive sail",
+  "bomb bag": "progressive bomb bag",
+  quiver: "progressive quiver",
+  "magic meter upgrade": "progressive magic meter"
+};
+
+export function getSphereInventoryItemKey(item: string, location = ""): string {
+  let itemName = String(item || "");
+  const locationArea = getAreaFromLocation(location);
+  const locationDungeon = keyDungeonNames.find((name) => normalize(name) === normalize(locationArea));
+  if (/^small key$/i.test(itemName) && locationDungeon) itemName = `${locationDungeon} Small Key`;
+  if (/^(?:boss|big) key$/i.test(itemName) && locationDungeon) itemName = `${locationDungeon} Big Key`;
+
+  const key = normalize(itemName);
+  return ITEM_KEY_ALIASES[key] || key;
+}
+
+export function isOwnDungeonKeyForPath(item: string): boolean {
+  const itemKey = normalize(item);
+  if (/small key$/.test(itemKey)) return normalize(String(data.sphereOptions.dungeon_small_keys || "")) === "own dungeon";
+  if (/(?:big|boss) key$/.test(itemKey)) return normalize(String(data.sphereOptions.dungeon_big_keys || "")) === "own dungeon";
+  return false;
+}
+
+export function getSphereBlueChuJellyCount(): number {
+  return 15;
+}
+
+/**
+ * Everything the player is known to hold that isn't tied to a location: the
+ * seed's starting gear, Blue Chu Jelly, and anything acquired on the Item
+ * Tracker that hasn't been assigned to a location yet.
+ *
+ * That last group matters: the Item Tracker is the source of truth for
+ * ownership, so without it the logic never learns you picked up a Hookshot
+ * unless you also told it *where* - and the map's accessible counts and
+ * sphere numbers would never move as you check items off.
+ */
+export function getSphereLogicStartingGear(): string[] {
+  return [
+    ...data.sphereStartingGear,
+    // logicItem where the rules name an item differently from the item pool
+    // ("<Dungeon> Big Key" vs the pool's "<Dungeon> Boss Key").
+    ...getUnplacedAcquiredItems().map((entry) => entry.logicItem ?? entry.item),
+    ...Array(getSphereBlueChuJellyCount()).fill("Blue Chu Jelly")
+  ];
+}
+
+export function getSphereCalculationInput(placements: SpherePlacement[], includeDependencies = true): SphereCalculationInput {
+  return {
+    locations: getAvailableLocations(),
+    rules: data.sphereRules,
+    macros: data.sphereMacros,
+    world: data.sphereWorld,
+    placements,
+    startingGear: getSphereLogicStartingGear(),
+    options: data.sphereOptions,
+    entranceMappings: Object.fromEntries(Object.entries(sphere.entranceMappings).map(([name, sector]) => [normalize(name), sector])),
+    entranceConnections: {},
+    chartMappings: {},
+    startingIsland: data.sphereStartingIsland,
+    includeDependencies
+  };
+}
+
+export function calculateSphereProgression(placements: SpherePlacement[]): SphereCalculationResult | null {
+  if (!data.sphereLogicLoaded) return null;
+  return WWRSphereEngine.calculate(getSphereCalculationInput(placements));
+}
+
+// Module-level, non-reactive cache (not UI state) - cleared by
+// invalidateSphereAnalysis() in sphere-worker-client.ts.
+export const sphereReachabilityCache = new Map<string, Set<string>>();
+
+const BOSS_LOCATIONS_FOR_REACHABILITY = [
+  "Dragon Roost Cavern - Gohma Heart Container",
+  "Forbidden Woods - Kalle Demos Heart Container",
+  "Tower of the Gods - Gohdan Heart Container",
+  "Forsaken Fortress - Helmaroc King Heart Container",
+  "Earth Temple - Jalhalla Heart Container",
+  "Wind Temple - Molgera Heart Container",
+  "Ganon's Tower - Defeat Ganondorf"
+];
+
+export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+  const additionalStartAreas = options.additionalStartAreas || [];
+  const cacheKey = JSON.stringify({
+    items: items.map(normalize).sort(),
+    additionalStartAreas: additionalStartAreas.map(normalize).sort(),
+    startingIsland: normalize(data.sphereStartingIsland)
+  });
+  const cached = sphereReachabilityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const availableLocations = getAvailableLocations();
+  const reachable = new Set(
+    WWRSphereEngine.getReachableLocations({
+      // Boss checks are logic probes as well as visible checks. Keep them in
+      // the reachability graph even when the synced location filters hide them.
+      locations: [...new Set([...availableLocations, ...BOSS_LOCATIONS_FOR_REACHABILITY])],
+      rules: data.sphereRules,
+      macros: data.sphereMacros,
+      world: data.sphereWorld,
+      placements: [],
+      items,
+      options: data.sphereOptions,
+      entranceMappings: Object.fromEntries(Object.entries(sphere.entranceMappings).map(([name, sector]) => [normalize(name), sector])),
+      entranceConnections: {},
+      chartMappings: {},
+      startingIsland: data.sphereStartingIsland,
+      additionalStartAreas
+    })
+  );
+  sphereReachabilityCache.set(cacheKey, reachable);
+  return reachable;
+}
+
+export function getMaximalSphereLogicInventory(): string[] {
+  const items: string[] = [];
+  data.items.forEach((item) => {
+    const copies = MAX_LOGIC_ITEM_COPIES[item] || 1;
+    for (let index = 0; index < copies; index += 1) items.push(item);
+  });
+  DUNGEON_KEY_LOGIC.forEach(({ dungeon, smallKeyCount }) => {
+    for (let index = 0; index < smallKeyCount; index += 1) items.push(`${dungeon} Small Key`);
+    items.push(`${dungeon} Big Key`);
+  });
+  return items;
+}
+
+interface OwnDungeonKeyPool {
+  item: string;
+  count: number;
+  itemPools: string[][];
+}
+
+let sphereOwnDungeonKeyPoolCache: { key: string; pools: Map<string, OwnDungeonKeyPool> } = { key: "", pools: new Map() };
+
+export function clearOwnDungeonKeyPoolCache(): void {
+  sphereOwnDungeonKeyPoolCache = { key: "", pools: new Map() };
+}
+
+export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool> {
+  const smallKeysOwnDungeon = normalize(String(data.sphereOptions.dungeon_small_keys || "")) === "own dungeon";
+  const bigKeysOwnDungeon = normalize(String(data.sphereOptions.dungeon_big_keys || "")) === "own dungeon";
+  if (!smallKeysOwnDungeon && !bigKeysOwnDungeon) return new Map();
+
+  const cacheKey = JSON.stringify({
+    locations: getAvailableLocations(),
+    manualEntrances: sphere.entranceMappings,
+    smallKeysOwnDungeon,
+    bigKeysOwnDungeon
+  });
+  if (sphereOwnDungeonKeyPoolCache.key === cacheKey) return sphereOwnDungeonKeyPoolCache.pools;
+
+  const maximalInventory = getMaximalSphereLogicInventory();
+  const pools = new Map<string, OwnDungeonKeyPool>();
+  DUNGEON_KEY_LOGIC.forEach(({ dungeon, smallKeyCount }) => {
+    const dungeonLocations = getAvailableLocations().filter((location) => normalize(getAreaFromLocation(location)) === normalize(dungeon));
+    const keyTypes: Array<{ item: string; count: number }> = [];
+    if (smallKeysOwnDungeon) keyTypes.push({ item: `${dungeon} Small Key`, count: smallKeyCount });
+    if (bigKeysOwnDungeon) keyTypes.push({ item: `${dungeon} Big Key`, count: 1 });
+
+    keyTypes.forEach(({ item, count }) => {
+      const itemKey = getSphereInventoryItemKey(item);
+      const inventoryWithoutKey = maximalInventory.filter((candidate) => getSphereInventoryItemKey(candidate) !== itemKey);
+      const itemPools: string[][] = [];
+      for (let itemCount = 0; itemCount < count; itemCount += 1) {
+        const reachable = getSphereReachableLocationSet([...inventoryWithoutKey, ...Array(itemCount).fill(item)]);
+        itemPools.push(dungeonLocations.filter((location) => reachable.has(normalize(location))));
+      }
+      pools.set(itemKey, { item, count, itemPools });
+    });
+  });
+
+  sphereOwnDungeonKeyPoolCache = { key: cacheKey, pools };
+  return pools;
+}
+
+export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+  const effectiveItems = [...items];
+  let reachable = getSphereReachableLocationSet(effectiveItems, options);
+  const keyPools = getOwnDungeonKeyPotentialPools();
+  if (!keyPools.size) return reachable;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    keyPools.forEach(({ item, count, itemPools }, itemKey) => {
+      let ownedCount = effectiveItems.filter((candidate) => getSphereInventoryItemKey(candidate) === itemKey).length;
+      while (ownedCount < count) {
+        const potentialLocations = itemPools[ownedCount] || [];
+        const keyIsGuaranteed = potentialLocations.length > 0 && potentialLocations.every((location) => reachable.has(normalize(location)));
+        if (!keyIsGuaranteed) break;
+        effectiveItems.push(item);
+        ownedCount += 1;
+        changed = true;
+        reachable = getSphereReachableLocationSet(effectiveItems, options);
+      }
+    });
+  }
+  return reachable;
+}
+
+// Ported from isLogicRequiredItemForLocation() (dev/app/app.js:2879). See its
+// original comment: the withItem/without reachability sets depend only on the
+// source item and which dungeon (if any) `location` starts from, so callers
+// checking many locations against the same source can pass a `cache` Map to
+// compute each (item, dungeonStart) pair once instead of once per location.
+export function isLogicRequiredItemForLocation(
+  source: { item: string; location?: string } | null | undefined,
+  location: string,
+  cache?: Map<string, { skip: boolean; withItem?: Set<string>; without?: Set<string> }>
+): boolean {
+  if (!source?.item || !location || isOwnDungeonKeyForPath(source.item)) return false;
+  const itemKey = getSphereInventoryItemKey(source.item, source.location || location);
+  if (!itemKey) return false;
+
+  const locationArea = getAreaFromLocation(location);
+  const dungeonStart = data.sphereWorld?.dungeonStarts?.[normalize(locationArea)];
+  const cacheKey = `${itemKey}|${dungeonStart || ""}`;
+  let sets = cache?.get(cacheKey);
+  if (!sets) {
+    const maximalInventory = getMaximalSphereLogicInventory();
+    const reducedInventory = maximalInventory.filter((item) => getSphereInventoryItemKey(item) !== itemKey);
+    if (reducedInventory.length === maximalInventory.length) {
+      sets = { skip: true };
+    } else {
+      const options = dungeonStart ? { additionalStartAreas: [dungeonStart] } : {};
+      sets = {
+        skip: false,
+        withItem: getSphereReachabilityWithOwnDungeonKeys(maximalInventory, options),
+        without: getSphereReachabilityWithOwnDungeonKeys(reducedInventory, options)
+      };
+    }
+    cache?.set(cacheKey, sets);
+  }
+  if (sets.skip || !sets.withItem || !sets.without) return false;
+  const locationKey = normalize(location);
+  return sets.withItem.has(locationKey) && !sets.without.has(locationKey);
+}

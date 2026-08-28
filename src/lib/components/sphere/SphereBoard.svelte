@@ -1,0 +1,318 @@
+<script lang="ts">
+  // Ported from renderSphereBoard() (dev/app/app.js:3393+) plus
+  // renderSpherePredictionColumns() (dev/app/app.js:4192+): Start, per-sphere
+  // placement lists, available-locations-by-area groups (with boss-path
+  // icons), and the "Sphere ?" relative-unknown columns that hold placements
+  // the logic can't pin to a numbered sphere.
+  //
+  // Path hints get a card in whichever column their boss resolves to, or a
+  // "Paths" column when nothing reaches it yet (sphere-path-progress.ts).
+  //
+  // Still deferred: SVG dependency-line drawing between columns, and the
+  // candidate-item row under each path card. The original's acquired-shard,
+  // area-hint and autosave nodes are also not rendered here - the knowledge
+  // sources that feed them (acquiredShardSources/areaHints/
+  // autosaveItemSources) are still empty in this port, so those nodes would
+  // have nothing to show.
+  import { WWRSphereEngine } from "$lib/logic";
+  import type { SpherePlacement } from "$lib/state/sphere.svelte";
+  import { data } from "$lib/state/data.svelte";
+  import { settings } from "$lib/state/settings.svelte";
+  import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
+  import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
+  import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
+  import { buildPathBossLocationIcons } from "$lib/logic/sphere-boss-icons";
+  import { isLocationMarked } from "$lib/logic/locations";
+  import { getAreaFromLocation } from "$lib/logic/data-loading";
+  import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+  import { getPathBossProgressEntries, type PathProgressEntry } from "$lib/logic/sphere-path-progress";
+  import SpherePlacementNode from "./SpherePlacementNode.svelte";
+  import SphereAreaGroup from "./SphereAreaGroup.svelte";
+  import SphereUnplacedItemNode from "./SphereUnplacedItemNode.svelte";
+  import SpherePathPredictionNode from "./SpherePathPredictionNode.svelte";
+
+  const normalize = WWRSphereEngine.normalize;
+
+  // getSphereTrackingKnowledge() is pure (no side effects), safe for $derived.
+  const knowledge = $derived(getSphereTrackingKnowledge());
+
+  // getSphereBoardAnalysis() is NOT pure - it mutates sphereAnalysisCache and
+  // dispatches worker jobs as a side effect, so it belongs in $effect, not
+  // $derived. $derived bodies are expected to be pure and can be re-run more
+  // than once per logical update; calling a side-effecting function from one
+  // risks runaway repeated dispatches. sphereAnalysisCache is itself reactive
+  // state, so components below read it directly rather than through this
+  // effect's return value.
+  $effect(() => {
+    getSphereBoardAnalysis(knowledge);
+  });
+
+  const calculation = $derived(sphereAnalysisCache.calculation);
+
+  const placementByLocation = $derived(new Map(knowledge.placements.map((placement) => [normalize(placement.location), placement])));
+
+  const pathBossIconsByLocation = $derived(
+    sphereAnalysisCache.dependenciesReady && calculation
+      ? buildPathBossLocationIcons(knowledge, calculation, sphereAnalysisCache.relativeUnknown!)
+      : new Map<string, string[]>()
+  );
+
+  interface SphereColumnData {
+    sphereNumber: number;
+    placements: Array<{ location: string; placement: ReturnType<typeof placementFor> }>;
+    groups: Array<{ area: string; locations: string[] }>;
+  }
+  function placementFor(location: string) {
+    return placementByLocation.get(normalize(location));
+  }
+
+  function groupLocationsByArea(locations: string[]): Array<{ area: string; locations: string[] }> {
+    const groupsByArea = new Map<string, string[]>();
+    locations.forEach((location) => {
+      const area = getAreaFromLocation(location);
+      if (!groupsByArea.has(area)) groupsByArea.set(area, []);
+      groupsByArea.get(area)!.push(location);
+    });
+    return [...groupsByArea.entries()].map(([area, grouped]) => ({ area, locations: grouped }));
+  }
+
+  const sphereColumns = $derived.by((): SphereColumnData[] => {
+    if (!calculation) return [];
+    const columns: SphereColumnData[] = [];
+    calculation.sphereLocations.forEach((sphereLocations, sphereNumber) => {
+      if (!sphereLocations?.length) return;
+      const placements = sphereLocations.filter((location) => placementByLocation.has(normalize(location)));
+      const openLocations = sphereLocations.filter((location) => !placementByLocation.has(normalize(location)) && !isLocationMarked(location));
+      if (!placements.length && !openLocations.length) return;
+
+      columns.push({
+        sphereNumber,
+        placements: placements.map((location) => ({ location, placement: placementFor(location) })),
+        groups: groupLocationsByArea(openLocations)
+      });
+    });
+    return columns;
+  });
+
+  interface PredictionColumnData {
+    level: number;
+    heading: string;
+    placements: SpherePlacement[];
+    groups: Array<{ area: string; locations: string[] }>;
+  }
+
+  // The relative-unknown columns. A placement whose location the logic can't
+  // reach - an out-of-logic check, or one gated behind something not yet
+  // known - gets no sphere number, so it appears in none of the numbered
+  // columns above. Without these it would vanish from the board entirely.
+  //
+  // Levels are relative order, not absolute spheres: level 0 is "as soon as
+  // the unknown resolves", level N is N dependency steps after that.
+  // Acquired-but-unassigned items share the level-0 column: they're known to
+  // be held, but nothing pins them to a sphere.
+  const unplacedItems = $derived(getUnplacedAcquiredItems());
+
+  // Path hints get a card wherever their boss lands: a numbered sphere, one of
+  // the relative-unknown columns, or the Paths column when nothing reaches it
+  // yet.
+  const pathProgress = $derived.by((): PathProgressEntry[] => {
+    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
+    if (!calculation || !relativeUnknown || !knowledge.pathHints.length) return [];
+    return getPathBossProgressEntries(knowledge, calculation, relativeUnknown);
+  });
+
+  const pathsBySphere = $derived.by(() => {
+    const map = new Map<number, PathProgressEntry[]>();
+    pathProgress.forEach((entry) => {
+      if (entry.progress.kind !== "exact") return;
+      const list = map.get(entry.progress.sphere) ?? [];
+      list.push(entry);
+      map.set(entry.progress.sphere, list);
+    });
+    return map;
+  });
+
+  const pathsByLevel = $derived.by(() => {
+    const map = new Map<number, PathProgressEntry[]>();
+    pathProgress.forEach((entry) => {
+      if (entry.progress.kind !== "relative") return;
+      const list = map.get(entry.progress.level) ?? [];
+      list.push(entry);
+      map.set(entry.progress.level, list);
+    });
+    return map;
+  });
+
+  const unresolvedPaths = $derived(pathProgress.filter((entry) => entry.progress.kind === "unknown"));
+
+  const predictionColumns = $derived.by((): PredictionColumnData[] => {
+    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
+    if (!calculation || !relativeUnknown) return [];
+
+    const maxLevel = Math.max(0, ...relativeUnknown.placementLevels.values(), ...pathsByLevel.keys());
+    const columns: PredictionColumnData[] = [];
+
+    for (let level = 0; level <= maxLevel; level += 1) {
+      const placements = relativeUnknown.unresolvedPlacements.filter(
+        (placement) => (relativeUnknown.placementLevels.get(placement.id) || 0) === level
+      );
+      // Locations reachable only once the unknown resolves are all level 0 -
+      // there's no basis for ordering them any finer than that.
+      const availableLocations = level === 0 ? relativeUnknown.availableLocations || [] : [];
+      // A level that holds only a path card still needs its column.
+      const hasPathCard = (pathsByLevel.get(level)?.length ?? 0) > 0;
+      if (!placements.length && !availableLocations.length && !hasPathCard && !(level === 0 && unplacedItems.length)) continue;
+
+      columns.push({
+        level,
+        heading: level === 0 ? "Sphere ?" : level === 1 ? "After sphere ?" : `${level} steps after ?`,
+        placements,
+        groups: groupLocationsByArea(availableLocations.filter((location) => !isLocationMarked(location)))
+      });
+    }
+
+    return columns;
+  });
+
+  // Click-and-drag panning, ported from the original's
+  // installSphereBoardPanning (dev/app/app.js:2444) - the board scrolls in
+  // both axes and is usually larger than its panel.
+  //
+  // Panning only engages past a small threshold, and a drag that panned
+  // swallows the click that follows it, so dragging across the board can't
+  // accidentally arm a location for item assignment.
+  const PAN_THRESHOLD = 4;
+  let boardElement: HTMLElement | undefined = $state();
+
+  function startPan(event: PointerEvent) {
+    if (event.button !== 0 || !boardElement) return;
+    const board = boardElement;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startScrollLeft = board.scrollLeft;
+    const startScrollTop = board.scrollTop;
+    let panning = false;
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      if (!panning && Math.abs(deltaX) < PAN_THRESHOLD && Math.abs(deltaY) < PAN_THRESHOLD) return;
+      if (!panning) {
+        panning = true;
+        board.classList.add("sphere-panning");
+      }
+      board.scrollLeft = startScrollLeft - deltaX;
+      board.scrollTop = startScrollTop - deltaY;
+    };
+
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      if (!panning) return;
+      board.classList.remove("sphere-panning");
+      board.addEventListener("click", (clickEvent) => { clickEvent.stopPropagation(); clickEvent.preventDefault(); }, { capture: true, once: true });
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  }
+</script>
+
+<section class="sphere-board" aria-label="Sphere progression graph" bind:this={boardElement} onpointerdown={startPan}>
+  {#if !calculation}
+    <div class="sphere-board-empty">
+      {sphereAnalysisCache.pending ? "Analyzing sphere logic..." : !data.sphereLogicLoaded ? "Sphere logic not loaded yet." : "No placements yet - assign an item to an exact location in Sphere mode."}
+    </div>
+  {:else}
+    <div class="sphere-canvas">
+      <!-- Scaled from the title-bar/header slider (SphereZoomSlider.svelte)
+           rather than from section resizing: the board has no fixed design
+           width, so it fills its container and scrolls instead. -->
+      <div class="sphere-columns" style="zoom: {settings.sphereBoardZoom / 100}">
+        <article class="sphere-column start-column">
+          <h3>Start</h3>
+          <div class="sphere-start-node" title={data.sphereStartingGear.join("\n") || "No additional starting gear"}>
+            {data.sphereStartingGear.length ? `${data.sphereStartingGear.length} starting items` : "Starting gear"}
+          </div>
+        </article>
+
+        {#each sphereColumns as column (column.sphereNumber)}
+          <article class="sphere-column">
+            <h3>Sphere {column.sphereNumber}</h3>
+            {#if column.groups.length}
+              <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
+              <div class="sphere-area-groups">
+                {#each column.groups as group (group.area)}
+                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} />
+                {/each}
+              </div>
+            {/if}
+            {#if column.placements.length}
+              <div class="sphere-placement-list">
+                {#each column.placements as { placement } (placement?.id)}
+                  {#if placement}
+                    <SpherePlacementNode {placement} sphereNumber={column.sphereNumber} {calculation} relativeUnknown={sphereAnalysisCache.relativeUnknown} />
+                  {/if}
+                {/each}
+              </div>
+            {/if}
+            {#if pathsBySphere.get(column.sphereNumber)?.length}
+              <div class="sphere-prediction-list">
+                {#each pathsBySphere.get(column.sphereNumber) ?? [] as entry (entry.hint.lineNumber)}
+                  <SpherePathPredictionNode {entry} />
+                {/each}
+              </div>
+            {/if}
+          </article>
+        {/each}
+
+        {#each predictionColumns as column (column.level)}
+          <article class="sphere-column sphere-prediction-column">
+            <h3>{column.heading}</h3>
+            {#if column.groups.length}
+              <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
+              <div class="sphere-area-groups">
+                {#each column.groups as group (group.area)}
+                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} />
+                {/each}
+              </div>
+            {/if}
+            {#if column.placements.length || (column.level === 0 && unplacedItems.length)}
+              <div class="sphere-prediction-list">
+                {#each column.placements as placement (placement.id)}
+                  <SpherePlacementNode
+                    {placement}
+                    sphereNumber={null}
+                    {calculation}
+                    relativeUnknown={sphereAnalysisCache.relativeUnknown}
+                  />
+                {/each}
+                {#if column.level === 0}
+                  {#each unplacedItems as entry (entry.id)}
+                    <SphereUnplacedItemNode {entry} />
+                  {/each}
+                {/if}
+                {#each pathsByLevel.get(column.level) ?? [] as entry (entry.hint.lineNumber)}
+                  <SpherePathPredictionNode {entry} />
+                {/each}
+              </div>
+            {/if}
+          </article>
+        {/each}
+
+        {#if unresolvedPaths.length}
+          <article class="sphere-column sphere-path-column">
+            <h3>Paths</h3>
+            <div class="sphere-prediction-list">
+              {#each unresolvedPaths as entry (entry.hint.lineNumber)}
+                <SpherePathPredictionNode {entry} />
+              {/each}
+            </div>
+          </article>
+        {/if}
+      </div>
+    </div>
+  {/if}
+</section>

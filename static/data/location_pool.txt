@@ -1,0 +1,317 @@
+        - Angular Isles - Cave Chest
+        - Angular Isles - Peak Chest
+        - Angular Isles - Sunken Treasure
+        - Birds Peak Rock - Cave Chest
+        - Birds Peak Rock - Sunken Treasure
+        - Boating Course - Cave Chest
+        - Boating Course - Raft Chest
+        - Boating Course - Sunken Treasure
+        - Bomb Island - Cave Chest
+        - Bomb Island - Lookout Platform Defeat Enemies
+        - Bomb Island - Submarine Chest
+        - Bomb Island - Sunken Treasure
+        - Cliff Plateau Isles - Cave Chest
+        - Cliff Plateau Isles - Highest Isle Chest
+        - Cliff Plateau Isles - Lookout Platform Chest
+        - Cliff Plateau Isles - Sunken Treasure
+        - Crescent Moon Island - Chest on Island
+        - Crescent Moon Island - Submarine Chest
+        - Crescent Moon Island - Sunken Treasure
+        - Cyclops Reef - Destroy Cannons and Gunboats
+        - Cyclops Reef - Lookout Platform Defeat Enemies
+        - Cyclops Reef - Sunken Treasure
+        - Diamond Steppe Island - Big Octo
+        - Diamond Steppe Island - Maze First Chest
+        - Diamond Steppe Island - Maze Second Chest
+        - Diamond Steppe Island - Sunken Treasure
+        - Dragon Roost Island - Baito Mail Game
+        - Dragon Roost Island - Boulder Chest
+        - Dragon Roost Island - Cave Chest
+        - Dragon Roost Island - Fly Across Platforms Around Island
+        - Dragon Roost Island - Hoskit Give 20 Golden Feathers
+        - Dragon Roost Island - Sunken Treasure
+        - Dragon Roost Island - Wind Shrine
+        - Eastern Fairy Island - Great Fairy
+        - Eastern Fairy Island - Lookout Platform Defeat Cannons and Enemies
+        - Eastern Fairy Island - Sunken Treasure
+        - Eastern Triangle Island - Sunken Treasure
+        - Fire Mountain - Big Octo
+        - Fire Mountain - Interior Chest
+        - Fire Mountain - Lookout Platform Chest
+        - Fire Mountain - Lookout Platform Destroy Cannons
+        - Fire Mountain - Sunken Treasure
+        - Five Eye Reef - Destroy Cannons and Gunboats
+        - Five Eye Reef - Lookout Platform Chest
+        - Five Eye Reef - Sunken Treasure
+        - Five Star Isles - Lookout Platform Destroy Cannons
+        - Five Star Isles - Raft Chest
+        - Five Star Isles - Submarine Chest
+        - Five Star Isles - Sunken Treasure
+        - Flight Control Platform - First Prize
+        - Flight Control Platform - Submarine Chest
+        - Flight Control Platform - Sunken Treasure
+        - Forest Haven - Chest on Small Island
+        - Forest Haven - On Tree Branch
+        - Forest Haven - Sunken Treasure
+        - Four Eye Reef - Destroy Cannons and Gunboats
+        - Four Eye Reef - Sunken Treasure
+        - Gale Isle - Sunken Treasure
+        - Greatfish Isle - Hidden Chest
+        - Greatfish Isle - Sunken Treasure
+        - Headstone Island - Submarine Chest
+        - Headstone Island - Sunken Treasure
+        - Headstone Island - Top of Island
+        - Horseshoe Island - Cave Chest
+        - Horseshoe Island - Northwestern Lookout Platform Chest
+        - Horseshoe Island - Play Golf
+        - Horseshoe Island - Southeastern Lookout Platform Chest
+        - Horseshoe Island - Sunken Treasure
+        - Hyrule Castle - Sword Chamber Chest
+        - Ice Ring Isle - Frozen Chest
+        - Ice Ring Isle - Inner Cave Chest
+        - Ice Ring Isle - Interior Chest
+        - Ice Ring Isle - Sunken Treasure
+        - Islet of Steel - Interior Chest
+        - Islet of Steel - Lookout Platform Defeat Enemies
+        - Islet of Steel - Sunken Treasure
+        - Mother & Child Isles - Inside Mother Isle
+        - Mother & Child Isles - Sunken Treasure
+        - Needle Rock Isle - Cave Chest
+        - Needle Rock Isle - Chest
+        - Needle Rock Isle - Golden Gunboat
+        - Needle Rock Isle - Sunken Treasure
+        - Northern Fairy Island - Great Fairy
+        - Northern Fairy Island - Submarine Chest
+        - Northern Fairy Island - Sunken Treasure
+        - Northern Triangle Island - Sunken Treasure
+        - Outset Island - Dig up Black Soil
+        - Outset Island - Great Fairy
+        - Outset Island - Jabun's Cave Chest
+        - Outset Island - Mesa's House Chest
+        - Outset Island - Orca Give 10 Knight's Crests
+        - Outset Island - Savage Labyrinth Floor 30
+        - Outset Island - Sunken Treasure
+        - Outset Island - Under Link's House
+        - Overlook Island - Cave Chest
+        - Overlook Island - Sunken Treasure
+        - Pawprint Isle - Chu Chu Cave Chest
+        - Pawprint Isle - Chu Chu Cave Chest Behind Left Boulder
+        - Pawprint Isle - Chu Chu Cave Chest Behind Right Boulder
+        - Pawprint Isle - Chu Chu Cave Chest Scale Wall
+        - Pawprint Isle - Lookout Platform Defeat Enemies
+        - Pawprint Isle - Sunken Treasure
+        - Pawprint Isle - Wizzrobe Cave Chest
+        - Private Oasis - Big Octo
+        - Private Oasis - Cabana Labyrinth Lower Floor Chest
+        - Private Oasis - Cabana Labyrinth Upper Floor Chest
+        - Private Oasis - Sunken Treasure
+        - Private Oasis - Top of Waterfall Chest
+        - Rock Spire Isle - Beedle 500 Rupee Item
+        - Rock Spire Isle - Beedle 900 Rupee Item
+        - Rock Spire Isle - Beedle 950 Rupee Item
+        - Rock Spire Isle - Cave Chest
+        - Rock Spire Isle - Center Lookout Platform Chest
+        - Rock Spire Isle - Defeat Southeast Gunboat
+        - Rock Spire Isle - Eastern Lookout Platform Destroy Cannons
+        - Rock Spire Isle - Sunken Treasure
+        - Rock Spire Isle - Western Lookout Platform Destroy Cannons
+        - Seven Star Isles - Big Octo
+        - Seven Star Isles - Center Lookout Platform Chest
+        - Seven Star Isles - Northern Lookout Platform Chest
+        - Seven Star Isles - Southern Lookout Platform Chest
+        - Seven Star Isles - Sunken Treasure
+        - Shark Island - Cave Chest
+        - Shark Island - Sunken Treasure
+        - Six Eye Reef - Destroy Cannons and Gunboats
+        - Six Eye Reef - Lookout Platform Destroy Cannons
+        - Six Eye Reef - Submarine Chest
+        - Six Eye Reef - Sunken Treasure
+        - Southern Fairy Island - Great Fairy
+        - Southern Fairy Island - Lookout Platform Destroy Northwest Cannons
+        - Southern Fairy Island - Lookout Platform Destroy Southeast Cannons
+        - Southern Fairy Island - Sunken Treasure
+        - Southern Triangle Island - Sunken Treasure
+        - Spectacle Island - Barrel Shooting First Prize
+        - Spectacle Island - Barrel Shooting Second Prize
+        - Spectacle Island - Sunken Treasure
+        - Star Belt Archipelago - Lookout Platform Chest
+        - Star Belt Archipelago - Sunken Treasure
+        - Star Island - Cave Chest
+        - Star Island - Lookout Platform Chest
+        - Star Island - Sunken Treasure
+        - Stone Watcher Island - Cave Chest
+        - Stone Watcher Island - Lookout Platform Chest
+        - Stone Watcher Island - Lookout Platform Destroy Cannons
+        - Stone Watcher Island - Sunken Treasure
+        - Thorned Fairy Island - Great Fairy
+        - Thorned Fairy Island - Northeastern Lookout Platform Destroy Cannons
+        - Thorned Fairy Island - Southwestern Lookout Platform Defeat Enemies
+        - Thorned Fairy Island - Sunken Treasure
+        - Three Eye Reef - Destroy Cannons and Gunboats
+        - Three Eye Reef - Sunken Treasure
+        - Tingle Island - Ankle All Statues Reward
+        - Tingle Island - Big Octo
+        - Tingle Island - Sunken Treasure
+        - Two Eye Reef - Big Octo Great Fairy
+        - Two Eye Reef - Destroy Cannons and Gunboats
+        - Two Eye Reef - Lookout Platform Chest
+        - Two Eye Reef - Sunken Treasure
+        - Western Fairy Island - Great Fairy
+        - Western Fairy Island - Lookout Platform Chest
+        - Western Fairy Island - Sunken Treasure
+        - Windfall Island - Auction 100 Rupee
+        - Windfall Island - Auction 40 Rupee
+        - Windfall Island - Auction 5 Rupee
+        - Windfall Island - Auction 60 Rupee
+        - Windfall Island - Auction 80 Rupee
+        - Windfall Island - Battle Squid First Prize
+        - Windfall Island - Battle Squid Second Prize
+        - Windfall Island - Battle Squid Under 20 Prize
+        - Windfall Island - Cafe Postman Delivery
+        - Windfall Island - Dampa Pig Minigame
+        - Windfall Island - House of Wealth Chest
+        - Windfall Island - Ivan Catch Killer Bees
+        - Windfall Island - Kamo Full Moon Picture
+        - Windfall Island - Kreeb Light the Lighthouse
+        - Windfall Island - Lenzo Become Assistant
+        - Windfall Island - Lenzo Bring Forest Firefly
+        - Windfall Island - Lenzo House Left Chest
+        - Windfall Island - Lenzo House Right Chest
+        - Windfall Island - Linda and Anton
+        - Windfall Island - Maggie Delivery Reward
+        - Windfall Island - Maggie Free Item
+        - Windfall Island - Maggie's Father Give 20 Skull Necklaces
+        - Windfall Island - Mila Catch Thief
+        - Windfall Island - Minenco Miss Windfall Picture
+        - Windfall Island - Mrs. Marie 1 Joy Pendant
+        - Windfall Island - Mrs. Marie 21 Joy Pendant
+        - Windfall Island - Mrs. Marie 40 Joy Pendant
+        - Windfall Island - Mrs. Marie Catch Killer Bees
+        - Windfall Island - Pirate Ship Chest
+        - Windfall Island - Pompie & Vera Secret Meeting Photo
+        - Windfall Island - Potion Shop 15 Blue Chu
+        - Windfall Island - Potion Shop 15 Green Chu
+        - Windfall Island - Sam Decorate Island
+        - Windfall Island - Sunken Treasure
+        - Windfall Island - Tingle First Gift
+        - Windfall Island - Tingle Second Gift
+        - Windfall Island - Tott Teach Rhythm
+        - Windfall Island - Transparent Chest
+        - Windfall Island - Windfall Jail Maze Chest
+        - Windfall Island - Zunari Exotic Flower
+
+        - Dragon Roost Cavern - Big Key Chest
+        - Dragon Roost Cavern - Bird's Nest
+        - Dragon Roost Cavern - Boarded Up Chest
+        - Dragon Roost Cavern - Boss Stairs Left Chest
+        - Dragon Roost Cavern - Boss Stairs Right Chest
+        - Dragon Roost Cavern - Boss Stairs Right Pot
+        - Dragon Roost Cavern - Dark Room Chest
+        - Dragon Roost Cavern - First Room Chest
+        - Dragon Roost Cavern - Gohma Heart Container
+        - Dragon Roost Cavern - Mini Boss
+        - Dragon Roost Cavern - Pot Room Chest
+        - Dragon Roost Cavern - Pot on Upper Shelf in Pot Room
+        - Dragon Roost Cavern - Rat Room Boarded Up Chest
+        - Dragon Roost Cavern - Rat Room Chest
+        - Dragon Roost Cavern - Swing Across Lava Chest
+        - Dragon Roost Cavern - Tingle Statue Chest
+        - Dragon Roost Cavern - Under Rope Bridge Chest
+        - Dragon Roost Cavern - Water Jug Alcove Chest
+        - Dragon Roost Cavern - Water Jug On Upper Shelf
+        - Earth Temple - Behind Statues Chest
+        - Earth Temple - Big Key Chest
+        - Earth Temple - Chest Behind Destructable Wall
+        - Earth Temple - First Crypt Chest
+        - Earth Temple - Foggy Floormaster Room End Chest
+        - Earth Temple - Jalhalla Heart Container
+        - Earth Temple - Kill All Floormasters Chest
+        - Earth Temple - Many Mirrors Room Left Chest
+        - Earth Temple - Many Mirrors Room Right Chest
+        - Earth Temple - Near Hammer Button Behind Curtain
+        - Earth Temple - Second Crypt Casket
+        - Earth Temple - Stalfos Crypt Room Chest
+        - Earth Temple - Stalfos Mini Boss
+        - Earth Temple - Third Crypt Chest
+        - Earth Temple - Three Blocks Room Chest
+        - Earth Temple - Tingle Statue Chest
+        - Earth Temple - Warp Pot Room Behind Curtain
+        - Earth Temple - Warp Pot Room Chest
+        - Forbidden Woods - Big Key Chest
+        - Forbidden Woods - Boko Baba Climb Chest
+        - Forbidden Woods - Chest Across Hanging Flower
+        - Forbidden Woods - Double Mothula Room Chest
+        - Forbidden Woods - First Room Chest
+        - Forbidden Woods - Highest Pot in Vine Maze
+        - Forbidden Woods - Hole In Tree Chest
+        - Forbidden Woods - Inside Hollow Tree Chest
+        - Forbidden Woods - Kalle Demos Heart Container
+        - Forbidden Woods - Locked Tree Trunk Chest
+        - Forbidden Woods - Morth Pit Chest
+        - Forbidden Woods - Mothula Mini Boss Chest
+        - Forbidden Woods - Past Seeds Hanging by Vines Chest
+        - Forbidden Woods - Pot High Above Hollow Tree
+        - Forbidden Woods - Tall Room Chest
+        - Forbidden Woods - Tingle Statue Chest
+        - Forbidden Woods - Vine Maze Left Chest
+        - Forbidden Woods - Vine Maze Right Chest
+        - Mailbox - Beedle's Gold Membership Reward
+        - Mailbox - Beedle's Silver Membership Reward
+        - Mailbox - Letter Advertising Bombs
+        - Mailbox - Letter Advertising Rock Spire Shop Ship
+        - Mailbox - Letter from Aryll
+        - Mailbox - Letter from Baito
+        - Mailbox - Letter from Baito's Mother
+        - Mailbox - Letter from Grandma
+        - Mailbox - Letter from Hoskit's Girlfriend
+        - Mailbox - Letter from Komali's Father
+        - Mailbox - Letter from Orca
+        - Mailbox - Letter from Tingle
+        - Forsaken Fortress - Chest Guarded by Bokoblin
+        - Forsaken Fortress - Chest Inside Lower Jail Cell
+        - Forsaken Fortress - Chest Outside Upper Jail Cell
+        - Forsaken Fortress - Chest on Bed
+        - Forsaken Fortress - Helmaroc King Heart Container
+        - Forsaken Fortress - Phantom Ganon
+        - Forsaken Fortress Sector - Sunken Treasure
+        - Great Sea - Beedle Shop 20 Rupee Item
+        - Great Sea - Cyclos
+        - Great Sea - Ghost Ship Chest
+        - Great Sea - Salvage Corp Gift
+        - Great Sea - Withered Trees
+        - Ganon's Tower - Defeat Ganondorf
+        - Ganon's Tower - Maze Chest
+        - Tower of the Gods - Big Key Chest
+        - Tower of the Gods - Chest Behind Bombable Wall
+        - Tower of the Gods - Darknut Mini Boss
+        - Tower of the Gods - Eastern Pot in Big Key Chest Room
+        - Tower of the Gods - First Armos Knights Chest
+        - Tower of the Gods - Floating Platforms Room Lower Chest
+        - Tower of the Gods - Floating Platforms Room Upper Chest
+        - Tower of the Gods - Gohdan Heart Container
+        - Tower of the Gods - Hop Across Floating Boxes Chest
+        - Tower of the Gods - Light Two Torches Chest
+        - Tower of the Gods - Pot Behind Bombable Wall
+        - Tower of the Gods - Second Armos Knights Chest
+        - Tower of the Gods - Shoot Eye Above Skulls Chest
+        - Tower of the Gods - Skull Room Chest
+        - Tower of the Gods - Stone Tablet
+        - Tower of the Gods - Tingle Statue Chest
+        - Tower of the Gods Sector - Sunken Treasure
+        - Wind Temple - Behind Armos Chest
+        - Wind Temple - Behind Stone Head Chest
+        - Wind Temple - Behind Stone Head in Hidden Upper Room
+        - Wind Temple - Behind Stone Head in Many Cyclones Room
+        - Wind Temple - Between Dirt Patches Chest
+        - Wind Temple - Big Key Chest
+        - Wind Temple - Cyclones Room Chest
+        - Wind Temple - Hub Room Center Chest
+        - Wind Temple - Hub Room Top Chest
+        - Wind Temple - Kill All Basement Room Enemies
+        - Wind Temple - Left Alcove Chest
+        - Wind Temple - Molgera Heart Container
+        - Wind Temple - Spike Wall Room Destroy Floors
+        - Wind Temple - Spike Wall Room First Chest
+        - Wind Temple - Tingle Statue Chest
+        - Wind Temple - Wizzrobe Mini Boss
+
