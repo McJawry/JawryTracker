@@ -7,7 +7,7 @@
   import { onMount } from "svelte";
   import SphereBoard from "./SphereBoard.svelte";
   import SphereZoomSlider from "$lib/components/layout/SphereZoomSlider.svelte";
-  import { announceRedockOnUnload } from "$lib/tauri/popout-session";
+  import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { data } from "$lib/state/data.svelte";
   import { ui } from "$lib/state/ui.svelte";
   import { loadReferenceData } from "$lib/logic/data-loading";
@@ -17,6 +17,7 @@
 
   onMount(async () => {
     announceRedockOnUnload("sphere-board");
+    announceGeometryChanges();
     try {
       await loadReferenceData();
       ui.dataStatus = "Data loaded";

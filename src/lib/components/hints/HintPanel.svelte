@@ -26,23 +26,25 @@
 
 <aside class="hint-panel" aria-label="Parsed hint overview">
   <section class="parsed-section">
-    <div class="section-heading">
-      <h2>Parsed Hints</h2>
-      <div class="parsed-actions">
-        <!-- Lives here rather than in Settings: it's a per-view toggle you
-             reach for while reading hints, not a configuration choice. -->
-        <label class="filters-toggle" title="Show or hide the hint type filter buttons">
-          <input
-            type="checkbox"
-            checked={settings.parsedHintsFilters}
-            onchange={() => { settings.parsedHintsFilters = !settings.parsedHintsFilters; saveSettings(); }}
-          />
-          <span>Filters</span>
-        </label>
-        <button class="tool-button" type="button" disabled={historyButtons.undoDisabled} onclick={undoNotes}>Undo</button>
-        <button class="tool-button" type="button" disabled={historyButtons.redoDisabled} onclick={redoNotes}>Redo</button>
-        <span>{hints.length} {hints.length === 1 ? "hint" : "hints"}</span>
-      </div>
+    <!-- No "Parsed Hints" heading: the section's own title bar already says
+         Hint Panel, docked or undocked, so it only cost a line and pushed the
+         controls down. They sit directly under that title bar instead, and
+         they used to share a line with it and wrap into two or three rows of
+         mostly empty space. -->
+    <div class="parsed-actions">
+      <!-- Lives here rather than in Settings: it's a per-view toggle you
+           reach for while reading hints, not a configuration choice. -->
+      <label class="filters-toggle" title="Show or hide the hint type filter buttons">
+        <input
+          type="checkbox"
+          checked={settings.parsedHintsFilters}
+          onchange={() => { settings.parsedHintsFilters = !settings.parsedHintsFilters; saveSettings(); }}
+        />
+        <span>Filters</span>
+      </label>
+      <button class="tool-button" type="button" disabled={historyButtons.undoDisabled} onclick={undoNotes}>Undo</button>
+      <button class="tool-button" type="button" disabled={historyButtons.redoDisabled} onclick={redoNotes}>Redo</button>
+      <span class="parsed-count">{hints.length} {hints.length === 1 ? "hint" : "hints"}</span>
     </div>
     <div class="tabs" role="tablist" aria-label="Hint type filters">
       {#each filterTabs as tab (tab.value)}

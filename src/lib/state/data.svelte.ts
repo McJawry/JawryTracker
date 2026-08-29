@@ -27,7 +27,6 @@ export interface ReferenceData {
    * profile should show.
    */
   filteredLocationKeys: Set<string> | null;
-  areaLocationKeys: Set<string> | null;
   locationOrder: Map<string, number> | null;
   loaded: boolean;
 }
@@ -52,7 +51,6 @@ function emptyReferenceData(): ReferenceData {
     requiredBosses: new Set(),
     randomStartingItemCount: 0,
     filteredLocationKeys: null,
-    areaLocationKeys: null,
     locationOrder: null,
     loaded: false
   };

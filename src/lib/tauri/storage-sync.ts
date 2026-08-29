@@ -12,6 +12,9 @@ import { hintNotes, updateHintsFromNotes } from "$lib/state/hints.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { LAYOUT_KEY, reloadLayoutFromStorage } from "$lib/state/layout.svelte";
 import { UNDOCKED_KEY, reloadUndockedFromStorage } from "$lib/state/undocked.svelte";
+import { DUNGEON_ITEMS_KEY, reloadDungeonItemsFromStorage } from "$lib/state/dungeon-items.svelte";
+import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
+import { restoreRandoSync } from "./rando-sync";
 
 let initialized = false;
 
@@ -25,10 +28,30 @@ export function initStorageSync(): void {
     switch (event.key) {
       case SPHERE_STORAGE_KEY:
         Object.assign(sphere, loadSphereState());
+        // randomStartingItems feeds data.sphereStartingGear, which the sphere
+        // analysis keys on. Without this, marking a seed's starting items in
+        // one window left every other window calculating from the old
+        // inventory.
+        refreshSphereStartingGear();
         break;
-      case SETTINGS_KEY:
+      case SETTINGS_KEY: {
+        // The seed's parsed logic lives in `data`, which is per-window
+        // in-memory state that no storage event touches. Re-hydrating
+        // `settings` alone left other windows filtering the location pool
+        // against whatever config they happened to load at startup: a sphere
+        // board popped out before a sync kept showing the unsynced pool -
+        // and its own sphere numbers - until it was closed and reopened.
+        const previousConfig = settings.randoConfigText;
+        const previousFolder = settings.randoFolderPath;
         Object.assign(settings, mergeSettings(readStoredSettings()));
+        if (settings.randoConfigText !== previousConfig || settings.randoFolderPath !== previousFolder) {
+          // Re-parses the logic and calls invalidateSphereAnalysis(), so this
+          // window recomputes. It writes only to `data`, never to
+          // localStorage, so it can't bounce back as another storage event.
+          void restoreRandoSync();
+        }
         break;
+      }
       case CHECKED_KEY: {
         const next = loadChecked();
         Object.keys(checked).forEach((key) => delete checked[key]);
@@ -55,6 +78,12 @@ export function initStorageSync(): void {
         break;
       case UNDOCKED_KEY:
         reloadUndockedFromStorage();
+        break;
+      // Dungeon keys/maps/compasses count toward the sphere logic's inventory
+      // (unplaced-items.ts), so a window with a stale copy computes different
+      // spheres from the one the item was clicked in.
+      case DUNGEON_ITEMS_KEY:
+        reloadDungeonItemsFromStorage();
         break;
     }
   });

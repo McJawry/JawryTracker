@@ -203,8 +203,6 @@ function locationHasEnabledCategory(categories: string[], enabledOptions: Set<st
 export interface FilteredLocationData {
   /** In the seed's randomized item pool - drives fractions and the drop lists. */
   filteredLocationKeys: Set<string>;
-  /** Exists in this seed at all (superset; used for the dungeon/misc area lists). */
-  areaLocationKeys: Set<string>;
   /** location_data.yaml's own ordering, so drop lists read like the real tracker. */
   locationOrder: Map<string, number>;
 }
@@ -218,7 +216,6 @@ export function buildFilteredLocationData(configText: string, locationCategoryTe
   const requiredBosses = new Set(getYamlListSection(configText, "required_bosses").map(normalize));
 
   const filteredLocationKeys = new Set<string>();
-  const areaLocationKeys = new Set<string>();
   const locationOrder = new Map<string, number>();
 
   data.locations.forEach((location, fallbackOrder) => {
@@ -234,15 +231,10 @@ export function buildFilteredLocationData(configText: string, locationCategoryTe
     const dungeonBoss = DUNGEON_REQUIRED_BOSSES[getAreaFromLocation(location)];
     if (raceModeDungeons && requiredBosses.size && dungeonBoss && !requiredBosses.has(normalize(dungeonBoss))) return;
 
-    const isNoProgressLocation = categoryEntry?.categories.some((category) => normalize(category) === "no progression");
-    if (!categoryMap.size || (categoryEntry && !isNoProgressLocation)) {
-      areaLocationKeys.add(locationKey);
-    }
-
     if (!categoryMap.size || (categoryEntry && locationHasEnabledCategory(categoryEntry.categories, enabledOptions))) {
       filteredLocationKeys.add(locationKey);
     }
   });
 
-  return { filteredLocationKeys, areaLocationKeys, locationOrder };
+  return { filteredLocationKeys, locationOrder };
 }

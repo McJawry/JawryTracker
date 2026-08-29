@@ -79,15 +79,13 @@ export function getAreaLocationChoices(areaName: string, targetKind: "sector" | 
   }
 
   const areaKeys = unique(possibleAreas).map(normalize);
-  // Dungeon/misc cells list every location the seed contains, not just the
-  // ones holding randomized progression - matching the original's split
-  // between areaLocationKeys and filteredLocationKeys.
-  const areaKeysPool = data.areaLocationKeys;
-  const availableLocations =
-    targetKind === "area" && areaKeysPool
-      ? sortLocationsBySourceOrder(data.locations.filter((location) => areaKeysPool.has(normalize(location))))
-      : getAvailableLocations();
-  return availableLocations.filter((location) => areaKeys.includes(normalize(getAreaFromLocation(location))));
+  // The seed's randomized pool, for dungeon/misc cells as well as sectors.
+  // Those two used to read a separate, wider set that ignored the
+  // progression_* options, so a dungeon listed checks the seed never
+  // randomizes (its Tingle Statue chest with progression_tingle_chests off,
+  // say) and counted them in its own accessible/remaining fraction, while the
+  // sector cells and the summary counted only the filtered pool.
+  return getAvailableLocations().filter((location) => areaKeys.includes(normalize(getAreaFromLocation(location))));
 }
 
 // Ported from getSphereHintAreaLocations() (dev/app/app.js:2768).
@@ -117,18 +115,33 @@ export function getLocationSphere(location: string): number | null {
  */
 export function getLocationSphereLabel(location: string): string {
   const sphereNumber = getLocationSphere(location);
-  if (sphereNumber === null) return "-";
+  // No determinate sphere, but you can still walk in there with what you're
+  // holding - "-" would read as unreachable and contradict the colour.
+  if (sphereNumber === null) return isLocationAccessible(location) ? "?" : "-";
 
   const certain = sphereAnalysisCache.certainLocationKeys;
   if (certain && !certain.has(normalize(location))) return "?";
   return String(sphereNumber);
 }
 
-/** Currently reachable in logic (used to colour the location list). */
+/**
+ * Whether the held inventory opens this location, used to colour the location
+ * list and drive the map's area fractions.
+ *
+ * Deliberately NOT the sphere calculation's reachable set: that withholds a
+ * placed item until its own location is reachable, so anything obtained out of
+ * logic - or recorded at a location that isn't reachable yet - left every
+ * location behind it red despite the item being in hand. Spheres still use the
+ * strict propagation; only the map reads this.
+ */
 export function isLocationAccessible(location: string): boolean {
+  const key = normalize(location);
+  const inventoryReachable = sphereAnalysisCache.inventoryReachableKeys;
+  if (inventoryReachable) return inventoryReachable.has(key);
+
+  // Before the first analysis lands, fall back to the calculation.
   const calculation = sphereAnalysisCache.calculation;
   if (!calculation) return false;
-  const key = normalize(location);
   return calculation.sphereLocations.some((sphere) => sphere.some((candidate) => normalize(candidate) === key));
 }
 
@@ -150,9 +163,10 @@ export function getAreaAccessibility(areaName: string, targetKind: "sector" | "a
   const remainingLocations = locations.filter((location) => !isLocationMarked(location));
   const remaining = remainingLocations.length;
 
-  const calculation = sphereAnalysisCache.calculation;
-  const reachable = calculation ? new Set(calculation.sphereLocations.flat().map(normalize)) : null;
-  const accessible = reachable ? remainingLocations.filter((location) => reachable.has(normalize(location))).length : 0;
+  // Same inventory-based question the location list asks - see
+  // isLocationAccessible. Keeping the cell fractions on the sphere-propagated
+  // set would have them disagree with the colours inside the cell's own list.
+  const accessible = remainingLocations.filter((location) => isLocationAccessible(location)).length;
 
   const colorClass: AreaAccessibility["colorClass"] = remaining === 0 && accessible === 0 ? "done" : accessible === 0 ? "stuck" : "open";
 

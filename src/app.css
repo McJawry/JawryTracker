@@ -74,6 +74,14 @@ body {
    shows. The keyable colour is applied to specific panels instead, via
    --stream-backdrop (see the stream backdrop block further down). */
 
+/* A popout window never scrolls sideways: its content is already scaled to
+   the window's width, so a horizontal bar only ever showed up as a knock-on
+   effect of the vertical scrollbar narrowing the client area by ~15px and
+   pushing a full-width child over the edge. */
+body.popout-window {
+  overflow-x: hidden;
+}
+
 body.chrome-hidden {
   --auto-map-size: var(--hidden-chrome-map-size);
 }
@@ -1513,25 +1521,30 @@ body.sphere-assignment-mode .sector {
   display: none;
 }
 
+/* No card chrome of its own: the section's title bar already frames the
+   panel, so the bordered white box just boxed in the controls and spent 14px
+   of padding on every edge. The hint cards inside carry their own
+   backgrounds, so nothing below needs a fill either. */
 .parsed-section {
   grid-template-rows: auto auto auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-/* Only the tabs collapse. The heading stays because it now carries the
-   "Filters" toggle - hiding it too left no way to switch them back on. */
+/* Only the tabs collapse. */
 body.hide-parsed-filters .parsed-section > .tabs {
   display: none;
 }
 
-body.hide-parsed-filters .parsed-section .hint-list {
-  margin-top: -2px;
-  padding-top: 0;
-}
-
+/* The negative margins that used to bleed the list out to the old box's
+   edges are gone with the box. */
 .parsed-section .hint-list {
-  margin: 0 -14px -14px;
-  padding: 12px 14px 14px;
-  border-radius: 0 0 8px 8px;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
 }
 
 body.stream-mode .parsed-section {
@@ -1544,7 +1557,7 @@ body.stream-mode .parsed-section {
    readable over a keyed background - but it takes the panel colour, not a
    hardcoded cream. That fixed fill ignored the panel colour entirely, and
    with light auto-contrast ink it left white text on a near-white box. */
-body.stream-mode .parsed-section .section-heading,
+body.stream-mode .parsed-section .parsed-actions,
 body.stream-mode .parsed-section .tabs {
   padding: 8px;
   border-radius: 8px;
@@ -1566,15 +1579,23 @@ body.stream-mode .parsed-section .hint-list {
 .parsed-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 8px;
 }
 
 .parsed-actions .tool-button {
-  min-height: 30px;
-  padding: 0 9px;
-  font-size: 0.82rem;
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+}
+
+/* Pushed to the end of the row so the counter reads as a status, not another
+   control crowding the buttons. */
+.parsed-count {
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 textarea {
@@ -3023,6 +3044,14 @@ body.compact-mode .map-toolbar {
   width: calc(var(--tracker-slot) * 1.86);
   height: calc(var(--tracker-slot) * 1.86);
   object-fit: contain;
+}
+
+/* Half brightness, so the collected pieces sit back against the grey
+   triforce behind them instead of glaring off it. Applied only to the
+   layered pieces - the grey base and the completed triforce8 image keep
+   their own values. */
+.triforce-shard-layer {
+  filter: brightness(0.5);
 }
 
 /* Shards that came from the seed's starting gear (crossed out in the shard

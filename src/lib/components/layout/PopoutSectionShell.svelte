@@ -9,7 +9,7 @@
   import { getSectionLogicalWidth } from "./section-scaling.svelte";
   import { settings } from "$lib/state/settings.svelte";
   import PopoutZoomSlider from "./PopoutZoomSlider.svelte";
-  import { announceRedockOnUnload } from "$lib/tauri/popout-session";
+  import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { loadReferenceData } from "$lib/logic/data-loading";
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
   import "$lib/logic/hint-parsing"; // registers the hints parser (side effect)
@@ -78,6 +78,7 @@
 
   onMount(async () => {
     announceRedockOnUnload(sectionId);
+    announceGeometryChanges();
     try {
       await loadReferenceData();
       ui.dataStatus = "Data loaded";
@@ -151,7 +152,12 @@
   .popout-section-content {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    /* Vertical only. The content is already scaled to the window's width, so
+       the horizontal bar was never reachable content - just the vertical
+       scrollbar eating ~15px of client width and pushing a full-width child
+       over the edge. */
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 8px;
   }
 </style>

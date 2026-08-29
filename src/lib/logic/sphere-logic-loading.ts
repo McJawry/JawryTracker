@@ -117,7 +117,6 @@ export function applySphereLogic(
     data.sphereStartingGear = [];
     data.randomStartingItemCount = 0;
     data.filteredLocationKeys = null;
-    data.areaLocationKeys = null;
     data.locationOrder = null;
     return;
   }
@@ -144,11 +143,9 @@ export function applySphereLogic(
   if (configText.trim()) {
     const filtered = buildFilteredLocationData(configText, locationDataText);
     data.filteredLocationKeys = filtered.filteredLocationKeys;
-    data.areaLocationKeys = filtered.areaLocationKeys;
     data.locationOrder = filtered.locationOrder;
   } else {
     data.filteredLocationKeys = null;
-    data.areaLocationKeys = null;
     data.locationOrder = null;
   }
 

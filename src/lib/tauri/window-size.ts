@@ -71,6 +71,23 @@ export async function onWindowMoved(callback: () => void): Promise<void> {
   }
 }
 
+/**
+ * Fires whenever this window is resized or moved. Both events are needed:
+ * onMoved alone misses a drag of the window's edge, and onResized alone
+ * misses a plain reposition - and a window capture in OBS is thrown off by
+ * either one.
+ */
+export async function onWindowGeometryChanged(callback: () => void): Promise<void> {
+  if (!isTauriRuntime()) return;
+  try {
+    const current = getCurrentWindow();
+    await current.onMoved(() => callback());
+    await current.onResized(() => callback());
+  } catch (error) {
+    console.error("Could not watch window geometry", error);
+  }
+}
+
 export async function applyWindowPosition(position: WindowPosition | undefined | null): Promise<void> {
   if (!isTauriRuntime() || !position || typeof position.x !== "number" || typeof position.y !== "number") return;
   try {

@@ -7,7 +7,7 @@ import { DUNGEON_KEY_LOGIC } from "$lib/gameData";
 import { WWRSphereEngine } from "$lib/logic";
 import { data } from "$lib/state/data.svelte";
 
-const DUNGEON_ITEMS_KEY = "ww-rando-hint-tracker-dungeon-items";
+export const DUNGEON_ITEMS_KEY = "ww-rando-hint-tracker-dungeon-items";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -118,6 +118,18 @@ export function toggleDungeonFlag(dungeon: string, flag: "bigKey" | "map" | "com
   const shown = getDungeonItems(dungeon)[flag];
   entryFor(dungeon)[flag] = !shown;
   saveDungeonItemsState();
+}
+
+/**
+ * Re-reads this window's copy from localStorage. Each window keeps its own
+ * reactive object, so a key counted in one window is invisible to the others
+ * until this runs - and dungeon items feed the sphere logic's inventory, so a
+ * stale copy skews a popped-out board's sphere numbers.
+ */
+export function reloadDungeonItemsFromStorage(): void {
+  const next = loadDungeonItems();
+  Object.keys(dungeonItemsState).forEach((key) => delete dungeonItemsState[key]);
+  Object.assign(dungeonItemsState, next);
 }
 
 export function resetDungeonItemsState(): void {

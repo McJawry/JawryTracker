@@ -5,6 +5,7 @@
   import { checked, saveChecked } from "$lib/state/checked.svelte";
   import { sphere, resetSphereState } from "$lib/state/sphere.svelte";
   import { hints, hintNotes, saveHintNotes } from "$lib/state/hints.svelte";
+  import { resetDungeonItemsState } from "$lib/state/dungeon-items.svelte";
   import { resetItemTrackerState } from "$lib/state/item-tracker.svelte";
   import { openPopoutWindow } from "$lib/tauri/popout-window";
   import { HIDEABLE_SECTIONS, SECTION_META } from "$lib/section-meta";
@@ -41,6 +42,10 @@
     saveChecked();
     resetSphereState();
     resetItemTrackerState();
+    // Dungeon keys/maps/compasses are ownership too - the confirm above says
+    // "items", and leaving them behind carried the last run's inventory into
+    // the new one, where it kept feeding the sphere logic.
+    resetDungeonItemsState();
     // A fresh run is exactly when the seed's starting items get entered, so
     // arm the mode rather than making the user find the button.
     setMarkStartingMode(true);

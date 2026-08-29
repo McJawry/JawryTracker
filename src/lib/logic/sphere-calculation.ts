@@ -74,6 +74,26 @@ export function getSphereLogicStartingGear(): string[] {
   ];
 }
 
+/**
+ * Everything the tracker says you hold, regardless of where it came from -
+ * the seed's starting gear, items acquired on the trackers, *and* every item
+ * recorded at a location.
+ *
+ * getSphereLogicStartingGear() deliberately leaves placed items out, because
+ * the sphere calculation has to withhold one until its own location is
+ * reachable; that's what makes spheres mean anything. The map asks a
+ * different question - "can I get in there with what I have?" - and there the
+ * withholding is wrong: an item picked up out of logic (or recorded at a
+ * location that isn't reachable yet) left everything behind it showing red
+ * even though the item was in hand.
+ */
+export function getOwnedInventory(): string[] {
+  return [
+    ...getSphereLogicStartingGear(),
+    ...sphere.placements.map((placement) => getDungeonSmallKeyName(placement.item, placement.location) || placement.item)
+  ];
+}
+
 export function getSphereCalculationInput(placements: SpherePlacement[], includeDependencies = true): SphereCalculationInput {
   return {
     locations: getAvailableLocations(),

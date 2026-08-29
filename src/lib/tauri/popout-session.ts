@@ -9,11 +9,13 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 import { SECTION_META } from "$lib/section-meta";
 import { markDocked, setUndockedIds, undockedState } from "$lib/state/undocked.svelte";
-import { openPopoutWindow } from "./popout-window";
-import { applyPopoutGeometry, getStoredPopoutGeometry, isPopoutSyncInProgress } from "./popout-geometry";
+import { getStoredPopoutGeometry, isPopoutSyncInProgress, syncPopoutWindows } from "./popout-geometry";
+import { onWindowGeometryChanged } from "./window-size";
+import { savePreferencesFile } from "./layout-file";
 import { isTauriRuntime } from "./is-tauri";
 
 export const REDOCKED_EVENT = "section:redocked";
+export const GEOMETRY_CHANGED_EVENT = "section:geometry-changed";
 
 /** Called from a popout window so the main window can drop it from the list. */
 export function announceRedockOnUnload(sectionId: string): void {
@@ -24,11 +26,39 @@ export function announceRedockOnUnload(sectionId: string): void {
 }
 
 /**
+ * Called from a popout so the main window records where it now sits.
+ *
+ * Only the main window owns the preferences file (a popout writing it would
+ * save its own size as the app's), so a popout can't persist its geometry
+ * itself - it has to say it moved and let the owner write. Without this,
+ * resizing a popout was never saved at all unless something in the main
+ * window happened to trigger a save afterwards, so window captures in OBS
+ * lost their framing on every restart.
+ */
+export function announceGeometryChanges(): void {
+  if (!isTauriRuntime()) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  void onWindowGeometryChanged(() => {
+    // Dragging an edge fires continuously; only the resting position matters.
+    clearTimeout(timer);
+    timer = setTimeout(() => void emit(GEOMETRY_CHANGED_EVENT), 300);
+  });
+}
+
+/**
  * Drops any section whose window no longer exists. The popout's own
  * "I'm closing" announcement isn't reliable - a native window close doesn't
  * always run beforeunload - so the authoritative check is which windows Tauri
  * actually has open.
  */
+// A section has to be missing twice running before it counts as docked.
+// Dropping it on a single miss meant one bad startup - a popout that failed
+// to open, or an enumeration that answered while the window was still being
+// created - permanently deleted that panel from the saved layout, since the
+// emptied list is written straight back to layout.json.
+const missedReconciles = new Map<string, number>();
+const MISSES_BEFORE_DOCKED = 2;
+
 export async function reconcileUndockedWindows(): Promise<void> {
   if (!isTauriRuntime()) return;
   // A preset load is mid-flight: sections are already marked undocked but
@@ -39,7 +69,13 @@ export async function reconcileUndockedWindows(): Promise<void> {
     const openLabels = new Set((await getAllWebviewWindows()).map((w) => w.label));
     const stillOpen = undockedState.ids.filter((id) => {
       const meta = SECTION_META[id];
-      return meta && openLabels.has(meta.popout.label);
+      if (meta && openLabels.has(meta.popout.label)) {
+        missedReconciles.delete(id);
+        return true;
+      }
+      const misses = (missedReconciles.get(id) ?? 0) + 1;
+      missedReconciles.set(id, misses);
+      return misses < MISSES_BEFORE_DOCKED;
     });
     if (stillOpen.length !== undockedState.ids.length) setUndockedIds(stillOpen);
   } catch (error) {
@@ -52,22 +88,25 @@ export async function initPopoutSession(): Promise<void> {
 
   await listen<string>(REDOCKED_EVENT, (event) => markDocked(event.payload));
 
-  // Reopen what was open last time. Anything whose window is somehow already
-  // there is left alone rather than duplicated.
-  try {
-    const openLabels = new Set((await getAllWebviewWindows()).map((w) => w.label));
-    const wanted = undockedState.ids.filter((id) => SECTION_META[id]);
+  // Popout geometry is read live by savePreferencesFile(), so this just needs
+  // to prompt a save. Debounced again on this side because several popouts
+  // can settle at once (loading a preset moves all of them).
+  let geometryTimer: ReturnType<typeof setTimeout> | undefined;
+  await listen(GEOMETRY_CHANGED_EVENT, () => {
+    clearTimeout(geometryTimer);
+    geometryTimer = setTimeout(() => void savePreferencesFile(), 400);
+  });
 
-    // Geometry was stashed by loadPreferencesFile() before these windows
-    // existed, so each reopens where it was left rather than at the OS
-    // default spot.
-    const geometry = getStoredPopoutGeometry();
-    for (const id of wanted) {
-      const meta = SECTION_META[id];
-      if (!openLabels.has(meta.popout.label)) await openPopoutWindow(meta.popout, { place: !geometry[id] });
-      await applyPopoutGeometry(id, geometry[id]);
-    }
-    setUndockedIds(wanted);
+  // Reopen what was open last time, at the geometry loadPreferencesFile()
+  // stashed before these windows existed. Delegated to syncPopoutWindows
+  // rather than looping here: it holds the in-progress flag for the whole
+  // reopen, which stops the reconcile below from seeing half-created windows
+  // and concluding the user had docked them.
+  try {
+    await syncPopoutWindows(
+      undockedState.ids.filter((id) => SECTION_META[id]),
+      getStoredPopoutGeometry()
+    );
   } catch (error) {
     console.error("Could not restore popout windows", error);
   }

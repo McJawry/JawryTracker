@@ -29,6 +29,7 @@ import {
   getSphereCalculationInput,
   getSphereLogicStartingGear,
   getSphereReachableLocationSet,
+  getOwnedInventory,
   sphereReachabilityCache,
   clearOwnDungeonKeyPoolCache
 } from "$lib/logic/sphere-calculation";
@@ -70,7 +71,7 @@ export function invalidateSphereAnalysis(): void {
   // comment on getSphereAnalysisWorker below); bumping the job id is enough
   // to make any in-flight response for a now-stale request get ignored.
   sphereAnalysisJobId += 1;
-  Object.assign(sphereAnalysisCache, { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, pending: false, dependenciesReady: false });
+  Object.assign(sphereAnalysisCache, { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, pending: false, dependenciesReady: false });
   sphereReachabilityCache.clear();
   clearHardBossRequirementCache();
   clearOwnDungeonKeyPoolCache();
@@ -84,6 +85,7 @@ function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculat
   sphereAnalysisCache.calculation = calculation;
   sphereAnalysisCache.relativeUnknown = relativeUnknown;
   sphereAnalysisCache.certainLocationKeys = computeCertainLocationKeys();
+  sphereAnalysisCache.inventoryReachableKeys = computeInventoryReachableKeys();
   sphereAnalysisCache.pending = false;
   sphereAnalysisCache.dependenciesReady = true;
 }
@@ -101,6 +103,17 @@ function computeCertainLocationKeys(): Set<string> {
 
   const certainItems = getSphereLogicStartingGear().filter((item) => !unplaced.has(normalize(item)));
   return getSphereReachableLocationSet(certainItems);
+}
+
+/**
+ * What the map colours read: reachability from the whole held inventory, with
+ * no regard for whether a given item was obtained in logic. Computed here,
+ * beside the calculation, so locations.ts can read it off the shared cache -
+ * importing sphere-calculation from locations.ts directly would close an
+ * import cycle (sphere-calculation already imports getAvailableLocations).
+ */
+function computeInventoryReachableKeys(): Set<string> {
+  return getSphereReachableLocationSet(getOwnedInventory());
 }
 
 let sphereAnalysisWorker: Worker | null = null;
