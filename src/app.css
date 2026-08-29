@@ -3046,11 +3046,11 @@ body.compact-mode .map-toolbar {
   object-fit: contain;
 }
 
-/* Half brightness, so the collected pieces sit back against the grey
-   triforce behind them instead of glaring off it. Applied only to the
-   layered pieces - the grey base and the completed triforce8 image keep
-   their own values. */
-.triforce-shard-layer {
+/* Half brightness on starting-gear shards only - the ones the red tint marks
+   - so they read as "came with the seed" rather than competing with the
+   pieces you actually found. Shards you found, the grey base and the
+   completed triforce8 image all keep their own values. */
+.triforce-shard-layer.starting {
   filter: brightness(0.5);
 }
 

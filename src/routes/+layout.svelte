@@ -91,6 +91,10 @@
       settings.sectionWidths,
       settings.sectionVisibility,
       settings.sphereBoardZoom,
+      // The popout scale slider lives in the popout, which never writes the
+      // preferences file itself - its change reaches this window as a
+      // settings storage event, and this is what turns that into a save.
+      settings.popoutZoom,
       undockedState.ids,
       windowWidth,
       windowHeight

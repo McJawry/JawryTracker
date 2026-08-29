@@ -41,12 +41,26 @@
   const imageSrc = $derived(itemImage(getProgressiveItemStageImageName(placement, calculation, relativeUnknown) || placement.item));
   const badge = $derived(getItemNumberBadge(placement.item));
   const area = $derived(getAreaFromLocation(placement.location));
+
+  // What this card hangs off in the dependency graph, read by sphere-edges.ts.
+  // A numbered sphere uses the calculation's own location dependencies; the
+  // relative-unknown columns use the inferred per-placement ones, matching the
+  // two call sites in the original (createSpherePlacementNode's
+  // relativeDependencies argument, null for numbered spheres).
+  const dependencies = $derived(
+    sphereNumber === null
+      ? (relativeUnknown?.dependencies.get(placement.id) ?? [])
+      : (calculation.dependencies[normalize(placement.location)] ?? [])
+  );
 </script>
 
 <button
   type="button"
   class={cardClass}
   data-node-id={placement.id}
+  data-dependencies={dependencies.join(",")}
+  data-path-item={placement.item}
+  data-marked-location={placement.fromHint ? undefined : "true"}
   title={`${placement.item}\n${placement.location}\n${sphereLabel}${isPruned ? "\nOptional in the minimal playthrough" : ""}\nRight-click to remove placement and un-acquire the item`}
   oncontextmenu={(event) => { event.preventDefault(); recordTrackerAction(); unassignPlacement(placement); }}
 >

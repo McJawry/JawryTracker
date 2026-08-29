@@ -25,11 +25,15 @@
   import { isLocationMarked } from "$lib/logic/locations";
   import { getAreaFromLocation } from "$lib/logic/data-loading";
   import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-  import { getPathBossProgressEntries, type PathProgressEntry } from "$lib/logic/sphere-path-progress";
+  import { getPathBossProgressEntries, getPathHintSourceIds, type PathProgressEntry } from "$lib/logic/sphere-path-progress";
   import SpherePlacementNode from "./SpherePlacementNode.svelte";
   import SphereAreaGroup from "./SphereAreaGroup.svelte";
   import SphereUnplacedItemNode from "./SphereUnplacedItemNode.svelte";
   import SpherePathPredictionNode from "./SpherePathPredictionNode.svelte";
+  import SphereAcquiredShardNode from "./SphereAcquiredShardNode.svelte";
+  import SphereAreaHintNode from "./SphereAreaHintNode.svelte";
+  import { shouldExpandSphereGroups, toggleAllSphereGroups } from "$lib/state/sphere-groups.svelte";
+  import { drawSphereEdges, applySphereChainFocus } from "./sphere-edges";
 
   const normalize = WWRSphereEngine.normalize;
 
@@ -76,45 +80,71 @@
     return [...groupsByArea.entries()].map(([area, grouped]) => ({ area, locations: grouped }));
   }
 
-  const sphereColumns = $derived.by((): SphereColumnData[] => {
-    if (!calculation) return [];
-    const columns: SphereColumnData[] = [];
-    calculation.sphereLocations.forEach((sphereLocations, sphereNumber) => {
-      if (!sphereLocations?.length) return;
-      const placements = sphereLocations.filter((location) => placementByLocation.has(normalize(location)));
-      const openLocations = sphereLocations.filter((location) => !placementByLocation.has(normalize(location)) && !isLocationMarked(location));
-      if (!placements.length && !openLocations.length) return;
+  let columnsElement: HTMLDivElement | undefined = $state();
+  let edgesElement: SVGSVGElement | undefined = $state();
 
-      columns.push({
-        sphereNumber,
-        placements: placements.map((location) => ({ location, placement: placementFor(location) })),
-        groups: groupLocationsByArea(openLocations)
-      });
-    });
-    return columns;
-  });
-
-  interface PredictionColumnData {
-    level: number;
-    heading: string;
-    placements: SpherePlacement[];
-    groups: Array<{ area: string; locations: string[] }>;
+  function setChainFocus(target: HTMLElement | null): void {
+    const node = target?.closest?.<HTMLElement>("[data-node-id]");
+    applySphereChainFocus(columnsElement ?? null, edgesElement ?? null, node?.dataset.nodeId ?? "");
   }
 
-  // The relative-unknown columns. A placement whose location the logic can't
-  // reach - an out-of-logic check, or one gated behind something not yet
-  // known - gets no sphere number, so it appears in none of the numbered
-  // columns above. Without these it would vanish from the board entirely.
-  //
-  // Levels are relative order, not absolute spheres: level 0 is "as soon as
-  // the unknown resolves", level N is N dependency steps after that.
-  // Acquired-but-unassigned items share the level-0 column: they're known to
-  // be held, but nothing pins them to a sphere.
-  const unplacedItems = $derived(getUnplacedAcquiredItems());
+  /**
+   * Edges are redrawn from what the DOM actually contains, driven by a
+   * MutationObserver rather than by listing reactive dependencies: the cards
+   * come from several $derived collections and a bare `sphereColumns;`
+   * statement is not a dependency the compiler keeps, so the effect silently
+   * never re-ran. Watching the container also covers things no derived value
+   * expresses - an area group being expanded, or a card resizing.
+   */
+  $effect(() => {
+    const canvas = columnsElement;
+    const edges = edgesElement;
+    // Read here so a zoom change tears down and re-runs this effect.
+    const zoom = settings.sphereBoardZoom / 100;
+    if (!canvas || !edges) return;
 
-  // Path hints get a card wherever their boss lands: a numbered sphere, one of
-  // the relative-unknown columns, or the Paths column when nothing reaches it
-  // yet.
+    // Two frames: the first lands after Svelte's DOM update, the second after
+    // the browser has laid it out. Measuring in between anchored edges to the
+    // previous render's positions.
+    let frame = 0;
+    const redraw = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => drawSphereEdges(canvas, edges, zoom));
+      });
+    };
+    redraw();
+
+    const mutations = new MutationObserver((records) => {
+      // Ignore our own writes into the <svg>, or drawing would retrigger
+      // drawing forever.
+      if (records.every((record) => edges.contains(record.target))) return;
+      redraw();
+    });
+    mutations.observe(canvas, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["open", "data-dependencies"]
+    });
+    const resize = new ResizeObserver(redraw);
+    resize.observe(canvas);
+
+    // requestAnimationFrame does not fire while the document is hidden, so a
+    // popout that is minimised or behind another window would come back with
+    // no lines and nothing to trigger them - the observers only fire if
+    // something actually changed while it was away.
+    const onVisible = () => { if (!document.hidden) redraw(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      mutations.disconnect();
+      resize.disconnect();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  });
+
   const pathProgress = $derived.by((): PathProgressEntry[] => {
     const relativeUnknown = sphereAnalysisCache.relativeUnknown;
     if (!calculation || !relativeUnknown || !knowledge.pathHints.length) return [];
@@ -145,6 +175,68 @@
 
   const unresolvedPaths = $derived(pathProgress.filter((entry) => entry.progress.kind === "unknown"));
 
+  // Which cards each path hint's purple chain runs back from, keyed by hint
+  // line so the card components can publish it as data-path-source-ids.
+  const pathSourceIds = $derived.by(() => {
+    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
+    const map = new Map<number, string[]>();
+    if (!calculation || !relativeUnknown) return map;
+    pathProgress.forEach((entry) => {
+      map.set(entry.hint.lineNumber, getPathHintSourceIds(entry.hint, entry.progress, knowledge, calculation, relativeUnknown));
+    });
+    return map;
+  });
+
+  const sphereColumns = $derived.by((): SphereColumnData[] => {
+    if (!calculation) return [];
+    const columns: SphereColumnData[] = [];
+    calculation.sphereLocations.forEach((sphereLocations, sphereNumber) => {
+      if (!sphereLocations?.length) return;
+      const placements = sphereLocations.filter((location) => placementByLocation.has(normalize(location)));
+      const openLocations = sphereLocations.filter((location) => !placementByLocation.has(normalize(location)) && !isLocationMarked(location));
+      // A solved path card counts as content: without this, a sphere whose
+      // placements were all made and whose locations were all checked lost
+      // its column - taking the boss card that resolved to it with it.
+      const solvedPathHints = pathsBySphere.get(sphereNumber) ?? [];
+      if (!placements.length && !openLocations.length && !solvedPathHints.length) return;
+
+      columns.push({
+        sphereNumber,
+        placements: placements.map((location) => ({ location, placement: placementFor(location) })),
+        groups: groupLocationsByArea(openLocations)
+      });
+    });
+    return columns;
+  });
+
+  interface PredictionColumnData {
+    level: number;
+    heading: string;
+    placements: SpherePlacement[];
+    groups: Array<{ area: string; locations: string[] }>;
+  }
+
+  // The relative-unknown columns. A placement whose location the logic can't
+  // reach - an out-of-logic check, or one gated behind something not yet
+  // known - gets no sphere number, so it appears in none of the numbered
+  // columns above. Without these it would vanish from the board entirely.
+  //
+  // Levels are relative order, not absolute spheres: level 0 is "as soon as
+  // the unknown resolves", level N is N dependency steps after that.
+  // Acquired-but-unassigned items share the level-0 column: they're known to
+  // be held, but nothing pins them to a sphere.
+  const unplacedItems = $derived(getUnplacedAcquiredItems());
+
+  // Acquired shards and area hints are sources the inference already uses;
+  // these give them cards, so the graph edges drawn to them land on something
+  // visible. Both belong to the unknown-sphere column, as upstream.
+  const occupiedLocationKeys = $derived(new Set(knowledge.placements.map((p) => normalize(p.location))));
+
+
+  // Path hints get a card wherever their boss lands: a numbered sphere, one of
+  // the relative-unknown columns, or the Paths column when nothing reaches it
+  // yet.
+
   const predictionColumns = $derived.by((): PredictionColumnData[] => {
     const relativeUnknown = sphereAnalysisCache.relativeUnknown;
     if (!calculation || !relativeUnknown) return [];
@@ -161,7 +253,9 @@
       const availableLocations = level === 0 ? relativeUnknown.availableLocations || [] : [];
       // A level that holds only a path card still needs its column.
       const hasPathCard = (pathsByLevel.get(level)?.length ?? 0) > 0;
-      if (!placements.length && !availableLocations.length && !hasPathCard && !(level === 0 && unplacedItems.length)) continue;
+      const hasUnknownSphereCards =
+        level === 0 && (unplacedItems.length || knowledge.acquiredShardSources.length || knowledge.areaHints.length);
+      if (!placements.length && !availableLocations.length && !hasPathCard && !hasUnknownSphereCards) continue;
 
       columns.push({
         level,
@@ -183,6 +277,13 @@
   // accidentally arm a location for item assignment.
   const PAN_THRESHOLD = 4;
   let boardElement: HTMLElement | undefined = $state();
+
+  // Every area panel on the board, so one button can expand or collapse the lot.
+  const areaGroupNodeIds = $derived([
+    ...sphereColumns.flatMap((column) => column.groups.map((group) => `sphere-${column.sphereNumber}-area-${normalize(group.area)}`)),
+    ...predictionColumns.flatMap((column) => column.groups.map((group) => `sphere-p${column.level}-area-${normalize(group.area)}`))
+  ]);
+  const groupsWillExpand = $derived(shouldExpandSphereGroups(areaGroupNodeIds));
 
   function startPan(event: PointerEvent) {
     if (event.button !== 0 || !boardElement) return;
@@ -230,10 +331,29 @@
       <!-- Scaled from the title-bar/header slider (SphereZoomSlider.svelte)
            rather than from section resizing: the board has no fixed design
            width, so it fills its container and scrolls instead. -->
-      <div class="sphere-columns" style="zoom: {settings.sphereBoardZoom / 100}">
+      <!-- Inside the zoomed container so the lines scale with the cards, and
+           absolutely positioned so they scroll with them. Hover is delegated
+           here rather than bound per card - every card type would otherwise
+           need its own listeners. -->
+      <div
+        class="sphere-columns"
+        style="zoom: {settings.sphereBoardZoom / 100}"
+        bind:this={columnsElement}
+        onmouseover={(event) => setChainFocus(event.target as HTMLElement)}
+        onmouseout={() => applySphereChainFocus(columnsElement ?? null, edgesElement ?? null, "")}
+      >
+        <svg class="sphere-edges" bind:this={edgesElement} aria-hidden="true"></svg>
         <article class="sphere-column start-column">
           <h3>Start</h3>
-          <div class="sphere-start-node" title={data.sphereStartingGear.join("\n") || "No additional starting gear"}>
+          <button
+            type="button"
+            class="sphere-groups-toggle"
+            title={groupsWillExpand ? "Expand every area panel" : "Collapse every area panel"}
+            onclick={() => toggleAllSphereGroups(areaGroupNodeIds)}
+          >
+            {groupsWillExpand ? "Expand all" : "Collapse all"}
+          </button>
+          <div class="sphere-start-node" data-node-id="start" title={data.sphereStartingGear.join("\n") || "No additional starting gear"}>
             {data.sphereStartingGear.length ? `${data.sphereStartingGear.length} starting items` : "Starting gear"}
           </div>
         </article>
@@ -245,7 +365,7 @@
               <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
               <div class="sphere-area-groups">
                 {#each column.groups as group (group.area)}
-                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} />
+                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} sphere={column.sphereNumber} dependencySource={calculation.dependencies} />
                 {/each}
               </div>
             {/if}
@@ -261,7 +381,7 @@
             {#if pathsBySphere.get(column.sphereNumber)?.length}
               <div class="sphere-prediction-list">
                 {#each pathsBySphere.get(column.sphereNumber) ?? [] as entry (entry.hint.lineNumber)}
-                  <SpherePathPredictionNode {entry} />
+                  <SpherePathPredictionNode {entry} sourceIds={pathSourceIds.get(entry.hint.lineNumber) ?? []} />
                 {/each}
               </div>
             {/if}
@@ -275,11 +395,15 @@
               <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
               <div class="sphere-area-groups">
                 {#each column.groups as group (group.area)}
-                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} />
+                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} sphere={`p${column.level}`} dependencySource={calculation.dependencies} />
                 {/each}
               </div>
             {/if}
-            {#if column.placements.length || (column.level === 0 && unplacedItems.length)}
+            <!-- Path cards are rendered inside this block, so they have to
+                 count towards showing it: a column whose only content was a
+                 solved path card (Molgera in "After sphere ?", say) rendered
+                 its heading with an empty body and the card disappeared. -->
+            {#if column.placements.length || (pathsByLevel.get(column.level)?.length ?? 0) > 0 || (column.level === 0 && (unplacedItems.length || knowledge.acquiredShardSources.length || knowledge.areaHints.length))}
               <div class="sphere-prediction-list">
                 {#each column.placements as placement (placement.id)}
                   <SpherePlacementNode
@@ -293,9 +417,15 @@
                   {#each unplacedItems as entry (entry.id)}
                     <SphereUnplacedItemNode {entry} />
                   {/each}
+                  {#each knowledge.acquiredShardSources as source (source.id)}
+                    <SphereAcquiredShardNode {source} />
+                  {/each}
+                  {#each knowledge.areaHints as hint (hint.lineNumber)}
+                    <SphereAreaHintNode {hint} {calculation} {occupiedLocationKeys} />
+                  {/each}
                 {/if}
                 {#each pathsByLevel.get(column.level) ?? [] as entry (entry.hint.lineNumber)}
-                  <SpherePathPredictionNode {entry} />
+                  <SpherePathPredictionNode {entry} sourceIds={pathSourceIds.get(entry.hint.lineNumber) ?? []} />
                 {/each}
               </div>
             {/if}
@@ -307,7 +437,7 @@
             <h3>Paths</h3>
             <div class="sphere-prediction-list">
               {#each unresolvedPaths as entry (entry.hint.lineNumber)}
-                <SpherePathPredictionNode {entry} />
+                <SpherePathPredictionNode {entry} sourceIds={pathSourceIds.get(entry.hint.lineNumber) ?? []} />
               {/each}
             </div>
           </article>

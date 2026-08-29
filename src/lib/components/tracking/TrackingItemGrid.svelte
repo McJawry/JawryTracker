@@ -143,7 +143,7 @@
             {:else}
               <img src={trackerAsset("triforce_gray")} alt={itemName} />
               {#each ownedShards as shard (shard.number)}
-                <img class="triforce-shard-layer" src={trackerAsset(`shard_${shard.number}`)} alt="" />
+                <img class="triforce-shard-layer" class:starting={shard.starting} src={trackerAsset(`shard_${shard.number}`)} alt="" />
                 {#if shard.starting}
                   <!-- Red blended over the shard (masked to its own shape)
                        rather than a filter recolour, so the piece keeps its

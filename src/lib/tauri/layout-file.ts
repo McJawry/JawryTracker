@@ -43,6 +43,8 @@ export interface LayoutPreferences {
   sectionWidths: Record<string, number>;
   sectionVisibility: SectionVisibility;
   sphereBoardZoom: number;
+  /** Per-section content scale for undocked windows, keyed by section id. */
+  popoutZoom: Record<string, number>;
   /** Sections popped out into their own window, reopened on next launch. */
   undockedSections: string[];
   /** Where each popout window sat on screen, in physical pixels. */
@@ -69,6 +71,7 @@ function currentPreferences(
     sectionWidths: { ...settings.sectionWidths },
     sectionVisibility: { ...settings.sectionVisibility },
     sphereBoardZoom: settings.sphereBoardZoom,
+    popoutZoom: { ...settings.popoutZoom },
     undockedSections: [...undockedState.ids],
     windowSize: readWindowSize()
   };
@@ -82,6 +85,12 @@ function applyPreferences(prefs: Partial<LayoutPreferences>): void {
   if (prefs.sectionWidths) Object.assign(settings.sectionWidths, { ...DEFAULT_SECTION_WIDTHS, ...prefs.sectionWidths });
   if (prefs.sectionVisibility) Object.assign(settings.sectionVisibility, { ...DEFAULT_SECTION_VISIBILITY, ...prefs.sectionVisibility });
   if (typeof prefs.sphereBoardZoom === "number") settings.sphereBoardZoom = prefs.sphereBoardZoom;
+  // Replaced, not merged: a preset that omits a section means "no scale
+  // override there", and merging would leave the previous preset's value.
+  if (prefs.popoutZoom) {
+    Object.keys(settings.popoutZoom).forEach((key) => delete settings.popoutZoom[key]);
+    Object.assign(settings.popoutZoom, prefs.popoutZoom);
+  }
   if (Array.isArray(prefs.undockedSections)) setUndockedIds(prefs.undockedSections);
   saveSettings();
 }
@@ -171,6 +180,7 @@ export async function resetLayoutToDefaults(): Promise<LayoutFileResult> {
   Object.assign(settings.sectionWidths, DEFAULT_SECTION_WIDTHS);
   Object.assign(settings.sectionVisibility, DEFAULT_SECTION_VISIBILITY);
   settings.sphereBoardZoom = 100;
+  Object.keys(settings.popoutZoom).forEach((key) => delete settings.popoutZoom[key]);
   setUndockedIds([]);
   saveSettings();
 
