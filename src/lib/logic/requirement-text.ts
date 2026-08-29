@@ -12,7 +12,8 @@ import { data } from "$lib/state/data.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
 import { getEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { getDungeonItems } from "$lib/state/dungeon-items.svelte";
-import { DUNGEON_KEY_LOGIC } from "$lib/gameData";
+import { DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
+import { getMaximalSphereLogicInventory, getSphereReachabilityWithOwnDungeonKeys } from "$lib/logic/sphere-calculation";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -280,51 +281,244 @@ function describeEntrancePath(location: string, route: { areaNames: string[] } |
   return route.areaNames.slice(-2).join(" -> ");
 }
 
+
+/**
+ * Display names, matching prettyTrackerName (gui/desktop/tracker/tracker.cpp
+ * :1897). Progressive items are named by the stage the count reaches; anything
+ * else is its own name, with " xN" appended past one copy.
+ */
+const PROGRESSIVE_STAGE_NAMES: Record<string, string[]> = {
+  "progressive sword": ["Hero's Sword", "Master Sword", "Master Sword (Half-Power)", "Master Sword (Full-Power)"],
+  "progressive sail": ["Sail", "Swift Sail"],
+  "progressive shield": ["Hero's Shield", "Mirror Shield"],
+  "progressive bow": ["Hero's Bow", "Fire & Ice Arrows", "Light Arrows"],
+  "progressive magic meter": ["Magic", "Double Magic"],
+  "progressive wallet": ["Wallet (1000)", "Wallet (5000)"],
+  "progressive picto box": ["Picto Box", "Deluxe Picto Box"],
+  "progressive bomb bag": ["Bomb Bag (60)", "Bomb Bag (99)"],
+  "progressive quiver": ["Quiver (60)", "Quiver (99)"]
+};
+
+function prettyTrackerName(item: string, count: number): string {
+  const stages = PROGRESSIVE_STAGE_NAMES[normalize(item)];
+  if (stages) return stages[Math.min(count, stages.length) - 1] ?? item;
+  return count > 1 ? `${item} x${count}` : item;
+}
+
+/**
+ * The items a location genuinely requires, found by elimination: take the
+ * maximal inventory, remove one item entirely, and see whether the location
+ * is still reachable. If it isn't, that item is required - and the smallest
+ * number of copies that restores reachability is the count.
+ *
+ * This is what makes the list flat. The randomizer's own tracker reaches the
+ * same place by flattening the world into DNF and minimising it
+ * (logic/flatten/); necessity-by-elimination gets the same answer for every
+ * item that is actually required, without porting a logic minimiser. It also
+ * resolves choices the way theirs does: "(Sword or Bow or Bombs)" contributes
+ * nothing unless one of them is needed elsewhere on the route, in which case
+ * only that one survives - which is why the reference shows a bare "Hero's
+ * Bow" for Molgera.
+ *
+ * Known gap vs. theirs: a genuine either/or that no other requirement forces
+ * is omitted here, where they would print "(A or B)". See the note in the
+ * tooltip's empty state.
+ */
+interface RequiredItem {
+  item: string;
+  count: number;
+}
+
+const requiredItemsCache = new Map<string, RequiredItem[] | null>();
+
+/**
+ * Cache key. Entrance mappings are part of it because assigning a dungeon to a
+ * different island changes what a location needs, and that happens without a
+ * logic reload - so keying on the location alone served a stale list until the
+ * next re-sync.
+ */
+function requirementCacheKey(location: string): string {
+  const entrances = Object.entries(sphere.entranceMappings)
+    .map(([name, sector]) => `${normalize(name)}>${normalize(sector)}`)
+    .sort()
+    .join("|");
+  return `${normalize(location)}::${entrances}`;
+}
+
+export function clearRequirementCache(): void {
+  requiredItemsCache.clear();
+  // In-flight passes are abandoned rather than allowed to write a result
+  // computed against the logic that was just replaced.
+  requirementGeneration += 1;
+  pendingRequests.clear();
+}
+
+// Bumped whenever the cache is cleared; an async pass that started before the
+// bump discards its result.
+let requirementGeneration = 0;
+
+/**
+ * Hands control back to the browser so a long elimination pass doesn't freeze
+ * the UI. Each item's test is a full reachability search, and there are ~50 of
+ * them - run back to back that is about a second of blocked main thread.
+ */
+async function yieldToBrowser(): Promise<void> {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (scheduler?.yield) return scheduler.yield();
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Chunked twin of computeRequiredItems - same result, yielding as it goes. */
+async function computeRequiredItemsAsync(location: string): Promise<RequiredItem[] | null> {
+  const locationKey = normalize(location);
+  const maximal = getMaximalSphereLogicInventory();
+  if (!getSphereReachabilityWithOwnDungeonKeys(maximal).has(locationKey)) return null;
+
+  const maxCounts = new Map<string, number>();
+  maximal.forEach((item) => maxCounts.set(item, (maxCounts.get(item) ?? 0) + 1));
+
+  const withCappedCopies = (item: string, keep: number): string[] => {
+    let seen = 0;
+    return maximal.filter((candidate) => (candidate === item ? seen++ < keep : true));
+  };
+
+  const required: RequiredItem[] = [];
+  let sinceYield = 0;
+  for (const [item, maxCount] of maxCounts) {
+    // A handful of searches between yields: often enough that the UI keeps
+    // painting, rarely enough that the yields don't dominate the runtime.
+    if (sinceYield >= 4) {
+      sinceYield = 0;
+      await yieldToBrowser();
+    }
+    sinceYield += 1;
+
+    if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, 0)).has(locationKey)) continue;
+    let needed = maxCount;
+    for (let keep = 1; keep < maxCount; keep += 1) {
+      if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, keep)).has(locationKey)) {
+        needed = keep;
+        break;
+      }
+    }
+    required.push({ item, count: needed });
+  }
+
+  const order = new Map(maximal.map((item, index) => [item, index] as const));
+  required.sort((left, right) => (order.get(left.item) ?? 0) - (order.get(right.item) ?? 0));
+  return required;
+}
+
+function computeRequiredItems(location: string): RequiredItem[] | null {
+  const locationKey = normalize(location);
+  const maximal = getMaximalSphereLogicInventory();
+  // Unreachable even holding everything: no item list can explain it.
+  if (!getSphereReachabilityWithOwnDungeonKeys(maximal).has(locationKey)) return null;
+
+  const maxCounts = new Map<string, number>();
+  maximal.forEach((item) => maxCounts.set(item, (maxCounts.get(item) ?? 0) + 1));
+
+  const withCappedCopies = (item: string, keep: number): string[] => {
+    let seen = 0;
+    return maximal.filter((candidate) => (candidate === item ? seen++ < keep : true));
+  };
+
+  const required: RequiredItem[] = [];
+  maxCounts.forEach((maxCount, item) => {
+    // One test rules out the vast majority: drop the item entirely and see if
+    // anything changes.
+    if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, 0)).has(locationKey)) return;
+    let needed = maxCount;
+    for (let keep = 1; keep < maxCount; keep += 1) {
+      if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, keep)).has(locationKey)) {
+        needed = keep;
+        break;
+      }
+    }
+    required.push({ item, count: needed });
+  });
+
+  // Stable order: the seed's own item order, so the list doesn't reshuffle
+  // between hovers.
+  const order = new Map(maximal.map((item, index) => [item, index] as const));
+  required.sort((left, right) => (order.get(left.item) ?? 0) - (order.get(right.item) ?? 0));
+  return required;
+}
+
+function getRequiredItems(location: string): RequiredItem[] | null {
+  const key = requirementCacheKey(location);
+  if (requiredItemsCache.has(key)) return requiredItemsCache.get(key)!;
+  const result = computeRequiredItems(location);
+  requiredItemsCache.set(key, result);
+  return result;
+}
+
+// One in-flight computation per location, so re-hovering while it runs
+// doesn't start a second pass.
+const pendingRequests = new Map<string, Promise<void>>();
+
+/** True when the answer is already cached and can be rendered immediately. */
+export function hasRequirementsReady(location: string): boolean {
+  return requiredItemsCache.has(requirementCacheKey(location));
+}
+
+/**
+ * Computes the requirements without blocking, resolving once they're cached.
+ * The caller re-reads via getLocationRequirements afterwards.
+ */
+export function requestLocationRequirements(location: string): Promise<void> {
+  const key = requirementCacheKey(location);
+  if (requiredItemsCache.has(key)) return Promise.resolve();
+  const existing = pendingRequests.get(key);
+  if (existing) return existing;
+
+  const generation = requirementGeneration;
+  const request = computeRequiredItemsAsync(location)
+    .then((result) => {
+      if (generation !== requirementGeneration) return;
+      requiredItemsCache.set(key, result);
+    })
+    .catch((error) => {
+      console.error("Could not work out the requirements for", location, error);
+    })
+    .finally(() => {
+      pendingRequests.delete(key);
+    });
+  pendingRequests.set(key, request);
+  return request;
+}
+
 export function getLocationRequirements(location: string): LocationRequirements {
-  const rule = data.sphereRules[normalize(location)];
   const route = findEntranceRoute(location);
   const entrancePath = describeEntrancePath(location, route);
 
-  if (rule === undefined || rule === null) {
+  // No rule at all - logic isn't loaded, or this location isn't in the seed.
+  if (data.sphereRules[normalize(location)] === undefined) {
     return { entrancePath, terms: [], unknown: true };
   }
 
-  // The location's own rule AND everything needed to reach its area. Without
-  // the route requirements the tooltip understates a deep dungeon check by a
-  // long way - it would list the room's own needs but not the pearls, keys or
-  // entrance access that get you there.
-  const routeNodes = (route?.needs ?? []).map((need) => WWRSphereEngine.compileExpression(need));
-  const combined = [WWRSphereEngine.compileExpression(rule), ...routeNodes].reduce((left, right) => ({
-    type: "and" as const,
-    left,
-    right
-  }));
-
-  const expanded = expandMacros(combined, 0);
-  const seenTerms = new Set<string>();
-  const terms = flattenAnd(expanded).map((term) => {
-    const tokens: RequirementToken[] = [];
-    renderNode(term, tokens, null);
-    const atoms = tokens.filter((token) => token.kind === "atom");
+  const required = getRequiredItems(location);
+  if (required === null) {
     return {
-      tokens,
-      // A term with any OR in it can be satisfied without every atom, so
-      // "satisfied" here only claims something for plain all-atoms-required
-      // terms; mixed terms fall back to false and rely on per-atom colour.
-      satisfied: atoms.length > 0 && atoms.every((token) => token.status === "have")
+      entrancePath,
+      terms: [
+        {
+          tokens: [{ text: "Impossible (please discover an entrance first)", kind: "atom", status: "missing" }],
+          satisfied: false
+        }
+      ],
+      unknown: false
+    };
+  }
+
+  // One bullet per required item, matching the reference tracker's flat list.
+  const terms = required.map(({ item, count }) => {
+    const status: RequirementStatus = getOwnedCount(item) >= count ? "have" : "missing";
+    return {
+      tokens: [{ text: prettyTrackerName(item, count), kind: "atom" as const, status }],
+      satisfied: status === "have"
     };
   });
 
-  // "Nothing" compiles to a single always-true atom - no requirements at all.
-  // Route requirements repeat heavily across hops (every room inside a dungeon
-  // re-states the dungeon's own access), so identical terms collapse to one.
-  const meaningful = terms.filter((term) => {
-    if (!term.tokens.some((token) => token.kind === "atom" && token.text.toLowerCase() !== "nothing")) return false;
-    const signature = term.tokens.map((token) => token.text).join(" ");
-    if (seenTerms.has(signature)) return false;
-    seenTerms.add(signature);
-    return true;
-  });
-
-  return { entrancePath, terms: meaningful, unknown: false };
+  return { entrancePath, terms, unknown: false };
 }

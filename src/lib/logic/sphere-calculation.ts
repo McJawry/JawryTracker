@@ -119,6 +119,7 @@ export function calculateSphereProgression(placements: SpherePlacement[]): Spher
 // Module-level, non-reactive cache (not UI state) - cleared by
 // invalidateSphereAnalysis() in sphere-worker-client.ts.
 export const sphereReachabilityCache = new Map<string, Set<string>>();
+const REACHABILITY_CACHE_LIMIT = 400;
 
 const BOSS_LOCATIONS_FOR_REACHABILITY = [
   "Dragon Roost Cavern - Gohma Heart Container",
@@ -132,10 +133,17 @@ const BOSS_LOCATIONS_FOR_REACHABILITY = [
 
 export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
   const additionalStartAreas = options.additionalStartAreas || [];
+  // Entrance mappings belong in the key: they change reachability and, unlike
+  // the rules/macros/options, they change *without* a logic reload - so with
+  // them missing the only safe thing was to wipe this cache on every tracker
+  // change, which made every first hover pay a full cold recompute.
   const cacheKey = JSON.stringify({
     items: items.map(normalize).sort(),
     additionalStartAreas: additionalStartAreas.map(normalize).sort(),
-    startingIsland: normalize(data.sphereStartingIsland)
+    startingIsland: normalize(data.sphereStartingIsland),
+    entranceMappings: Object.entries(sphere.entranceMappings)
+      .map(([name, sector]) => [normalize(name), normalize(sector)])
+      .sort(([first], [second]) => first.localeCompare(second))
   });
   const cached = sphereReachabilityCache.get(cacheKey);
   if (cached) return cached;
@@ -159,6 +167,14 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
       additionalStartAreas
     })
   );
+  // The cache now survives across tracker changes, so it needs a ceiling.
+  // Every distinct inventory produces an entry and a long session walks
+  // through a lot of them; dropping the oldest keeps it bounded without the
+  // bookkeeping of a real LRU.
+  if (sphereReachabilityCache.size >= REACHABILITY_CACHE_LIMIT) {
+    const oldest = sphereReachabilityCache.keys().next().value;
+    if (oldest !== undefined) sphereReachabilityCache.delete(oldest);
+  }
   sphereReachabilityCache.set(cacheKey, reachable);
   return reachable;
 }

@@ -62,6 +62,15 @@ export interface RelativeUnknownResult {
   dependencies: Map<string, string[]>;
   availableLocations: string[];
   availableDependencies: Map<string, string[]>;
+  /**
+   * Which relative column each available location belongs in, keyed by
+   * normalized location. A location unlocked by an unresolved placement sits
+   * one step after it, exactly as a placement gated behind another does -
+   * previously every available location was dumped into level 0, so a check
+   * that only opens once the Spoils Bag turns up appeared alongside the
+   * Spoils Bag instead of after it.
+   */
+  availableLocationLevels: Map<string, number>;
 }
 
 export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, calculation: SphereCalculationResult): RelativeUnknownResult {
@@ -81,7 +90,14 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
   const placementLevels = new Map<string, number>(unresolvedPlacements.map((placement) => [placement.id, 0]));
   const dependencies = new Map<string, string[]>(unresolvedPlacements.map((placement) => [placement.id, []]));
   if (!sources.length) {
-    return { unresolvedPlacements, placementLevels, dependencies, availableLocations: [], availableDependencies: new Map() };
+    return {
+      unresolvedPlacements,
+      placementLevels,
+      dependencies,
+      availableLocations: [],
+      availableDependencies: new Map(),
+      availableLocationLevels: new Map()
+    };
   }
 
   const resolvedPlacements = knowledge.placements.filter(
@@ -266,5 +282,34 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
     });
   }
 
-  return { unresolvedPlacements, placementLevels, dependencies, availableLocations, availableDependencies };
+  // Same rule the placement levels use: one step after whatever unlocks it.
+  // Several unresolved copies of the same item are alternatives rather than
+  // cumulative requirements, so take the earliest within an item and the
+  // latest across distinct items - mirroring the equivalentSources handling
+  // applied to placement dependencies above.
+  const availableLocationLevels = new Map<string, number>();
+  availableLocations.forEach((location) => {
+    const key = normalize(location);
+    const deps = unique(availableDependencies.get(key) ?? []).filter((id) => sourceIds.has(id));
+    if (!deps.length) {
+      availableLocationLevels.set(key, 0);
+      return;
+    }
+    const earliestByItem = new Map<string, number>();
+    deps.forEach((id) => {
+      const itemKey = normalize(sourceById.get(id)?.item ?? id);
+      const level = placementLevels.get(id) ?? 0;
+      earliestByItem.set(itemKey, Math.min(earliestByItem.get(itemKey) ?? level, level));
+    });
+    availableLocationLevels.set(key, Math.max(...earliestByItem.values()) + 1);
+  });
+
+  return {
+    unresolvedPlacements,
+    placementLevels,
+    dependencies,
+    availableLocations,
+    availableDependencies,
+    availableLocationLevels
+  };
 }

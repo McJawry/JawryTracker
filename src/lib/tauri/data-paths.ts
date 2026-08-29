@@ -65,17 +65,29 @@ export async function getDataRoot(location: PresetLocation): Promise<string> {
  * Layout presets stay directly in `presets/` (where they have always been);
  * colours get a subfolder.
  */
-export type PresetKind = "layout" | "colors";
+export type PresetKind = "layout" | "colors" | "runs";
 
 export const PRESET_KIND_FOLDERS: Record<PresetKind, string[]> = {
   layout: ["presets"],
-  colors: ["presets", "colors"]
+  colors: ["presets", "colors"],
+  // Runs are saved state, not preferences, so they get their own folder
+  // rather than sitting among the presets. Keeping them out of the data root
+  // also means autosave.json can keep rewriting itself without ever
+  // touching a named save.
+  runs: ["saves"]
 };
 
 export async function getPresetsDir(location: PresetLocation, kind: PresetKind = "layout"): Promise<string> {
   let dir = await getDataRoot(location);
   for (const segment of PRESET_KIND_FOLDERS[kind]) dir = await join(dir, segment);
   return ensureDir(dir);
+}
+
+/** Opens a preset/save folder in the system file manager. */
+export async function openPresetsDir(location: PresetLocation, kind: PresetKind): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const { openPath } = await import("@tauri-apps/plugin-opener");
+  await openPath(await getPresetsDir(location, kind));
 }
 
 /** Opens a data root in the system file manager. */

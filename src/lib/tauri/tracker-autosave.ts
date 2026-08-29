@@ -11,7 +11,15 @@
 // handled by layout.json and the preset files.
 import { readTextFile, writeTextFile, exists } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
-import { getAppDataRoot } from "./data-paths";
+import { getAppDataRoot, openPresetsDir, type PresetLocation } from "./data-paths";
+import {
+  listPreferencePresets,
+  savePreferencePreset,
+  readPreferencePreset,
+  deletePreferencePreset,
+  type PresetEntry,
+  type PresetResult
+} from "./preference-presets";
 import { isTauriRuntime } from "./is-tauri";
 import { CHECKED_KEY, ITEM_STORAGE_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 
@@ -132,4 +140,45 @@ export async function loadTrackerAutosave(): Promise<AutosaveLoadResult> {
   if (!save) return { ok: false, message: "No autosave.json in the data folder." };
   if (!applyAutosave(save)) return { ok: false, message: "That autosave is empty or unreadable." };
   return { ok: true, message: `Loaded autosave from ${save.savedAt ? new Date(save.savedAt).toLocaleString() : "unknown time"}.` };
+}
+
+/**
+ * Named run saves, stored per data root exactly like preference presets
+ * (see preference-presets.ts / data-paths.ts) so a run can travel with a
+ * portable copy of the app or be shared between copies via the user folder.
+ *
+ * These are deliberately separate files from `autosave.json`: the autosave
+ * keeps rewriting itself on every change, so a run you deliberately saved
+ * must not live in the same file or it would be overwritten a second later.
+ */
+export async function listRunSaves(location: PresetLocation): Promise<PresetEntry[]> {
+  return listPreferencePresets(location, "runs");
+}
+
+export async function saveRunAs(name: string, location: PresetLocation): Promise<PresetResult> {
+  if (!isTauriRuntime()) return { ok: false, message: "Saving a run requires the desktop app." };
+  return savePreferencePreset(name, location, currentAutosave(), "runs");
+}
+
+export async function loadRunSave(name: string, location: PresetLocation): Promise<AutosaveLoadResult> {
+  if (!isTauriRuntime()) return { ok: false, message: "Loading a run requires the desktop app." };
+  const save = (await readPreferencePreset(name, location, "runs")) as Partial<TrackerAutosave> | null;
+  if (!save) return { ok: false, message: `Could not read the save "${name}".` };
+  if (!applyAutosave(save)) return { ok: false, message: "That save is empty or unreadable." };
+  // Keep autosave.json in step with what is now loaded, rather than leaving
+  // it describing the run this just replaced.
+  await saveTrackerAutosave();
+  const savedAt = save.savedAt;
+  return {
+    ok: true,
+    message: `Loaded "${name}"${savedAt ? ` from ${new Date(savedAt).toLocaleString()}` : ""}.`
+  };
+}
+
+export async function deleteRunSave(name: string, location: PresetLocation): Promise<PresetResult> {
+  return deletePreferencePreset(name, location, "runs");
+}
+
+export async function openRunSaveFolder(location: PresetLocation): Promise<void> {
+  await openPresetsDir(location, "runs");
 }

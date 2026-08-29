@@ -19,7 +19,13 @@
     type PresetEntry
   } from "$lib/tauri/preference-presets";
   import { saveColorPreset, loadColorPreset, resetColorsToDefaults } from "$lib/tauri/color-presets";
-  import { saveTrackerAutosave, loadTrackerAutosave } from "$lib/tauri/tracker-autosave";
+  import {
+    listRunSaves,
+    saveRunAs,
+    loadRunSave,
+    deleteRunSave,
+    openRunSaveFolder
+  } from "$lib/tauri/tracker-autosave";
   import {
     describeDataRoots,
     openDataRoot,
@@ -163,17 +169,46 @@
   // the manual save/load for copying a run between builds.
   let autosaveStatus = $state("");
 
-  async function saveRunNow() {
+  // Named run saves, mirroring the preference-preset controls above.
+  let runName = $state("");
+  let runSaves: PresetEntry[] = $state([]);
+  let selectedRun = $state("");
+  const runLocation = $derived(settings.runSaveLocation as PresetLocation);
+
+  async function refreshRunSaves() {
+    runSaves = await listRunSaves(runLocation);
+    if (!runSaves.some((entry) => entry.name === selectedRun)) selectedRun = runSaves[0]?.name ?? "";
+  }
+
+  $effect(() => {
+    runLocation;
+    void refreshRunSaves();
+  });
+
+  async function saveRun() {
     autosaveStatus = "Saving...";
-    await saveTrackerAutosave();
-    autosaveStatus = "Run saved to data/autosave.json.";
+    const result = await saveRunAs(runName, runLocation);
+    autosaveStatus = result.message;
+    if (!result.ok) return;
+    runName = "";
+    await refreshRunSaves();
+    if (result.name) selectedRun = result.name;
   }
 
   async function loadRun() {
-    if (!confirm("Replace the current run with the contents of data/autosave.json?")) return;
-    const result = await loadTrackerAutosave();
+    if (!selectedRun) return;
+    if (!confirm(`Replace the current run with "${selectedRun}"?`)) return;
+    const result = await loadRunSave(selectedRun, runLocation);
     autosaveStatus = result.message;
     if (result.ok) window.location.reload();
+  }
+
+  async function deleteRun() {
+    if (!selectedRun) return;
+    if (!confirm(`Delete the saved run "${selectedRun}"?`)) return;
+    const result = await deleteRunSave(selectedRun, runLocation);
+    autosaveStatus = result.message;
+    await refreshRunSaves();
   }
 
   async function importPreferences() {
@@ -258,16 +293,52 @@
   </fieldset>
 
   <fieldset class="settings-group">
-    <legend>Run autosave</legend>
+    <legend>Run saves</legend>
     <p class="setting-hint">
       Checked locations, items, hints, notes and dungeon items mirror to
-      <code>data/autosave.json</code>. Copy that one file into another build's
-      <code>data</code> folder to carry the run across.
+      <code>data/autosave.json</code> continuously. Saving under a name keeps a
+      separate copy in <code>saves/</code> that the autosave never overwrites.
     </p>
+
+    <label class="setting-control">
+      <span>Folder</span>
+      <select bind:value={settings.runSaveLocation} onchange={update}>
+        {#each Object.entries(PRESET_LOCATION_LABELS) as [value, label] (value)}
+          <option {value}>{label}</option>
+        {/each}
+      </select>
+    </label>
+
     <div class="setting-row">
-      <button class="tool-button" type="button" onclick={saveRunNow}>Save run now</button>
-      <button class="tool-button" type="button" onclick={loadRun}>Load run from autosave</button>
+      <select class="preset-select" bind:value={selectedRun} disabled={!runSaves.length}>
+        {#if runSaves.length}
+          {#each runSaves as save (save.name)}
+            <option value={save.name}>{save.name}</option>
+          {/each}
+        {:else}
+          <option value="">No runs saved here</option>
+        {/if}
+      </select>
+      <button class="tool-button" type="button" disabled={!selectedRun} onclick={loadRun}>Load run from savefile</button>
+      <button class="tool-button" type="button" disabled={!selectedRun} onclick={deleteRun}>Delete</button>
     </div>
+
+    <div class="setting-row">
+      <input
+        class="preset-name"
+        type="text"
+        placeholder="New run save name"
+        bind:value={runName}
+        onkeydown={(event) => event.key === "Enter" && saveRun()}
+      />
+      <button class="tool-button" type="button" disabled={!runName.trim()} onclick={saveRun}>Save as</button>
+    </div>
+
+    <div class="setting-row">
+      <button class="tool-button" type="button" onclick={() => openRunSaveFolder("app")}>Open portable save folder</button>
+      <button class="tool-button" type="button" onclick={() => openRunSaveFolder("user")}>Open shared save folder</button>
+    </div>
+
     {#if autosaveStatus}<p class="setting-status">{autosaveStatus}</p>{/if}
   </fieldset>
 

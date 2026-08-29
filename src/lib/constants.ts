@@ -89,6 +89,7 @@ export interface Settings {
   presetLocation: "app" | "user";
   /** Same, for colour presets - chosen independently of the layout one. */
   colorPresetLocation: "app" | "user";
+  runSaveLocation: "app" | "user";
   /** Notes panel grows with its text instead of scrolling inside a fixed box. */
   notesAutoGrow: boolean;
   /** Textarea height used when notesAutoGrow is off. */
@@ -165,6 +166,7 @@ export const DEFAULT_SETTINGS: Settings = {
   randoConfigText: null,
   presetLocation: "app",
   colorPresetLocation: "app",
+  runSaveLocation: "app",
   notesAutoGrow: true,
   notesHeight: 300,
   sectionVisibility: { ...DEFAULT_SECTION_VISIBILITY },

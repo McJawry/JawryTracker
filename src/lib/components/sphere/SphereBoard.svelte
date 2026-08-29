@@ -241,16 +241,23 @@
     const relativeUnknown = sphereAnalysisCache.relativeUnknown;
     if (!calculation || !relativeUnknown) return [];
 
-    const maxLevel = Math.max(0, ...relativeUnknown.placementLevels.values(), ...pathsByLevel.keys());
+    const maxLevel = Math.max(
+      0,
+      ...relativeUnknown.placementLevels.values(),
+      ...relativeUnknown.availableLocationLevels.values(),
+      ...pathsByLevel.keys()
+    );
     const columns: PredictionColumnData[] = [];
 
     for (let level = 0; level <= maxLevel; level += 1) {
       const placements = relativeUnknown.unresolvedPlacements.filter(
         (placement) => (relativeUnknown.placementLevels.get(placement.id) || 0) === level
       );
-      // Locations reachable only once the unknown resolves are all level 0 -
-      // there's no basis for ordering them any finer than that.
-      const availableLocations = level === 0 ? relativeUnknown.availableLocations || [] : [];
+      // Each available location sits in the column for whatever unlocks it,
+      // rather than all landing in level 0 - see availableLocationLevels.
+      const availableLocations = (relativeUnknown.availableLocations ?? []).filter(
+        (location) => (relativeUnknown.availableLocationLevels.get(normalize(location)) ?? 0) === level
+      );
       // A level that holds only a path card still needs its column.
       const hasPathCard = (pathsByLevel.get(level)?.length ?? 0) > 0;
       const hasUnknownSphereCards =

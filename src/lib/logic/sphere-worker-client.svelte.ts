@@ -37,6 +37,7 @@ import { getAvailableLocations } from "$lib/logic/locations";
 import { inferRelativeUnknownSpheres } from "$lib/logic/sphere-inference";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { clearHardBossRequirementCache } from "$lib/logic/sphere-boss-icons";
+import { clearRequirementCache } from "$lib/logic/requirement-text";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -66,15 +67,19 @@ function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
 }
 
 export function invalidateSphereAnalysis(): void {
-  // This runs on every routine placement change, not just a logic re-sync -
-  // the persistent worker deliberately stays alive across this (see the
-  // comment on getSphereAnalysisWorker below); bumping the job id is enough
-  // to make any in-flight response for a now-stale request get ignored.
+  // Only a real logic/settings reload calls this (applySphereLogic), not a
+  // routine placement change - so it is the right place to drop the derived
+  // caches wholesale. The persistent worker deliberately stays alive across
+  // it (see getSphereAnalysisWorker below); bumping the job id is enough to
+  // make any in-flight response for a now-stale request get ignored.
   sphereAnalysisJobId += 1;
   Object.assign(sphereAnalysisCache, { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, pending: false, dependenciesReady: false });
   sphereReachabilityCache.clear();
   clearHardBossRequirementCache();
   clearOwnDungeonKeyPoolCache();
+  // The required-item lists are derived from the logic and settings only, so
+  // they survive inventory changes - but a logic reload has to drop them.
+  clearRequirementCache();
 }
 
 function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculationResult | null): void {
@@ -213,7 +218,11 @@ export function getSphereBoardAnalysis(knowledge: SphereTrackingKnowledge) {
   const key = getSphereAnalysisKey(knowledge);
   if (sphereAnalysisCache.key === key) return sphereAnalysisCache;
 
-  sphereReachabilityCache.clear();
+  // No longer cleared here: the reachability cache keys on the inventory and
+  // the entrance mappings, so a tracker change can't collide with a stale
+  // entry. A real logic or settings reload still clears it, via
+  // invalidateSphereAnalysis. Wiping it on every change meant the first
+  // requirement tooltip after any click paid a full cold recompute.
   const canAnalyze = data.sphereLogicLoaded;
 
   // The previous calculation deliberately stays in place while the new one
