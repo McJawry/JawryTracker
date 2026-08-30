@@ -242,12 +242,32 @@ export function selectLatestPathCandidates(
   candidates: Array<{ id: string; sphere?: number; relativeLevel?: number }>
 ): Array<{ id: string }> {
   if (!candidates.length) return [];
-  const rank = (candidate: { sphere?: number; relativeLevel?: number }) =>
-    Number.isInteger(candidate.sphere) ? (candidate.sphere as number)
-      : Number.isInteger(candidate.relativeLevel) ? (candidate.relativeLevel as number)
-      : -1;
-  const highest = Math.max(...candidates.map(rank));
-  return candidates.filter((candidate) => rank(candidate) === highest);
+  // A relative level sits after every known sphere by definition, so it
+  // outranks any absolute sphere instead of being compared against one on the
+  // same scale: "sphere 5" comes before "one step after the unknown sphere",
+  // not after it.
+  const rank = (candidate: { sphere?: number; relativeLevel?: number }): [number, number] =>
+    Number.isInteger(candidate.relativeLevel) ? [1, candidate.relativeLevel as number]
+      : Number.isInteger(candidate.sphere) ? [0, candidate.sphere as number]
+      : [-1, 0];
+  const highest = candidates.map(rank).reduce((best, next) => (next[0] > best[0] || (next[0] === best[0] && next[1] > best[1]) ? next : best));
+  return candidates.filter((candidate) => {
+    const [tier, value] = rank(candidate);
+    return tier === highest[0] && value === highest[1];
+  });
+}
+
+/**
+ * How many path hints point at the same area as this one.
+ *
+ * The randomizer gives every hinted boss its own path item, so an area hinted
+ * as the path to two bosses holds two *distinct* path items - confirmed with
+ * the randomizer's developers. That rules out narrowing several hints on one
+ * area down to the same single candidate.
+ */
+export function countPathHintsForArea(hint: Hint, knowledge: SphereTrackingKnowledge): number {
+  const areaKey = normalize(hint.left.name);
+  return (knowledge.pathHints ?? []).filter((candidate) => normalize(candidate.left.name) === areaKey).length;
 }
 
 export interface PathCandidate {

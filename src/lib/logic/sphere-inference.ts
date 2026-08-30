@@ -32,6 +32,75 @@ function unique<T>(values: T[]): T[] {
   return [...new Set(values)];
 }
 
+/**
+ * Tarjan's strongly connected components, iterative so a long dependency chain
+ * can't overflow the stack.
+ *
+ * Components come back numbered in the order Tarjan closes them, which is
+ * reverse topological order: every edge between two different components runs
+ * from a higher number to a lower one.
+ */
+function buildStronglyConnectedComponents(
+  nodeIds: Set<string>,
+  children: Map<string, string[]>
+): { componentOf: Map<string, number>; componentCount: number } {
+  const index = new Map<string, number>();
+  const low = new Map<string, number>();
+  const onStack = new Set<string>();
+  const stack: string[] = [];
+  const componentOf = new Map<string, number>();
+  let nextIndex = 0;
+  let componentCount = 0;
+
+  const open = (id: string) => {
+    index.set(id, nextIndex);
+    low.set(id, nextIndex);
+    nextIndex += 1;
+    stack.push(id);
+    onStack.add(id);
+  };
+
+  nodeIds.forEach((rootId) => {
+    if (index.has(rootId)) return;
+    open(rootId);
+    // Each frame is a node plus how far through its child list we are.
+    const frames: Array<{ id: string; childIndex: number }> = [{ id: rootId, childIndex: 0 }];
+
+    while (frames.length) {
+      const frame = frames[frames.length - 1];
+      const kids = children.get(frame.id) ?? [];
+
+      if (frame.childIndex < kids.length) {
+        const childId = kids[frame.childIndex];
+        frame.childIndex += 1;
+        if (!nodeIds.has(childId)) continue;
+        if (!index.has(childId)) {
+          open(childId);
+          frames.push({ id: childId, childIndex: 0 });
+        } else if (onStack.has(childId)) {
+          low.set(frame.id, Math.min(low.get(frame.id)!, index.get(childId)!));
+        }
+        continue;
+      }
+
+      frames.pop();
+      if (low.get(frame.id) === index.get(frame.id)) {
+        let memberId: string;
+        do {
+          memberId = stack.pop()!;
+          onStack.delete(memberId);
+          componentOf.set(memberId, componentCount);
+        } while (memberId !== frame.id);
+        componentCount += 1;
+      }
+      const parent = frames[frames.length - 1];
+      if (parent) low.set(parent.id, Math.min(low.get(parent.id)!, low.get(frame.id)!));
+    }
+  });
+
+  return { componentOf, componentCount };
+}
+
 export function getResolvedProgressiveUpgradeProviders(knowledge: SphereTrackingKnowledge, calculation: SphereCalculationResult): SpherePlacement[] {
   const prunedPlacementIds = new Set(calculation.prunedPlacementIds || []);
   const counts = new Map<string, number>();
@@ -147,14 +216,28 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
         if (!reachable.has(normalize(location)) && !isLogicRequiredItemForLocation(source, location, requiredItemCache)) return;
         availableDependencies.get(normalize(location))!.push(source.id);
       });
-      const newlyReachableTargets = unresolvedPlacements.filter((target) => {
-        if (target.id === source.id) return false;
-        const locationKey = normalize(target.location);
-        return !baselineReachable.has(locationKey) && (reachable.has(locationKey) || isLogicRequiredItemForLocation(source, target.location, requiredItemCache));
-      });
-      newlyReachableTargets.forEach((target) => {
+      // Two different reasons a source can gate a target, kept apart because
+      // only the first supports the provider test below: the source's item
+      // actually brings the target into reach, or the target's logic names
+      // that item as necessary even though reaching it needs more besides.
+      const candidateTargets = unresolvedPlacements.filter(
+        (target) => target.id !== source.id && !baselineReachable.has(normalize(target.location))
+      );
+      const newlyReachableTargets = candidateTargets.filter((target) => reachable.has(normalize(target.location)));
+      const requiredItemTargets = candidateTargets.filter(
+        (target) => !reachable.has(normalize(target.location)) && isLogicRequiredItemForLocation(source, target.location, requiredItemCache)
+      );
+      [...newlyReachableTargets, ...requiredItemTargets].forEach((target) => {
         dependencies.get(target.id)!.push(source.id);
       });
+
+      // The provider test asks whether pulling one progressive copy back out
+      // takes a target out of reach, which only means anything for targets
+      // that were in reach to begin with. Run against a target that merely
+      // names this item in its logic, it answered "not reachable" whichever
+      // provider was removed - so every provider became a dependency, and a
+      // Master Sword that opens nothing in the seed appeared to gate fourteen
+      // checks across three dungeons.
       if (!newlyReachableTargets.length) return;
 
       progressiveProviders.forEach((provider) => {
@@ -258,29 +341,51 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
 
   const sourceIds = new Set(sources.map((source) => source.id));
   const children = new Map<string, string[]>([...sourceIds].map((id) => [id, []]));
-  const indegrees = new Map<string, number>(unresolvedPlacements.map((placement) => [placement.id, 0]));
   dependencies.forEach((parentIds, targetId) => {
     unique(parentIds).forEach((parentId) => {
       if (!sourceIds.has(parentId)) return;
       if (!children.has(parentId)) children.set(parentId, []);
       children.get(parentId)!.push(targetId);
-      indegrees.set(targetId, (indegrees.get(targetId) || 0) + 1);
     });
   });
 
-  const queue = [...sourceIds].filter((id) => !indegrees.has(id) || indegrees.get(id) === 0);
-  const visited = new Set<string>();
-  while (queue.length) {
-    const sourceId = queue.shift()!;
-    if (visited.has(sourceId)) continue;
-    visited.add(sourceId);
-    const sourceLevel = placementLevels.get(sourceId) || 0;
-    (children.get(sourceId) || []).forEach((targetId) => {
-      placementLevels.set(targetId, Math.max(placementLevels.get(targetId) || 0, sourceLevel + 1));
-      indegrees.set(targetId, Math.max(0, (indegrees.get(targetId) || 0) - 1));
-      if (indegrees.get(targetId) === 0) queue.push(targetId);
+  // Levels are a longest path over the graph's strongly connected components
+  // rather than a plain topological sort, because a recorded run can contain a
+  // dependency cycle: the Deku Leaf gating a wallet, the wallet gating bombs,
+  // the bombs gating Power Bracelets, and Power Bracelets gating the Deku Leaf
+  // again is a real example. Kahn's algorithm never dequeues a node inside a
+  // cycle, so every member kept its starting level of 0 while nodes fed from
+  // outside the cycle were pushed to 1 - putting children in *earlier* columns
+  // than the parents they wait on. Collapsing each cycle to one node lands its
+  // members in a single column, which is the honest answer: their order is
+  // genuinely undetermined.
+  const { componentOf, componentCount } = buildStronglyConnectedComponents(sourceIds, children);
+  const membersByComponent: string[][] = Array.from({ length: componentCount }, () => []);
+  componentOf.forEach((component, id) => membersByComponent[component].push(id));
+
+  const componentLevels = new Array<number>(componentCount).fill(0);
+  // Reverse topological numbering, so counting down visits every parent
+  // component before the components that depend on it.
+  for (let component = componentCount - 1; component >= 0; component -= 1) {
+    const level = componentLevels[component];
+    membersByComponent[component].forEach((sourceId) => {
+      (children.get(sourceId) ?? []).forEach((targetId) => {
+        const targetComponent = componentOf.get(targetId);
+        // Edges inside a component are what makes it a cycle - ignoring them
+        // is the whole point of condensing.
+        if (targetComponent === undefined || targetComponent === component) return;
+        componentLevels[targetComponent] = Math.max(componentLevels[targetComponent], level + 1);
+      });
     });
   }
+
+  // Only unresolved placements go into placementLevels: the board reads its
+  // column count from that map's values, so seeding it with pruned sources
+  // and hints would invent empty columns.
+  unresolvedPlacements.forEach((placement) => {
+    const component = componentOf.get(placement.id);
+    placementLevels.set(placement.id, component === undefined ? 0 : componentLevels[component]);
+  });
 
   // Same rule the placement levels use: one step after whatever unlocks it.
   // Several unresolved copies of the same item are alternatives rather than

@@ -49,13 +49,22 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
 
   const nodes = collectNodes(canvas);
   const scale = zoom || 1;
+
+  // Every rect is read before a single path is written. Measuring inside the
+  // append loop made each appendChild dirty layout and the next
+  // getBoundingClientRect force a synchronous reflow - 157 of them on a
+  // mid-run board, which is most of the ~50ms this used to take per redraw.
+  // It also measured a node once per edge instead of once.
+  const rects = new Map<string, DOMRect>();
+  nodes.forEach((node, id) => rects.set(id, node.getBoundingClientRect()));
+
+  const fragment = document.createDocumentFragment();
   nodes.forEach((target, targetId) => {
+    const targetRect = rects.get(targetId)!;
     const dependencies = (target.dataset.dependencies?.split(",") ?? []).filter(Boolean);
     dependencies.forEach((sourceId) => {
-      const source = nodes.get(sourceId);
-      if (!source) return;
-      const sourceRect = source.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
+      const sourceRect = rects.get(sourceId);
+      if (!sourceRect) return;
       // Source's right edge to the target's left edge, both at mid-height.
       const startX = (sourceRect.right - canvasRect.left) / scale;
       const startY = (sourceRect.top + sourceRect.height / 2 - canvasRect.top) / scale;
@@ -66,9 +75,10 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
       path.setAttribute("d", `M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`);
       path.dataset.source = sourceId;
       path.dataset.target = targetId;
-      edges.appendChild(path);
+      fragment.appendChild(path);
     });
   });
+  edges.appendChild(fragment);
 
   markPathHintEdges(nodes, canvas, edges);
 }

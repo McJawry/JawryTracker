@@ -627,10 +627,24 @@
     return getInventoryCount(context.inventory, classification.itemName) >= classification.count;
   }
 
+  // The logic files and config.yaml don't always agree on an option's name:
+  // world.yaml gates Ganon's Tower's staircase on Skip_Refights, but the
+  // randomizer writes that setting out as skip_rematch_bosses. Without the
+  // alias the comparison finds nothing, reads as false, and the four boss
+  // refights - and so Power Bracelets, via Can_Defeat_Jalhalla - get treated
+  // as required for everything past the Trials Hub.
+  const OPTION_ALIASES = {
+    "skip refights": ["skip rematch bosses"],
+    "skip rematch bosses": ["skip refights"]
+  };
+
   function getOptionValue(options, name) {
     const key = normalize(unwrapYamlValue(name));
-    const entry = Object.entries(options).find(([optionName]) => normalize(optionName) === key);
-    return entry ? { found: true, value: entry[1] } : { found: false, value: undefined };
+    for (const candidate of [key, ...(OPTION_ALIASES[key] || [])]) {
+      const entry = Object.entries(options).find(([optionName]) => normalize(optionName) === candidate);
+      if (entry) return { found: true, value: entry[1] };
+    }
+    return { found: false, value: undefined };
   }
 
   function evaluateDungeonAccess(dungeonName, context, macroStack) {

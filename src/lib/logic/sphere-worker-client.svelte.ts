@@ -37,7 +37,7 @@ import { getAvailableLocations } from "$lib/logic/locations";
 import { inferRelativeUnknownSpheres } from "$lib/logic/sphere-inference";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { clearHardBossRequirementCache } from "$lib/logic/sphere-boss-icons";
-import { clearRequirementCache } from "$lib/logic/requirement-text";
+import { clearRequirementCache, warmRequirementReachability } from "$lib/logic/requirement-text";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -93,6 +93,8 @@ function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculat
   sphereAnalysisCache.inventoryReachableKeys = computeInventoryReachableKeys();
   sphereAnalysisCache.pending = false;
   sphereAnalysisCache.dependenciesReady = true;
+  // Self-guarded: only the first call after a logic reload does any work.
+  warmRequirementReachability();
 }
 
 /**

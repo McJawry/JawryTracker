@@ -13,6 +13,7 @@
     getPathHintCandidates,
     getPathLogicalItems,
     selectLatestPathCandidates,
+    countPathHintsForArea,
     type PathCandidate,
     type PathProgressEntry
   } from "$lib/logic/sphere-path-progress";
@@ -35,11 +36,26 @@
       : getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown);
   });
 
+  // How many bosses this one area is the path to.
+  const areaPathHintCount = $derived.by(() => {
+    if (!sphereAnalysisCache.calculation) return 1;
+    return countPathHintsForArea(entry.hint, getSphereTrackingKnowledge());
+  });
+
   // Only the confirmed, furthest-along candidates become graph edges - an
   // unconfirmed guess shouldn't draw a line as if it were established.
-  const linkedItems = $derived(
-    solved ? displayedItems : selectLatestPathCandidates(displayedItems.filter((item) => item.confirmed))
-  );
+  //
+  // Narrowing to the single furthest-along candidate is only sound for an area
+  // hinted at one boss. Every hinted boss gets its own path item, so an area
+  // on the path to two of them holds two distinct ones - collapsing both cards
+  // onto the same item claimed one Power Bracelets was the path to Gohdan and
+  // Molgera at once. With several hints on an area, every confirmed candidate
+  // stays in play.
+  const linkedItems = $derived.by(() => {
+    if (solved) return displayedItems;
+    const confirmed = displayedItems.filter((item) => item.confirmed);
+    return areaPathHintCount > 1 ? confirmed : selectLatestPathCandidates(confirmed);
+  });
 
   function candidateTitle(candidate: PathCandidate): string {
     if (Number.isInteger(candidate.sphere)) return `${candidate.item} - sphere ${candidate.sphere}`;

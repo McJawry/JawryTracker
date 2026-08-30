@@ -7,6 +7,7 @@
     getLocationRequirements,
     hasRequirementsReady,
     requestLocationRequirements,
+    setRequirementFocus,
     type LocationRequirements
   } from "$lib/logic/requirement-text";
 
@@ -18,17 +19,34 @@
   // to the browser and the tooltip fills in when it lands.
   let ready = $state(false);
 
+  // Nothing starts until the pointer has settled. Moving down a location list
+  // enters every row on the way to the one being clicked, and starting a pass
+  // for each of those cost seconds of chunked work for answers nobody read.
+  const HOVER_DELAY_MS = 250;
+
   $effect(() => {
     const wanted = location;
+    // Published before anything else: an elimination pass still running for a
+    // row the pointer has left checks this and gives up at its next yield.
+    setRequirementFocus(wanted);
+
     if (hasRequirementsReady(wanted)) {
       ready = true;
-      return;
+      return () => setRequirementFocus(null);
     }
+
     ready = false;
-    void requestLocationRequirements(wanted).then(() => {
-      // Ignore a result that arrives after the pointer moved on.
-      if (wanted === location) ready = true;
-    });
+    const timer = setTimeout(() => {
+      void requestLocationRequirements(wanted).then(() => {
+        // Ignore a result that arrives after the pointer moved on.
+        if (wanted === location) ready = true;
+      });
+    }, HOVER_DELAY_MS);
+
+    return () => {
+      clearTimeout(timer);
+      setRequirementFocus(null);
+    };
   });
 
   const requirements = $derived<LocationRequirements | null>(ready ? getLocationRequirements(location) : null);

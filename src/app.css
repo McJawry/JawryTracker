@@ -107,11 +107,15 @@ textarea {
   overflow-x: auto;
 }
 
+/* Compact mode tightens the layout; it must not resize the window's content.
+   This used to clamp the whole shell to var(--hint-panel-width) - a leftover
+   from the original single-column app. In the docked multi-panel layout that
+   cut every panel off at ~360px with dead, unclickable space beside it, and
+   because the Settings button sits in the clipped region there was no way
+   back to the toggle that caused it. */
 body.compact-mode .app-shell {
-  width: min(100%, var(--hint-panel-width));
   gap: 10px;
   padding: 12px;
-  overflow-x: hidden;
 }
 
 body.compact-mode .setting-control,

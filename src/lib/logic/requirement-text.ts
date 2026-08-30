@@ -92,6 +92,21 @@ function getOwnedCount(itemName: string): number {
   return Math.max(trackedCopies, startingCopies + placedCopies);
 }
 
+/**
+ * Copies of an item the seed hands the player before they start - the
+ * config's starting_gear plus whatever start_with_random_item rolled, which
+ * refreshSphereStartingGear folds into the same list. Requirements already
+ * covered by these are dropped from the tooltip: they can never be the reason
+ * a location is out of reach.
+ */
+function getStartingCount(itemName: string): number {
+  // starting_gear spells several items with the "Progressive" prefix the
+  // logic files leave off ("Progressive Sail" vs "Sail"), so both sides are
+  // compared with it stripped - the same match matchGridItemName makes.
+  const key = normalize(itemName).replace(/^progressive /, "");
+  return data.sphereStartingGear.filter((gear) => normalize(gear).replace(/^progressive /, "") === key).length;
+}
+
 // The logic's item names and the item grid's keys mostly agree, but the logic
 // uses the "Progressive X" form for several the grid names plainly.
 function matchGridItemName(itemName: string): string | null {
@@ -347,6 +362,7 @@ function requirementCacheKey(location: string): string {
 
 export function clearRequirementCache(): void {
   requiredItemsCache.clear();
+  warmedKey = "";
   // In-flight passes are abandoned rather than allowed to write a result
   // computed against the logic that was just replaced.
   requirementGeneration += 1;
@@ -356,6 +372,22 @@ export function clearRequirementCache(): void {
 // Bumped whenever the cache is cleared; an async pass that started before the
 // bump discards its result.
 let requirementGeneration = 0;
+
+/**
+ * The location the tooltip is actually waiting on. Sweeping the pointer down a
+ * location list enters every row on the way to the one being clicked, and each
+ * of those used to start an elimination pass that then ran to completion -
+ * seventeen rows of one area cost five seconds of chunked work. A pass whose
+ * location is no longer the focus now stops at its next yield.
+ */
+let requirementFocus: string | null = null;
+
+/** Abandoned at a yield; distinct from null, which means "genuinely impossible". */
+const ABANDONED = Symbol("abandoned");
+
+export function setRequirementFocus(location: string | null): void {
+  requirementFocus = location === null ? null : normalize(location);
+}
 
 /**
  * Hands control back to the browser so a long elimination pass doesn't freeze
@@ -369,7 +401,7 @@ async function yieldToBrowser(): Promise<void> {
 }
 
 /** Chunked twin of computeRequiredItems - same result, yielding as it goes. */
-async function computeRequiredItemsAsync(location: string): Promise<RequiredItem[] | null> {
+async function computeRequiredItemsAsync(location: string): Promise<RequiredItem[] | null | typeof ABANDONED> {
   const locationKey = normalize(location);
   const maximal = getMaximalSphereLogicInventory();
   if (!getSphereReachabilityWithOwnDungeonKeys(maximal).has(locationKey)) return null;
@@ -390,6 +422,9 @@ async function computeRequiredItemsAsync(location: string): Promise<RequiredItem
     if (sinceYield >= 4) {
       sinceYield = 0;
       await yieldToBrowser();
+      // The pointer has moved to another row (or off the list) - whoever
+      // wanted this answer isn't looking any more.
+      if (requirementFocus !== locationKey) return ABANDONED;
     }
     sinceYield += 1;
 
@@ -445,6 +480,45 @@ function computeRequiredItems(location: string): RequiredItem[] | null {
   return required;
 }
 
+/** Hands control back only when the browser has nothing better to do. */
+function yieldToIdle(): Promise<void> {
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
+  if (idle) return new Promise((resolve) => idle(() => resolve(), { timeout: 1000 }));
+  return new Promise((resolve) => setTimeout(resolve, 32));
+}
+
+// The (generation, entrances) the reachability cache was last warmed for.
+let warmedKey = "";
+
+/**
+ * Pre-computes the reachability searches every requirement tooltip shares.
+ *
+ * The elimination pass asks "is this location still reachable without item X"
+ * once per item in the seed's maximal inventory, and those answers depend on
+ * neither the location nor the run - so the first tooltip after a logic load
+ * paid about three seconds filling the cache and every later one was fast.
+ * Running the same work in idle time moves that cost off the first hover.
+ */
+export function warmRequirementReachability(): void {
+  const maximal = getMaximalSphereLogicInventory();
+  if (!maximal.length) return;
+  const key = `${requirementGeneration}::${requirementCacheKey("")}`;
+  if (key === warmedKey) return;
+  warmedKey = key;
+
+  const generation = requirementGeneration;
+  void (async () => {
+    getSphereReachabilityWithOwnDungeonKeys(maximal);
+    for (const item of new Set(maximal)) {
+      await yieldToIdle();
+      // A logic reload landed while this was running - its answers are stale
+      // and the next call will warm the new logic instead.
+      if (generation !== requirementGeneration) return;
+      getSphereReachabilityWithOwnDungeonKeys(maximal.filter((candidate) => candidate !== item));
+    }
+  })();
+}
+
 function getRequiredItems(location: string): RequiredItem[] | null {
   const key = requirementCacheKey(location);
   if (requiredItemsCache.has(key)) return requiredItemsCache.get(key)!;
@@ -475,7 +549,7 @@ export function requestLocationRequirements(location: string): Promise<void> {
   const generation = requirementGeneration;
   const request = computeRequiredItemsAsync(location)
     .then((result) => {
-      if (generation !== requirementGeneration) return;
+      if (generation !== requirementGeneration || result === ABANDONED) return;
       requiredItemsCache.set(key, result);
     })
     .catch((error) => {
@@ -511,14 +585,17 @@ export function getLocationRequirements(location: string): LocationRequirements 
     };
   }
 
-  // One bullet per required item, matching the reference tracker's flat list.
-  const terms = required.map(({ item, count }) => {
-    const status: RequirementStatus = getOwnedCount(item) >= count ? "have" : "missing";
-    return {
-      tokens: [{ text: prettyTrackerName(item, count), kind: "atom" as const, status }],
-      satisfied: status === "have"
-    };
-  });
+  // One bullet per required item, matching the reference tracker's flat list,
+  // minus anything the seed already started the player with.
+  const terms = required
+    .filter(({ item, count }) => getStartingCount(item) < count)
+    .map(({ item, count }) => {
+      const status: RequirementStatus = getOwnedCount(item) >= count ? "have" : "missing";
+      return {
+        tokens: [{ text: prettyTrackerName(item, count), kind: "atom" as const, status }],
+        satisfied: status === "have"
+      };
+    });
 
   return { entrancePath, terms, unknown: false };
 }
