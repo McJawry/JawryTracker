@@ -16,8 +16,8 @@
         "title": "JawryTracker",
         "width": 1150,
         "height": 820,
-        "minWidth": 640,
-        "minHeight": 480,
+        "minWidth": 400,
+        "minHeight": 190,
         "center": true,
         "dragDropEnabled": false,
         "visible": false

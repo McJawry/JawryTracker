@@ -31,7 +31,9 @@
   // A section that is popped out must not also render inline - otherwise
   // undocking leaves a duplicate copy behind in the docked layout. When its
   // window closes, popout-session marks it docked again and it reappears.
-  const isUndocked = $derived(undockedState.ids.includes(sectionId));
+  // A section with no popout can never be undocked, which also heals a stale
+  // id left in the persisted list from before the Control Panel lost its.
+  const isUndocked = $derived(Boolean(def.popout) && undockedState.ids.includes(sectionId));
   const isVisible = $derived(
     (!def.visibilityKey || settings.sectionVisibility[def.visibilityKey]) && !isUndocked
   );
@@ -156,7 +158,9 @@
         </span>
       {/if}
       <div class="dockable-titlebar-actions">
-        <button type="button" class="dockable-titlebar-button" title="Pop out into its own window" onclick={undock}>&#x2b1a;</button>
+        {#if def.popout}
+          <button type="button" class="dockable-titlebar-button" title="Pop out into its own window" onclick={undock}>&#x2b1a;</button>
+        {/if}
         {#if def.canHide}
           <button type="button" class="dockable-titlebar-button" title="Hide this section" onclick={toggleHide}>&times;</button>
         {/if}

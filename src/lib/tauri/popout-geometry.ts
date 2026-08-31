@@ -40,6 +40,7 @@ export async function readPopoutGeometry(): Promise<PopoutGeometryMap> {
   const geometry: PopoutGeometryMap = {};
   await Promise.all(
     Object.entries(SECTION_META).map(async ([id, meta]) => {
+      if (!meta.popout) return;
       try {
         const found = await WebviewWindow.getByLabel(meta.popout.label);
         if (!found) return;
@@ -69,7 +70,7 @@ export async function readPopoutGeometry(): Promise<PopoutGeometryMap> {
 export async function openPopoutForSection(sectionId: string): Promise<void> {
   if (!isTauriRuntime()) return;
   const meta = SECTION_META[sectionId];
-  if (!meta) return;
+  if (!meta?.popout) return;
 
   const alreadyOpen = await WebviewWindow.getByLabel(meta.popout.label);
   const remembered = storedGeometry[sectionId];
@@ -86,7 +87,7 @@ export async function openPopoutForSection(sectionId: string): Promise<void> {
 export async function applyPopoutGeometry(sectionId: string, geometry: PopoutGeometry | undefined): Promise<void> {
   if (!isTauriRuntime() || !geometry) return;
   const meta = SECTION_META[sectionId];
-  if (!meta) return;
+  if (!meta?.popout) return;
 
   try {
     const found = await WebviewWindow.getByLabel(meta.popout.label);
@@ -135,6 +136,7 @@ async function runPopoutSync(wantedIds: string[], geometry: PopoutGeometryMap): 
   await Promise.all(
     Object.entries(SECTION_META).map(async ([id, meta]) => {
       if (wantedSet.has(id)) return;
+      if (!meta.popout) return;
       try {
         const found = await WebviewWindow.getByLabel(meta.popout.label);
         await found?.close();
@@ -147,6 +149,7 @@ async function runPopoutSync(wantedIds: string[], geometry: PopoutGeometryMap): 
   // Open the ones it does, then place them.
   for (const id of wanted) {
     const meta = SECTION_META[id];
+    if (!meta?.popout) continue;
     try {
       // Geometry follows immediately, so skip the default placement rather
       // than moving the window twice.

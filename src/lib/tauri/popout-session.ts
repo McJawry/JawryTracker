@@ -69,7 +69,9 @@ export async function reconcileUndockedWindows(): Promise<void> {
     const openLabels = new Set((await getAllWebviewWindows()).map((w) => w.label));
     const stillOpen = undockedState.ids.filter((id) => {
       const meta = SECTION_META[id];
-      if (meta && openLabels.has(meta.popout.label)) {
+      // A section that can't pop out has no window to still be open, so a
+      // stale id for one is dropped rather than kept alive here.
+      if (meta?.popout && openLabels.has(meta.popout.label)) {
         missedReconciles.delete(id);
         return true;
       }

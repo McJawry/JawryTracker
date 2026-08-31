@@ -25,7 +25,12 @@
   import { isLocationMarked } from "$lib/logic/locations";
   import { getAreaFromLocation } from "$lib/logic/data-loading";
   import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-  import { getPathBossProgressEntries, getPathHintSourceIds, type PathProgressEntry } from "$lib/logic/sphere-path-progress";
+  import {
+    getPathBossProgressEntries,
+    getPathHintCandidates,
+    getPathHintSourceIds,
+    type PathProgressEntry
+  } from "$lib/logic/sphere-path-progress";
   import SpherePlacementNode from "./SpherePlacementNode.svelte";
   import SphereAreaGroup from "./SphereAreaGroup.svelte";
   import SphereUnplacedItemNode from "./SphereUnplacedItemNode.svelte";
@@ -184,6 +189,35 @@
     pathProgress.forEach((entry) => {
       map.set(entry.hint.lineNumber, getPathHintSourceIds(entry.hint, entry.progress, knowledge, calculation, relativeUnknown));
     });
+
+    // Two hints on one area can never name the same location - the randomizer
+    // marks a location hasBeenHinted the moment it is used (Hints.cpp). So if
+    // the dependency graph hands two cards the same source, that answer is
+    // provably wrong, whatever the graph thinks. It happens whenever the
+    // recorded placements are too incomplete to order the area's items: a
+    // circular set has nothing unlocking anything, so every card falls back to
+    // the same lone ancestor.
+    //
+    // Widening both to every candidate in the area is the honest reading, and
+    // several sources per card draw dashed (sphere-edges.ts) rather than
+    // asserting one item feeds both bosses.
+    const byArea = new Map<string, PathProgressEntry[]>();
+    pathProgress.forEach((entry) => {
+      const areaKey = entry.hint.left.name.trim().toLowerCase();
+      if (!byArea.has(areaKey)) byArea.set(areaKey, []);
+      byArea.get(areaKey)!.push(entry);
+    });
+
+    byArea.forEach((entries) => {
+      if (entries.length < 2) return;
+      const signatures = entries.map((entry) => (map.get(entry.hint.lineNumber) ?? []).join("|"));
+      if (new Set(signatures).size === signatures.length) return;
+      entries.forEach((entry) => {
+        const widened = getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown).map((candidate) => candidate.id);
+        if (widened.length > 1) map.set(entry.hint.lineNumber, widened);
+      });
+    });
+
     return map;
   });
 

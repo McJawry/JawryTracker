@@ -74,6 +74,22 @@ interface WWRSphereEngineApi {
   calculate(input: SphereCalculationInput): SphereCalculationResult;
   compileExpression(expression: unknown): ExpressionNode;
   classifyAtom(atom: string): AtomClassification;
+  /**
+   * Every location's requirement, flattened to items only. Port of the
+   * randomizer's logic/flatten/; see requirement-text.ts for the shape of the
+   * tree this returns.
+   */
+  flattenRequirements(input: {
+    rules: Record<string, unknown>;
+    macros: Record<string, unknown>;
+    world: unknown;
+    options: Record<string, unknown>;
+    entranceMappings: Record<string, string>;
+    entranceConnections: Record<string, string>;
+    chartMappings: Record<string, string>;
+    startingIsland: string;
+    additionalStartAreas?: string[];
+  }): Record<string, unknown>;
 }
 
 /** Parsed requirement expression: a binary and/or tree over leaf atoms. */

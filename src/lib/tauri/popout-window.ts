@@ -18,6 +18,34 @@ export interface PopoutWindowOptions {
   minHeight?: number;
 }
 
+/** Most of the screen a fresh popout may claim, before its own minimums. */
+const MAX_SCREEN_FRACTION = 0.8;
+
+/**
+ * Default sizes shrunk to fit the screen the app is actually on.
+ *
+ * The configured sizes assume a roomy logical desktop. Windows reports these
+ * in logical pixels, so a laptop at 200% display scaling has a 960x540 logical
+ * desktop - and the Sphere Board's 1000x720 default is then wider *and* taller
+ * than the entire screen, with the Hint Panel's 640 taller than it too.
+ *
+ * screen.availWidth/availHeight are already logical and already exclude the
+ * taskbar, so this needs no extra Tauri capability - unlike currentMonitor().
+ */
+function fitToScreen(options: PopoutWindowOptions): { width: number; height: number } {
+  const availableWidth = typeof screen !== "undefined" ? screen.availWidth : 0;
+  const availableHeight = typeof screen !== "undefined" ? screen.availHeight : 0;
+  if (!availableWidth || !availableHeight) return { width: options.width, height: options.height };
+
+  const cap = (requested: number, available: number, minimum: number | undefined) =>
+    Math.round(Math.max(minimum ?? 0, Math.min(requested, available * MAX_SCREEN_FRACTION)));
+
+  return {
+    width: cap(options.width, availableWidth, options.minWidth),
+    height: cap(options.height, availableHeight, options.minHeight)
+  };
+}
+
 /**
  * Where a popout with no remembered position should appear.
  *
@@ -56,11 +84,12 @@ export async function openPopoutWindow(
     return;
   }
 
+  const size = fitToScreen(options);
   new WebviewWindow(options.label, {
     url: `/?popout=${encodeURIComponent(options.popoutParam)}`,
     title: options.title,
-    width: options.width,
-    height: options.height,
+    width: size.width,
+    height: size.height,
     minWidth: options.minWidth,
     minHeight: options.minHeight,
     resizable: true

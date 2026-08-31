@@ -100,8 +100,11 @@
 
 <main class="popout-section-shell">
   {#if def}
+    <!-- No heading: the window's own title bar already reads
+         "JawryTracker - <section>", and repeating it directly underneath cost
+         a third of the header's height. On a laptop at 200% display scaling
+         the whole logical desktop is only 540px tall, so that mattered. -->
     <header class="popout-header">
-      <h1>{def.title}</h1>
       <PopoutZoomSlider {sectionId} {autoScale} />
     </header>
     <!-- Same width/zoom wrapper DockableSection uses, but scaled to the
@@ -138,15 +141,12 @@
   }
 
   .popout-header {
-    padding: 6px 10px;
+    display: flex;
+    justify-content: flex-end;
+    padding: 2px 8px;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
     color: var(--ink);
-  }
-
-  .popout-header h1 {
-    margin: 0;
-    font-size: 0.9rem;
   }
 
   .popout-section-content {

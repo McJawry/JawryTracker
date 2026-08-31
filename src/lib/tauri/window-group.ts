@@ -13,6 +13,7 @@ import { isTauriRuntime } from "./is-tauri";
 
 const RAISE_EVENT = "window-group:raising";
 const SUPPRESS_MS = 500;
+const MAIN_WINDOW_LABEL = "main";
 
 let suppressUntil = 0;
 let initialized = false;
@@ -33,6 +34,29 @@ export async function initWindowGroupSync(): Promise<void> {
     if (Date.now() < suppressUntil) return;
     void raiseGroup(current.label);
   });
+
+  // Popouts are panels of the main window, so they close with it. Tauri keeps
+  // the process alive while any window is open, and closing the main window
+  // left every popout running with no way to get it back - no menu, no tray,
+  // and nothing in a popout that can open it.
+  //
+  // The undocked list is deliberately left alone: the next launch reopens the
+  // same popouts, so the layout survives the restart.
+  if (current.label === MAIN_WINDOW_LABEL) {
+    await current.onCloseRequested(async () => {
+      // No preventDefault: Tauri awaits this handler and then destroys the
+      // window itself, so the popouts are already gone by the time the main
+      // window goes. That self-destroy needs core:window:allow-destroy in the
+      // capabilities - without it merely registering this listener stops the
+      // main window closing at all, silently. Calling preventDefault and closing it by hand instead
+      // re-enters this listener and the main window never closes at all -
+      // every popout vanished and the app stayed running.
+      const others = (await getAllWebviewWindows()).filter((window) => window.label !== current.label);
+      await Promise.all(
+        others.map((window) => window.close().catch((error) => console.error(`Could not close ${window.label}`, error)))
+      );
+    });
+  }
 }
 
 async function raiseGroup(currentLabel: string): Promise<void> {

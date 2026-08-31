@@ -37,7 +37,7 @@ import { getAvailableLocations } from "$lib/logic/locations";
 import { inferRelativeUnknownSpheres } from "$lib/logic/sphere-inference";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { clearHardBossRequirementCache } from "$lib/logic/sphere-boss-icons";
-import { clearRequirementCache, warmRequirementReachability } from "$lib/logic/requirement-text";
+import { clearRequirementCache } from "$lib/logic/requirement-text";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -77,8 +77,8 @@ export function invalidateSphereAnalysis(): void {
   sphereReachabilityCache.clear();
   clearHardBossRequirementCache();
   clearOwnDungeonKeyPoolCache();
-  // The required-item lists are derived from the logic and settings only, so
-  // they survive inventory changes - but a logic reload has to drop them.
+  // Flattened requirements depend only on the logic and the seed's options, so
+  // they survive every inventory change - but a logic reload has to drop them.
   clearRequirementCache();
 }
 
@@ -93,8 +93,6 @@ function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculat
   sphereAnalysisCache.inventoryReachableKeys = computeInventoryReachableKeys();
   sphereAnalysisCache.pending = false;
   sphereAnalysisCache.dependenciesReady = true;
-  // Self-guarded: only the first call after a logic reload does any work.
-  warmRequirementReachability();
 }
 
 /**
@@ -138,7 +136,8 @@ function calculateSphereProgressionSync(placements: SpherePlacement[]): SphereCa
 function getSphereAnalysisWorker(): Worker | null {
   if (sphereAnalysisWorker || typeof Worker === "undefined") return sphereAnalysisWorker;
 
-  const worker = new Worker(new URL("./sphere-worker.js", import.meta.url));
+  // type: "module" - see sphere-worker.js for why it is not a classic worker.
+  const worker = new Worker(new URL("./sphere-worker.js", import.meta.url), { type: "module" });
   worker.addEventListener("message", (event) => {
     sphereAnalysisWorkerBusy = false;
     const workerMs = performance.now() - sphereAnalysisDispatchStart;

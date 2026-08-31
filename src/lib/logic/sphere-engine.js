@@ -748,7 +748,26 @@
     return false;
   }
 
+  // Entrance wiring reads only the world, the options and the manual
+  // connections - never the inventory - but analyzeWorld rebuilt it on every
+  // call, which meant once per sphere per candidate test: 232 rebuilds and a
+  // second of wall time for one unchanging answer.
+  const entranceConnectionCache = new WeakMap();
+
   function buildEntranceConnections(context) {
+    const world = context.world;
+    const cached = world ? entranceConnectionCache.get(world) : null;
+    if (cached && cached.options === context.options && cached.entranceConnections === context.entranceConnections) {
+      return cached.state;
+    }
+    const state = computeEntranceConnections(context);
+    if (world) {
+      entranceConnectionCache.set(world, { options: context.options, entranceConnections: context.entranceConnections, state });
+    }
+    return state;
+  }
+
+  function computeEntranceConnections(context) {
     const world = context.world;
     const connections = {};
     const disconnected = new Set();
@@ -818,6 +837,20 @@
     return mappedDungeon ? world.dungeonStarts[normalize(mappedDungeon)] || "" : "";
   }
 
+  // Object.values() on every area, on every pass, on every call allocated
+  // hundreds of thousands of throwaway arrays. Keyed on the area object so it
+  // survives across calls without writing to the world (which is a reactive
+  // proxy on the main thread).
+  const areaMemberCache = new WeakMap();
+  function getAreaMembers(area) {
+    let members = areaMemberCache.get(area);
+    if (!members) {
+      members = { events: Object.values(area.events), exits: Object.values(area.exits) };
+      areaMemberCache.set(area, members);
+    }
+    return members;
+  }
+
   function analyzeWorld(world, contextBase, seed) {
     if (!world) return { accessibleAreas: null, events: new Set() };
     // Reachability only grows as inventory grows (no logic rule takes items away),
@@ -836,36 +869,69 @@
     let eventChanged = true;
     let passes = 0;
 
+    // Exit targets depend on the world, the entrance state and the options -
+    // all fixed for this call - so each edge is resolved once instead of on
+    // every pass over its area.
+    const resolvedTargets = new Map();
+    // An area whose events have all fired and whose exits all lead somewhere
+    // already reachable can never contribute again: both sets only ever grow.
+    // Re-scanning them was most of the work in the second and third passes.
+    const settledAreas = new Set();
+    const targetKeyFor = (area, exit) => {
+      let targetKey = resolvedTargets.get(exit);
+      if (targetKey === undefined) {
+        targetKey = normalize(resolveExitTarget(area, exit.name, context));
+        resolvedTargets.set(exit, targetKey);
+      }
+      return targetKey;
+    };
+
     while (eventChanged && passes < 1000) {
       eventChanged = false;
       passes += 1;
       const pendingAreas = [...accessibleAreas];
       const scannedAreas = new Set();
 
-      while (pendingAreas.length) {
-        const areaKey = pendingAreas.shift();
-        if (scannedAreas.has(areaKey)) continue;
+      // Index cursor rather than shift(): the queue holds every accessible
+      // area, and shifting off the front copies the whole array each time.
+      for (let cursor = 0; cursor < pendingAreas.length; cursor += 1) {
+        const areaKey = pendingAreas[cursor];
+        if (scannedAreas.has(areaKey) || settledAreas.has(areaKey)) continue;
         scannedAreas.add(areaKey);
         const area = world.areas[areaKey];
         if (!area) continue;
+        const members = getAreaMembers(area);
+        let settled = true;
 
-        Object.values(area.events).forEach((event) => {
+        members.events.forEach((event) => {
           const eventKey = normalize(event.name);
-          if (!events.has(eventKey) && evaluateExpression(event.need, context)) {
+          if (events.has(eventKey)) return;
+          if (evaluateExpression(event.need, context)) {
             events.add(eventKey);
             eventChanged = true;
+          } else {
+            settled = false;
           }
         });
 
-        Object.values(area.exits).forEach((exit) => {
-          if (!evaluateExpression(exit.need, context)) return;
-          const target = resolveExitTarget(area, exit.name, context);
-          const targetKey = normalize(target);
-          if (targetKey && world.areas[targetKey] && !accessibleAreas.has(targetKey)) {
-            accessibleAreas.add(targetKey);
-            pendingAreas.push(targetKey);
+        members.exits.forEach((exit) => {
+          // Where the exit goes is settled before asking whether it can be
+          // taken. An exit into an area that is already reachable cannot
+          // change anything, and evaluating its requirement - which expands
+          // macros recursively - is by far the expensive half. On a late-run
+          // board 83% of these landed somewhere already known.
+          const targetKey = targetKeyFor(area, exit);
+          if (!targetKey || !world.areas[targetKey]) return;
+          if (accessibleAreas.has(targetKey)) return;
+          if (!evaluateExpression(exit.need, context)) {
+            settled = false;
+            return;
           }
+          accessibleAreas.add(targetKey);
+          pendingAreas.push(targetKey);
         });
+
+        if (settled) settledAreas.add(areaKey);
       }
     }
 
@@ -1220,6 +1286,344 @@
     return result;
   }
 
+  // ---------------------------------------------------------------------------
+  // Requirement flattening
+  //
+  // Ported from the randomizer's own logic/flatten/ (flatten.cpp, bits.cpp, and
+  // the essential half of simplify_algebraic.cpp's DNFToExpr). For every
+  // location it produces a requirement expression built only from items - area
+  // access and events are inlined away - which is what the randomizer's tracker
+  // shows in its tooltip, and it is computed once when the logic loads rather
+  // than per hover.
+  //
+  // Deliberately not ported: the kernel/co-kernel rectangle factoring upstream
+  // uses to shorten the printed expression. Common-factor extraction is kept,
+  // so output is correct and readable, just sometimes longer than upstream's.
+  // ---------------------------------------------------------------------------
+
+  function makeBitIndex() {
+    const bits = new Map();
+    const reverse = [];
+    return {
+      reverse,
+      bitFor(atom) {
+        const key = atom.kind === "health" ? "health::" + atom.count : normalize(atom.item) + "::" + atom.count;
+        const existing = bits.get(key);
+        if (existing !== undefined) return existing;
+        const index = reverse.length;
+        bits.set(key, index);
+        reverse.push(atom);
+        return index;
+      }
+    };
+  }
+
+  // Requirements the randomizer's tracker deliberately treats as always met
+  // when it builds a tooltip. Sailing between islands is the only one - the
+  // randomizer's developers confirmed as much - because otherwise every
+  // location off the starting island would open with
+  // "(Wind Waker and Wind's Requiem and Sail) or Swift Sail", which tells you
+  // nothing. Boats_Sail and Swift_Sail appear nowhere else in the logic, so
+  // assuming this macro removes every sail reference and nothing besides.
+  //
+  // Flattening only: the sphere calculation and the map's reachability still
+  // require the sail for real.
+  const FLATTEN_ASSUMED_MACROS = new Set(["can sail away"]);
+
+  // A DNF is an OR of terms; each term is a bigint bitmask of required atoms
+  // (an AND). The empty mask is the always-true term, and no terms at all is
+  // false.
+  const dnfTrue = () => ({ terms: [0n] });
+  const dnfFalse = () => ({ terms: [] });
+  const dnfIsTrue = (dnf) => dnf.terms.some((term) => term === 0n);
+  const dnfIsFalse = (dnf) => dnf.terms.length === 0;
+  const includedIn = (a, b) => (a | b) === b;
+
+  /** Drops every term implied by another - a superset requires strictly more. */
+  function dnfDedup(dnf) {
+    const filtered = [];
+    for (const candidate of dnf.terms) {
+      let covered = false;
+      for (let index = filtered.length - 1; index >= 0; index -= 1) {
+        if (includedIn(filtered[index], candidate)) { covered = true; break; }
+        if (includedIn(candidate, filtered[index])) {
+          filtered[index] = filtered[filtered.length - 1];
+          filtered.pop();
+        }
+      }
+      if (!covered) filtered.push(candidate);
+    }
+    return { terms: filtered };
+  }
+
+  const dnfOr = (first, second) => ({ terms: [...first.terms, ...second.terms] });
+
+  /** OR, plus whether `other` contributed anything not already implied. */
+  function dnfOrUseful(current, other) {
+    const added = [];
+    for (const candidate of other.terms) {
+      if (current.terms.some((existing) => includedIn(existing, candidate))) continue;
+      added.push(candidate);
+    }
+    return { useful: added.length > 0, dnf: { terms: [...current.terms, ...added] } };
+  }
+
+  function dnfAnd(first, second) {
+    const terms = [];
+    for (const left of first.terms) {
+      for (const right of second.terms) terms.push(left | right);
+    }
+    const combined = { terms };
+    return terms.length > 500 ? dnfDedup(combined) : combined;
+  }
+
+  /** Every event and can_access area an expression can reach through macros. */
+  function collectRemoteDependencies(node, context, out, macroStack) {
+    if (!node) return;
+    if (node.type === "and" || node.type === "or") {
+      collectRemoteDependencies(node.left, context, out, macroStack);
+      collectRemoteDependencies(node.right, context, out, macroStack);
+      return;
+    }
+    const classification = classifyAtom(node.value);
+    if (classification.kind === "can_access") { out.areas.add(classification.area); return; }
+    if (classification.kind !== "item") return;
+    if (context.eventKeys.has(classification.key)) { out.events.add(classification.key); return; }
+    const macro = context.macros && context.macros[classification.key];
+    if (macro && !macroStack.has(classification.key)) {
+      const nextStack = new Set(macroStack);
+      nextStack.add(classification.key);
+      collectRemoteDependencies(compileExpression(macro), context, out, nextStack);
+    }
+  }
+
+  /**
+   * The flatten twin of evaluateNode: instead of a boolean it returns the DNF
+   * of item requirements. Atom handling follows evaluateAtom's order so the two
+   * can never disagree about what a rule means.
+   */
+  function evaluatePartial(node, search, macroStack) {
+    if (!node) return dnfFalse();
+    if (node.type === "and") return dnfAnd(evaluatePartial(node.left, search, macroStack), evaluatePartial(node.right, search, macroStack));
+    if (node.type === "or") return dnfOr(evaluatePartial(node.left, search, macroStack), evaluatePartial(node.right, search, macroStack));
+
+    const context = search.context;
+    const classification = classifyAtom(node.value);
+
+    if (classification.kind === "true") return dnfTrue();
+    if (classification.kind === "false") return dnfFalse();
+    if (classification.key && FLATTEN_ASSUMED_MACROS.has(classification.key)) return dnfTrue();
+    if (classification.kind === "can_access") return search.areaExprs.get(classification.area) || dnfFalse();
+
+    // A count requirement implies every lesser count of the same item, so the
+    // lesser bits go in too - that is what lets dedup cancel weaker terms.
+    if (classification.kind === "count_fn") {
+      let mask = 0n;
+      for (let copies = 1; copies <= classification.count; copies += 1) {
+        mask |= 1n << BigInt(search.bitIndex.bitFor({ kind: "item", item: classification.item, count: copies }));
+      }
+      return { terms: [mask] };
+    }
+
+    if (classification.kind === "health") {
+      return { terms: [1n << BigInt(search.bitIndex.bitFor({ kind: "health", count: classification.count }))] };
+    }
+
+    if (context.eventKeys.has(classification.key)) return search.eventExprs.get(classification.key) || dnfFalse();
+
+    // A seed's options are fixed, so they collapse to true or false here rather
+    // than surviving into the tooltip.
+    if (classification.kind === "comparison" || classification.kind === "option_enabled_disabled"
+      || classification.kind === "option_is" || classification.kind === "option_contains") {
+      const staticContext = { ...context, inventory: {}, events: new Set(), accessibleAreas: new Set() };
+      return evaluateAtom(node.value, staticContext, new Set()) ? dnfTrue() : dnfFalse();
+    }
+
+    if (classification.kind === "location") {
+      const rule = context.rules && context.rules[classification.locationKey];
+      const guard = "loc:" + classification.locationKey;
+      if (!rule || macroStack.has(guard)) return dnfFalse();
+      const nextStack = new Set(macroStack);
+      nextStack.add(guard);
+      return evaluatePartial(compileExpression(rule), search, nextStack);
+    }
+
+    if (classification.kind === "dungeon_access") {
+      const randomized = Boolean(getOptionValue(context.options || {}, "randomize_dungeon_entrances").value);
+      const mappedSector = context.entranceMappings && context.entranceMappings[classification.dungeonName];
+      if (randomized && !mappedSector) return dnfFalse();
+      const sector = mappedSector || VANILLA_DUNGEON_SECTORS[classification.dungeonName];
+      const requirementName = SECTOR_ENTRANCE_REQUIREMENTS[normalize(sector)];
+      const requirement = requirementName && context.macros && context.macros[normalize(requirementName)];
+      return requirement ? evaluatePartial(compileExpression(requirement), search, macroStack) : dnfFalse();
+    }
+
+    const macro = context.macros && context.macros[classification.key];
+    if (macro && !macroStack.has(classification.key)) {
+      const nextStack = new Set(macroStack);
+      nextStack.add(classification.key);
+      return evaluatePartial(compileExpression(macro), search, nextStack);
+    }
+
+    return { terms: [1n << BigInt(search.bitIndex.bitFor({ kind: "item", item: classification.itemName, count: classification.count }))] };
+  }
+
+  /** DNF back to a readable AND/OR tree - DNFToExpr, minus the factoring. */
+  function dnfToRequirement(bitIndex, dnf) {
+    if (dnfIsFalse(dnf)) return { type: "impossible" };
+    if (dnfIsTrue(dnf)) return { type: "nothing" };
+
+    const deduped = dnfDedup(dnf);
+    const termBits = deduped.terms.map((term) => {
+      const set = new Set();
+      for (let bit = 0; bit < bitIndex.reverse.length; bit += 1) {
+        if ((term >> BigInt(bit)) & 1n) set.add(bit);
+      }
+      return set;
+    });
+
+    // "Wallet x1 and Wallet x2" reads badly - keep only the strongest count of
+    // each item within a term.
+    termBits.forEach((set) => {
+      [...set].forEach((bit) => {
+        const atom = bitIndex.reverse[bit];
+        if (atom.kind !== "item" || atom.count <= 1) return;
+        for (let lesser = 1; lesser < atom.count; lesser += 1) {
+          set.delete(bitIndex.bitFor({ kind: "item", item: atom.item, count: lesser }));
+        }
+      });
+    });
+
+    let commonFactors = new Set(termBits[0]);
+    termBits.forEach((set) => { commonFactors = new Set([...commonFactors].filter((bit) => set.has(bit))); });
+    termBits.forEach((set) => commonFactors.forEach((bit) => set.delete(bit)));
+
+    const toAtoms = (bitSet) => [...bitSet].map((bit) => bitIndex.reverse[bit]).map((atom) => (
+      atom.kind === "health" ? { type: "health", count: atom.count } : { type: "item", item: atom.item, count: atom.count }
+    ));
+    const andOf = (args) => (args.length === 1 ? args[0] : { type: "and", args });
+
+    const commonArgs = toAtoms(commonFactors);
+    const remaining = termBits.filter((set) => set.size);
+    if (!remaining.length) return commonArgs.length ? andOf(commonArgs) : { type: "nothing" };
+
+    const alternatives = remaining.map((set) => andOf(toAtoms(set)));
+    const disjunction = alternatives.length === 1 ? alternatives[0] : { type: "or", args: alternatives };
+    return commonArgs.length ? andOf([...commonArgs, disjunction]) : disjunction;
+  }
+
+  /**
+   * The three-stage flatten: a fixpoint over area access and events, then one
+   * OR per location over every way to reach it, then simplification.
+   */
+  function flattenRequirements(input) {
+    const world = input.world;
+    if (!world || !world.areas) return {};
+
+    const eventKeys = new Set();
+    Object.values(world.areas).forEach((area) => {
+      Object.values(area.events || {}).forEach((event) => eventKeys.add(normalize(event.name)));
+    });
+
+    const context = {
+      world,
+      rules: input.rules || {},
+      macros: getSeedMacros(input.macros, world, input.options, input.chartMappings),
+      options: input.options || {},
+      entranceMappings: input.entranceMappings || {},
+      entranceConnections: input.entranceConnections || {},
+      chartMappings: input.chartMappings || {},
+      startingIsland: input.startingIsland || "",
+      eventKeys
+    };
+    context.entranceState = buildEntranceConnections(context);
+
+    const search = { context, bitIndex: makeBitIndex(), areaExprs: new Map(), eventExprs: new Map() };
+
+    // Only re-check an exit or event when something it depends on moved: its
+    // own area, or an event/area it names through can_access. Without this the
+    // fixpoint re-evaluates the whole world every round.
+    const things = [];
+    Object.entries(world.areas).forEach(([areaKey, area]) => {
+      Object.values(area.exits || {}).forEach((exit) => things.push({ kind: "exit", areaKey, area, entry: exit }));
+      Object.values(area.events || {}).forEach((event) => things.push({ kind: "event", areaKey, area, entry: event }));
+    });
+    const dependencies = new Map();
+    things.forEach((thing) => {
+      const out = { events: new Set(), areas: new Set() };
+      collectRemoteDependencies(compileExpression(thing.entry.need), context, out, new Set());
+      dependencies.set(thing, out);
+    });
+
+    const rootKey = normalize(world.startArea || "Root");
+    search.areaExprs.set(rootKey, dnfTrue());
+    (input.additionalStartAreas || []).map(normalize).forEach((areaKey) => {
+      if (world.areas[areaKey]) search.areaExprs.set(areaKey, dnfTrue());
+    });
+
+    let recentAreas = new Set(search.areaExprs.keys());
+    let recentEvents = new Set();
+    let rounds = 0;
+
+    while ((recentAreas.size || recentEvents.size) && rounds < 500) {
+      rounds += 1;
+      const nextAreas = new Set();
+      const nextEvents = new Set();
+
+      things.forEach((thing) => {
+        const parentExpr = search.areaExprs.get(thing.areaKey);
+        if (!parentExpr) return;
+        const remote = dependencies.get(thing);
+        const touched = recentAreas.has(thing.areaKey)
+          || [...remote.events].some((key) => recentEvents.has(key))
+          || [...remote.areas].some((key) => recentAreas.has(key));
+        if (!touched) return;
+
+        const partial = dnfAnd(parentExpr, evaluatePartial(compileExpression(thing.entry.need), search, new Set()));
+        if (dnfIsFalse(partial)) return;
+
+        if (thing.kind === "exit") {
+          const targetKey = normalize(resolveExitTarget(thing.area, thing.entry.name, context));
+          if (!targetKey || !world.areas[targetKey]) return;
+          const current = search.areaExprs.get(targetKey) || dnfFalse();
+          const merged = dnfOrUseful(current, partial);
+          if (!merged.useful) return;
+          search.areaExprs.set(targetKey, dnfDedup(merged.dnf));
+          nextAreas.add(targetKey);
+        } else {
+          const eventKey = normalize(thing.entry.name);
+          const current = search.eventExprs.get(eventKey) || dnfFalse();
+          const merged = dnfOrUseful(current, partial);
+          if (!merged.useful) return;
+          search.eventExprs.set(eventKey, dnfDedup(merged.dnf));
+          nextEvents.add(eventKey);
+        }
+      });
+
+      recentAreas = nextAreas;
+      recentEvents = nextEvents;
+    }
+
+    // One OR per location over every area that hosts it.
+    const perLocation = new Map();
+    Object.entries(world.areas).forEach(([areaKey, area]) => {
+      (area.locations || []).forEach((entry) => {
+        const key = normalize(entry.name);
+        if (!perLocation.has(key)) perLocation.set(key, dnfFalse());
+        const areaExpr = search.areaExprs.get(areaKey);
+        if (!areaExpr) return;
+        const combined = dnfAnd(areaExpr, evaluatePartial(compileExpression(entry.need), search, new Set()));
+        perLocation.set(key, dnfOr(perLocation.get(key), combined));
+      });
+    });
+
+    const requirements = {};
+    perLocation.forEach((dnf, key) => {
+      requirements[key] = dnfToRequirement(search.bitIndex, dnfDedup(dnf));
+    });
+    return requirements;
+  }
+
   global.WWRSphereEngine = {
     normalize,
     parseLogicData,
@@ -1231,6 +1635,7 @@
     // logic itself uses - a display-only reimplementation would be free to
     // silently disagree with the engine about what a rule means.
     compileExpression,
-    classifyAtom
+    classifyAtom,
+    flattenRequirements
   };
 }(typeof window !== "undefined" ? window : self));

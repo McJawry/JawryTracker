@@ -66,7 +66,6 @@ export interface Settings {
   showHoHo: boolean;
   showBlueChu: boolean;
   streamMode: boolean;
-  compactMode: boolean;
   parsedHintsFilters: boolean;
   automaticMode: boolean;
   automaticLastLocation: boolean;
@@ -151,7 +150,6 @@ export const DEFAULT_SETTINGS: Settings = {
   showHoHo: true,
   showBlueChu: true,
   streamMode: false,
-  compactMode: false,
   parsedHintsFilters: true,
   automaticMode: false,
   automaticLastLocation: false,

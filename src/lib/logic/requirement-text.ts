@@ -17,9 +17,6 @@ import { getMaximalSphereLogicInventory, getSphereReachabilityWithOwnDungeonKeys
 
 const normalize = WWRSphereEngine.normalize;
 
-/** Macros are expanded inline so the tooltip shows real item names. */
-const MAX_MACRO_DEPTH = 6;
-
 export type RequirementStatus = "have" | "missing" | "unknown";
 
 export interface RequirementToken {
@@ -41,27 +38,6 @@ export interface LocationRequirements {
   terms: RequirementTerm[];
   /** No rule found for this location - usually means logic isn't loaded. */
   unknown: boolean;
-}
-
-function isNode(node: ExpressionNode): node is Extract<ExpressionNode, { type: "and" | "or" }> {
-  return node.type === "and" || node.type === "or";
-}
-
-/**
- * Whether the player currently holds an atom's requirement. Only item atoms
- * get a definite answer - options and area access depend on evaluation
- * context the tooltip doesn't reconstruct, so they render neutral rather than
- * guessing wrong.
- */
-function getAtomStatus(atomText: string): RequirementStatus {
-  const classification = WWRSphereEngine.classifyAtom(atomText);
-  if (classification.kind === "true") return "have";
-  if (classification.kind === "false") return "missing";
-  if (classification.kind !== "item" && classification.kind !== "count_fn") return "unknown";
-
-  const itemName = classification.kind === "count_fn" ? classification.item! : classification.itemName!;
-  const needed = classification.count ?? 1;
-  return getOwnedCount(itemName) >= needed ? "have" : "missing";
 }
 
 // Small/big keys are tracked per dungeon rather than in the item grid, so
@@ -92,21 +68,6 @@ function getOwnedCount(itemName: string): number {
   return Math.max(trackedCopies, startingCopies + placedCopies);
 }
 
-/**
- * Copies of an item the seed hands the player before they start - the
- * config's starting_gear plus whatever start_with_random_item rolled, which
- * refreshSphereStartingGear folds into the same list. Requirements already
- * covered by these are dropped from the tooltip: they can never be the reason
- * a location is out of reach.
- */
-function getStartingCount(itemName: string): number {
-  // starting_gear spells several items with the "Progressive" prefix the
-  // logic files leave off ("Progressive Sail" vs "Sail"), so both sides are
-  // compared with it stripped - the same match matchGridItemName makes.
-  const key = normalize(itemName).replace(/^progressive /, "");
-  return data.sphereStartingGear.filter((gear) => normalize(gear).replace(/^progressive /, "") === key).length;
-}
-
 // The logic's item names and the item grid's keys mostly agree, but the logic
 // uses the "Progressive X" form for several the grid names plainly.
 function matchGridItemName(itemName: string): string | null {
@@ -115,103 +76,35 @@ function matchGridItemName(itemName: string): string | null {
   return candidates.find((candidate) => normalize(candidate).replace(/^progressive /, "") === key) ?? null;
 }
 
-function expandMacros(node: ExpressionNode, depth: number): ExpressionNode {
-  if (isNode(node)) {
-    return { type: node.type, left: expandMacros(node.left, depth), right: expandMacros(node.right, depth) } as ExpressionNode;
-  }
-  if (depth >= MAX_MACRO_DEPTH) return node;
-
-  const classification = WWRSphereEngine.classifyAtom(node.value);
-  const macro = classification.key ? data.sphereMacros[classification.key] : undefined;
-  if (!macro) return node;
-
-  return expandMacros(WWRSphereEngine.compileExpression(macro), depth + 1);
-}
-
-/** Splits a chain of ANDs into the top-level bullet list. */
-function flattenAnd(node: ExpressionNode): ExpressionNode[] {
-  if (isNode(node) && node.type === "and") return [...flattenAnd(node.left), ...flattenAnd(node.right)];
-  return [node];
-}
-
-function renderNode(node: ExpressionNode, tokens: RequirementToken[], parentType: "and" | "or" | null): void {
-  if (!isNode(node)) {
-    tokens.push({ text: cleanAtomText(node.value), kind: "atom", status: getAtomStatus(node.value) });
-    return;
-  }
-
-  // Parenthesise only where precedence would otherwise change the reading.
-  const needsParens = parentType !== null && parentType !== node.type;
-  if (needsParens) tokens.push({ text: "(", kind: "punctuation" });
-  renderNode(node.left, tokens, node.type);
-  tokens.push({ text: node.type === "and" ? "and" : "or", kind: "operator" });
-  renderNode(node.right, tokens, node.type);
-  if (needsParens) tokens.push({ text: ")", kind: "punctuation" });
-}
-
-/**
- * Human-readable atom text. The raw logic forms (`count(2, Progressive Bow)`,
- * `can_access(...)`, `Item x2`) are how the YAML is written, not how the
- * tracker should read - the display text comes from the classification the
- * engine already produced.
- */
-function cleanAtomText(value: string): string {
-  const raw = String(value || "")
-    .trim()
-    .replace(/^["']|["']$/g, "");
-  const classification = WWRSphereEngine.classifyAtom(value);
-
-  if (classification.kind === "count_fn") {
-    const count = classification.count ?? 1;
-    return count > 1 ? `${count}x ${tidy(classification.item ?? "")}` : tidy(classification.item ?? "");
-  }
-  if (classification.kind === "can_access") {
-    // Uses the raw parenthesised text: the classification's `area` is
-    // normalized (lower-cased, punctuation stripped) for matching.
-    const inner = raw.match(/^can_access\s*\((.*)\)$/i)?.[1] ?? classification.area ?? "";
-    return `Access ${tidy(inner)}`;
-  }
-  if (classification.kind === "location") {
-    return `Check ${tidy(raw.match(/["'](.+)["']/)?.[1] ?? raw)}`;
-  }
-  if (classification.kind === "health") {
-    return `${classification.count} hearts`;
-  }
-  if (classification.kind === "item") {
-    const count = classification.count ?? 1;
-    return count > 1 ? `${count}x ${tidy(classification.itemName ?? raw)}` : tidy(classification.itemName ?? raw);
-  }
-  return tidy(raw);
-}
-
-function tidy(value: string): string {
-  return String(value || "")
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .replace(/_/g, " ");
-}
-
 interface WorldArea {
   name: string;
-  locations?: Array<{ name: string }>;
-  exits?: Record<string, { name: string; need: unknown }>;
+  locations?: Array<{ name: string; need: string }>;
+  exits?: Record<string, { name: string; need: string }>;
 }
 
-/**
- * Shortest route from the world's start area to the area holding this
- * location, as a list of the exits crossed. Breadth-first, so the route with
- * the fewest hops wins - the requirements the tooltip shows are the ones for
- * *a* legal route, not necessarily the cheapest in items.
- */
+// locationKey -> the area holding it, built once per world rather than by
+// re-scanning every area's location list on each lookup.
+let areaByLocationCache: { world: unknown; index: Map<string, WorldArea> } | null = null;
+
+function getAreaByLocation(areas: Record<string, WorldArea>): Map<string, WorldArea> {
+  if (areaByLocationCache && areaByLocationCache.world === data.sphereWorld) return areaByLocationCache.index;
+  const index = new Map<string, WorldArea>();
+  Object.values(areas).forEach((area) => {
+    (area.locations || []).forEach((entry) => {
+      const key = normalize(entry.name);
+      if (!index.has(key)) index.set(key, area);
+    });
+  });
+  areaByLocationCache = { world: data.sphereWorld, index };
+  return index;
+}
+
 function findEntranceRoute(location: string): { areaNames: string[]; needs: unknown[] } | null {
   const world = data.sphereWorld as { areas?: Record<string, WorldArea>; startArea?: string } | null;
   const areas = world?.areas;
   if (!areas) return null;
 
-  const locationKey = normalize(location);
-  const targetArea = Object.values(areas).find((area) =>
-    (area.locations || []).some((entry) => normalize(entry.name) === locationKey)
-  );
+  const targetArea = getAreaByLocation(areas).get(normalize(location));
   if (!targetArea) return null;
 
   const startName = world?.startArea || "Root";
@@ -224,7 +117,9 @@ function findEntranceRoute(location: string): { areaNames: string[]; needs: unkn
 
   while (queue.length) {
     const current = queue.shift()!;
-    const area = areas[current.areaName] || Object.values(areas).find((entry) => normalize(entry.name) === normalize(current.areaName));
+    // areas is keyed by the normalised name, so looking up the raw one missed
+    // every time and fell through to a full scan of the world per queue pop.
+    const area = areas[normalize(current.areaName)];
     if (!area?.exits) continue;
 
     for (const exit of Object.values(area.exits)) {
@@ -320,282 +215,191 @@ function prettyTrackerName(item: string, count: number): string {
   return count > 1 ? `${item} x${count}` : item;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Flattened requirements                                                      */
+/*                                                                            */
+/* The tree comes from WWRSphereEngine.flattenRequirements, a port of the      */
+/* randomizer's own logic/flatten/. It is item-only - area access and events   */
+/* are inlined - and it depends on nothing that changes during a run, so it is */
+/* computed once per logic load and only the have/missing colouring is         */
+/* recomputed per hover. That is how the randomizer's tracker works too:       */
+/* tracker_label.cpp reads a stored location->computedRequirement.             */
+/* -------------------------------------------------------------------------- */
+
+export type FlatRequirement =
+  | { type: "nothing" }
+  | { type: "impossible" }
+  | { type: "item"; item: string; count: number }
+  | { type: "health"; count: number }
+  | { type: "triforce" }
+  | { type: "and"; args: FlatRequirement[] }
+  | { type: "or"; args: FlatRequirement[] };
+
+const TRIFORCE_SHARD_KEYS = new Set(
+  Array.from({ length: 8 }, (_, index) => normalize(`Triforce Shard ${index + 1}`))
+);
+
+const isShard = (requirement: FlatRequirement): boolean =>
+  requirement.type === "item" && requirement.count === 1 && TRIFORCE_SHARD_KEYS.has(normalize(requirement.item));
+
 /**
- * The items a location genuinely requires, found by elimination: take the
- * maximal inventory, remove one item entirely, and see whether the location
- * is still reachable. If it isn't, that item is required - and the smallest
- * number of copies that restores reachability is the count.
- *
- * This is what makes the list flat. The randomizer's own tracker reaches the
- * same place by flattening the world into DNF and minimising it
- * (logic/flatten/); necessity-by-elimination gets the same answer for every
- * item that is actually required, without porting a logic minimiser. It also
- * resolves choices the way theirs does: "(Sword or Bow or Bombs)" contributes
- * nothing unless one of them is needed elsewhere on the route, in which case
- * only that one survives - which is why the reference shows a bare "Hero's
- * Bow" for Molgera.
- *
- * Known gap vs. theirs: a genuine either/or that no other requirement forces
- * is omitted here, where they would print "(A or B)". See the note in the
- * tooltip's empty state.
+ * Our logic files name the eight shards individually; the randomizer's own
+ * item pool models them as eight copies of one item, so its tracker prints a
+ * single "Triforce of Courage" line. Collapsing a complete set here matches
+ * that without pretending the logic says something it doesn't - a partial set
+ * is still listed shard by shard.
  */
-interface RequiredItem {
-  item: string;
-  count: number;
+function collapseTriforce(requirement: FlatRequirement): FlatRequirement {
+  if (requirement.type !== "and" && requirement.type !== "or") return requirement;
+  const args = requirement.args.map(collapseTriforce);
+
+  if (requirement.type === "and") {
+    const shards = new Set(args.filter(isShard).map((arg) => normalize((arg as { item: string }).item)));
+    if (shards.size === TRIFORCE_SHARD_KEYS.size) {
+      const rest = args.filter((arg) => !isShard(arg));
+      const collapsed: FlatRequirement[] = [{ type: "triforce" }, ...rest];
+      return collapsed.length === 1 ? collapsed[0] : { type: "and", args: collapsed };
+    }
+  }
+
+  return { type: requirement.type, args };
 }
 
-const requiredItemsCache = new Map<string, RequiredItem[] | null>();
+let flattenedRequirements: Record<string, FlatRequirement> | null = null;
+let flattenedKey = "";
 
 /**
- * Cache key. Entrance mappings are part of it because assigning a dungeon to a
- * different island changes what a location needs, and that happens without a
- * logic reload - so keying on the location alone served a stale list until the
- * next re-sync.
+ * Entrance assignments are the one input that moves without a logic reload -
+ * pointing a dungeon at a different island changes what everything behind it
+ * needs - so they key the cache.
  */
-function requirementCacheKey(location: string): string {
-  const entrances = Object.entries(sphere.entranceMappings)
+function entranceSignature(): string {
+  return Object.entries(sphere.entranceMappings)
     .map(([name, sector]) => `${normalize(name)}>${normalize(sector)}`)
     .sort()
     .join("|");
-  return `${normalize(location)}::${entrances}`;
 }
+
+const entrancePathCache = new Map<string, string | null>();
 
 export function clearRequirementCache(): void {
-  requiredItemsCache.clear();
-  warmedKey = "";
-  // In-flight passes are abandoned rather than allowed to write a result
-  // computed against the logic that was just replaced.
-  requirementGeneration += 1;
-  pendingRequests.clear();
+  flattenedRequirements = null;
+  flattenedKey = "";
+  entrancePathCache.clear();
+  areaByLocationCache = null;
 }
 
-// Bumped whenever the cache is cleared; an async pass that started before the
-// bump discards its result.
-let requirementGeneration = 0;
-
-/**
- * The location the tooltip is actually waiting on. Sweeping the pointer down a
- * location list enters every row on the way to the one being clicked, and each
- * of those used to start an elimination pass that then ran to completion -
- * seventeen rows of one area cost five seconds of chunked work. A pass whose
- * location is no longer the focus now stops at its next yield.
- */
-let requirementFocus: string | null = null;
-
-/** Abandoned at a yield; distinct from null, which means "genuinely impossible". */
-const ABANDONED = Symbol("abandoned");
-
-export function setRequirementFocus(location: string | null): void {
-  requirementFocus = location === null ? null : normalize(location);
+/** Memoised twin of describeEntrancePath - same inputs as the flatten cache. */
+function getEntrancePath(location: string): string | null {
+  const key = normalize(location);
+  if (entrancePathCache.has(key)) return entrancePathCache.get(key)!;
+  const path = describeEntrancePath(location, findEntranceRoute(location));
+  entrancePathCache.set(key, path);
+  return path;
 }
 
-/**
- * Hands control back to the browser so a long elimination pass doesn't freeze
- * the UI. Each item's test is a full reachability search, and there are ~50 of
- * them - run back to back that is about a second of blocked main thread.
- */
-async function yieldToBrowser(): Promise<void> {
-  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
-  if (scheduler?.yield) return scheduler.yield();
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
+function getFlattenedRequirements(): Record<string, FlatRequirement> {
+  const key = entranceSignature();
+  if (flattenedRequirements && flattenedKey === key) return flattenedRequirements;
+  if (!data.sphereLogicLoaded || !data.sphereWorld) return {};
+  entrancePathCache.clear();
 
-/** Chunked twin of computeRequiredItems - same result, yielding as it goes. */
-async function computeRequiredItemsAsync(location: string): Promise<RequiredItem[] | null | typeof ABANDONED> {
-  const locationKey = normalize(location);
-  const maximal = getMaximalSphereLogicInventory();
-  if (!getSphereReachabilityWithOwnDungeonKeys(maximal).has(locationKey)) return null;
-
-  const maxCounts = new Map<string, number>();
-  maximal.forEach((item) => maxCounts.set(item, (maxCounts.get(item) ?? 0) + 1));
-
-  const withCappedCopies = (item: string, keep: number): string[] => {
-    let seen = 0;
-    return maximal.filter((candidate) => (candidate === item ? seen++ < keep : true));
-  };
-
-  const required: RequiredItem[] = [];
-  let sinceYield = 0;
-  for (const [item, maxCount] of maxCounts) {
-    // A handful of searches between yields: often enough that the UI keeps
-    // painting, rarely enough that the yields don't dominate the runtime.
-    if (sinceYield >= 4) {
-      sinceYield = 0;
-      await yieldToBrowser();
-      // The pointer has moved to another row (or off the list) - whoever
-      // wanted this answer isn't looking any more.
-      if (requirementFocus !== locationKey) return ABANDONED;
-    }
-    sinceYield += 1;
-
-    if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, 0)).has(locationKey)) continue;
-    let needed = maxCount;
-    for (let keep = 1; keep < maxCount; keep += 1) {
-      if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, keep)).has(locationKey)) {
-        needed = keep;
-        break;
-      }
-    }
-    required.push({ item, count: needed });
-  }
-
-  const order = new Map(maximal.map((item, index) => [item, index] as const));
-  required.sort((left, right) => (order.get(left.item) ?? 0) - (order.get(right.item) ?? 0));
-  return required;
-}
-
-function computeRequiredItems(location: string): RequiredItem[] | null {
-  const locationKey = normalize(location);
-  const maximal = getMaximalSphereLogicInventory();
-  // Unreachable even holding everything: no item list can explain it.
-  if (!getSphereReachabilityWithOwnDungeonKeys(maximal).has(locationKey)) return null;
-
-  const maxCounts = new Map<string, number>();
-  maximal.forEach((item) => maxCounts.set(item, (maxCounts.get(item) ?? 0) + 1));
-
-  const withCappedCopies = (item: string, keep: number): string[] => {
-    let seen = 0;
-    return maximal.filter((candidate) => (candidate === item ? seen++ < keep : true));
-  };
-
-  const required: RequiredItem[] = [];
-  maxCounts.forEach((maxCount, item) => {
-    // One test rules out the vast majority: drop the item entirely and see if
-    // anything changes.
-    if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, 0)).has(locationKey)) return;
-    let needed = maxCount;
-    for (let keep = 1; keep < maxCount; keep += 1) {
-      if (getSphereReachabilityWithOwnDungeonKeys(withCappedCopies(item, keep)).has(locationKey)) {
-        needed = keep;
-        break;
-      }
-    }
-    required.push({ item, count: needed });
+  flattenedRequirements = WWRSphereEngine.flattenRequirements({
+    rules: data.sphereRules,
+    macros: data.sphereMacros,
+    world: data.sphereWorld,
+    options: data.sphereOptions,
+    entranceMappings: { ...sphere.entranceMappings },
+    entranceConnections: {},
+    chartMappings: {},
+    startingIsland: data.sphereStartingIsland
+  }) as Record<string, FlatRequirement>;
+  Object.keys(flattenedRequirements).forEach((locationKey) => {
+    flattenedRequirements![locationKey] = collapseTriforce(flattenedRequirements![locationKey]);
   });
-
-  // Stable order: the seed's own item order, so the list doesn't reshuffle
-  // between hovers.
-  const order = new Map(maximal.map((item, index) => [item, index] as const));
-  required.sort((left, right) => (order.get(left.item) ?? 0) - (order.get(right.item) ?? 0));
-  return required;
+  flattenedKey = key;
+  return flattenedRequirements;
 }
 
-/** Hands control back only when the browser has nothing better to do. */
-function yieldToIdle(): Promise<void> {
-  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback;
-  if (idle) return new Promise((resolve) => idle(() => resolve(), { timeout: 1000 }));
-  return new Promise((resolve) => setTimeout(resolve, 32));
+/** True when the held inventory already satisfies this sub-expression. */
+function isSatisfied(requirement: FlatRequirement): boolean {
+  switch (requirement.type) {
+    case "nothing":
+      return true;
+    case "impossible":
+      return false;
+    // Hearts aren't tracked, and the randomizer's tooltip doesn't print them
+    // either - treating them as met keeps them from colouring a bullet red.
+    case "health":
+      return true;
+    case "item":
+      return getOwnedCount(requirement.item) >= requirement.count;
+    case "triforce":
+      return [...TRIFORCE_SHARD_KEYS].every((shard) => getOwnedCount(shard) >= 1);
+    case "and":
+      return requirement.args.every(isSatisfied);
+    case "or":
+      return requirement.args.some(isSatisfied);
+  }
 }
 
-// The (generation, entrances) the reachability cache was last warmed for.
-let warmedKey = "";
+function renderRequirement(
+  requirement: FlatRequirement,
+  tokens: RequirementToken[],
+  parentType: "and" | "or" | null
+): void {
+  if (requirement.type === "item") {
+    const status: RequirementStatus = getOwnedCount(requirement.item) >= requirement.count ? "have" : "missing";
+    // Logic atoms are written Deku_Leaf; the display name is Deku Leaf.
+    const itemName = requirement.item.replace(/_/g, " ");
+    tokens.push({ text: prettyTrackerName(itemName, requirement.count), kind: "atom", status });
+    return;
+  }
+  if (requirement.type === "triforce") {
+    const status: RequirementStatus = isSatisfied(requirement) ? "have" : "missing";
+    tokens.push({ text: "Triforce of Courage", kind: "atom", status });
+    return;
+  }
+  if (requirement.type === "nothing") {
+    tokens.push({ text: "Nothing", kind: "atom", status: "have" });
+    return;
+  }
+  if (requirement.type === "impossible") {
+    tokens.push({ text: "Impossible (please discover an entrance first)", kind: "atom", status: "missing" });
+    return;
+  }
+  // formatRequirement upstream has no HEALTH case, so it prints nothing.
+  if (requirement.type === "health") return;
 
-/**
- * Pre-computes the reachability searches every requirement tooltip shares.
- *
- * The elimination pass asks "is this location still reachable without item X"
- * once per item in the seed's maximal inventory, and those answers depend on
- * neither the location nor the run - so the first tooltip after a logic load
- * paid about three seconds filling the cache and every later one was fast.
- * Running the same work in idle time moves that cost off the first hover.
- */
-export function warmRequirementReachability(): void {
-  const maximal = getMaximalSphereLogicInventory();
-  if (!maximal.length) return;
-  const key = `${requirementGeneration}::${requirementCacheKey("")}`;
-  if (key === warmedKey) return;
-  warmedKey = key;
+  const args = requirement.args.filter((arg) => arg.type !== "health");
+  if (!args.length) return;
 
-  const generation = requirementGeneration;
-  void (async () => {
-    getSphereReachabilityWithOwnDungeonKeys(maximal);
-    for (const item of new Set(maximal)) {
-      await yieldToIdle();
-      // A logic reload landed while this was running - its answers are stale
-      // and the next call will warm the new logic instead.
-      if (generation !== requirementGeneration) return;
-      getSphereReachabilityWithOwnDungeonKeys(maximal.filter((candidate) => candidate !== item));
-    }
-  })();
-}
-
-function getRequiredItems(location: string): RequiredItem[] | null {
-  const key = requirementCacheKey(location);
-  if (requiredItemsCache.has(key)) return requiredItemsCache.get(key)!;
-  const result = computeRequiredItems(location);
-  requiredItemsCache.set(key, result);
-  return result;
-}
-
-// One in-flight computation per location, so re-hovering while it runs
-// doesn't start a second pass.
-const pendingRequests = new Map<string, Promise<void>>();
-
-/** True when the answer is already cached and can be rendered immediately. */
-export function hasRequirementsReady(location: string): boolean {
-  return requiredItemsCache.has(requirementCacheKey(location));
-}
-
-/**
- * Computes the requirements without blocking, resolving once they're cached.
- * The caller re-reads via getLocationRequirements afterwards.
- */
-export function requestLocationRequirements(location: string): Promise<void> {
-  const key = requirementCacheKey(location);
-  if (requiredItemsCache.has(key)) return Promise.resolve();
-  const existing = pendingRequests.get(key);
-  if (existing) return existing;
-
-  const generation = requirementGeneration;
-  const request = computeRequiredItemsAsync(location)
-    .then((result) => {
-      if (generation !== requirementGeneration || result === ABANDONED) return;
-      requiredItemsCache.set(key, result);
-    })
-    .catch((error) => {
-      console.error("Could not work out the requirements for", location, error);
-    })
-    .finally(() => {
-      pendingRequests.delete(key);
-    });
-  pendingRequests.set(key, request);
-  return request;
+  const needsParentheses = parentType !== null && parentType !== requirement.type && args.length > 1;
+  if (needsParentheses) tokens.push({ text: "(", kind: "punctuation" });
+  args.forEach((arg, index) => {
+    if (index) tokens.push({ text: requirement.type === "and" ? " and " : " or ", kind: "operator" });
+    renderRequirement(arg, tokens, requirement.type);
+  });
+  if (needsParentheses) tokens.push({ text: ")", kind: "punctuation" });
 }
 
 export function getLocationRequirements(location: string): LocationRequirements {
-  const route = findEntranceRoute(location);
-  const entrancePath = describeEntrancePath(location, route);
+  const entrancePath = getEntrancePath(location);
+  const requirement = getFlattenedRequirements()[normalize(location)];
 
-  // No rule at all - logic isn't loaded, or this location isn't in the seed.
-  if (data.sphereRules[normalize(location)] === undefined) {
-    return { entrancePath, terms: [], unknown: true };
-  }
+  // No entry at all: the logic isn't loaded, or this location isn't in the seed.
+  if (!requirement) return { entrancePath, terms: [], unknown: true };
 
-  const required = getRequiredItems(location);
-  if (required === null) {
-    return {
-      entrancePath,
-      terms: [
-        {
-          tokens: [{ text: "Impossible (please discover an entrance first)", kind: "atom", status: "missing" }],
-          satisfied: false
-        }
-      ],
-      unknown: false
-    };
-  }
-
-  // One bullet per required item, matching the reference tracker's flat list,
-  // minus anything the seed already started the player with.
-  const terms = required
-    .filter(({ item, count }) => getStartingCount(item) < count)
-    .map(({ item, count }) => {
-      const status: RequirementStatus = getOwnedCount(item) >= count ? "have" : "missing";
-      return {
-        tokens: [{ text: prettyTrackerName(item, count), kind: "atom" as const, status }],
-        satisfied: status === "have"
-      };
-    });
+  // One bullet per argument of a top-level AND, one bullet for anything else -
+  // the split tracker_label.cpp makes.
+  const parts = requirement.type === "and" ? requirement.args : [requirement];
+  const terms = parts
+    .map((part) => {
+      const tokens: RequirementToken[] = [];
+      renderRequirement(part, tokens, null);
+      return { tokens, satisfied: isSatisfied(part) };
+    })
+    .filter((term) => term.tokens.length);
 
   return { entrancePath, terms, unknown: false };
 }

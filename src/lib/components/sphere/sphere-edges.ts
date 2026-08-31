@@ -101,6 +101,12 @@ function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement,
   const { parents, children } = buildGraph(nodes);
   const pathEdges = new Set<string>();
   const pathNodeIds = new Set<string>();
+  // A card with several candidates can't say which one is really its path
+  // item - the randomizer picks by shuffle order (Hints.cpp) - so its edges
+  // are drawn as tentative. An edge a single-candidate card also claims is
+  // certain, and that wins.
+  const tentativeEdges = new Set<string>();
+  const certainEdges = new Set<string>();
 
   const addPathTarget = (pathNodeId: string, targetId: string) => {
     const node = nodes.get(pathNodeId);
@@ -119,6 +125,7 @@ function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement,
     if (!targetId) return;
     const sourceIds = (pathCard.dataset.pathSourceIds ?? "").split(",").filter((id) => nodes.has(id));
     if (!sourceIds.length) return;
+    const claimed = sourceIds.length > 1 ? tentativeEdges : certainEdges;
 
     const ancestors = new Set([targetId]);
     const ancestorQueue = [targetId];
@@ -142,6 +149,7 @@ function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement,
         (children.get(currentId) ?? []).forEach((childId) => {
           if (!ancestors.has(childId)) return;
           pathEdges.add(edgeKey(currentId, childId));
+          claimed.add(edgeKey(currentId, childId));
           cardPathNodeIds.add(currentId);
           cardPathNodeIds.add(childId);
           if (visited.has(childId)) return;
@@ -156,8 +164,10 @@ function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement,
   // Purple edges are re-appended so they paint over the grey ones.
   const purple: SVGPathElement[] = [];
   edges.querySelectorAll<SVGPathElement>("path").forEach((path) => {
-    const isPurple = pathEdges.has(edgeKey(path.dataset.source ?? "", path.dataset.target ?? ""));
+    const key = edgeKey(path.dataset.source ?? "", path.dataset.target ?? "");
+    const isPurple = pathEdges.has(key);
     path.classList.toggle("path-hint-edge", isPurple);
+    path.classList.toggle("path-hint-tentative", isPurple && tentativeEdges.has(key) && !certainEdges.has(key));
     if (isPurple) purple.push(path);
   });
   pathNodeIds.forEach((nodeId) => nodes.get(nodeId)?.classList.add("path-chain-location"));

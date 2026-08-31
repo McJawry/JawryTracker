@@ -8,9 +8,8 @@
 </script>
 
 <main class="popout-settings-shell">
-  <header class="popout-header">
-    <h1>Settings</h1>
-  </header>
+  <!-- Header dropped entirely: it held only a "Settings" heading, which the
+       window's own title bar already shows. -->
   <SettingsPanel />
 </main>
 
@@ -41,15 +40,4 @@
     padding-bottom: 10px;
   }
 
-  .popout-header {
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--line);
-    background: var(--panel);
-    color: var(--ink);
-  }
-
-  .popout-header h1 {
-    margin: 0;
-    font-size: 0.9rem;
-  }
 </style>

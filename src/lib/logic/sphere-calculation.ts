@@ -131,20 +131,24 @@ const BOSS_LOCATIONS_FOR_REACHABILITY = [
   "Ganon's Tower - Defeat Ganondorf"
 ];
 
-export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
-  const additionalStartAreas = options.additionalStartAreas || [];
-  // Entrance mappings belong in the key: they change reachability and, unlike
-  // the rules/macros/options, they change *without* a logic reload - so with
-  // them missing the only safe thing was to wipe this cache on every tracker
-  // change, which made every first hover pay a full cold recompute.
-  const cacheKey = JSON.stringify({
+// Entrance mappings belong in the key: they change reachability and, unlike
+// the rules/macros/options, they change *without* a logic reload - so with
+// them missing the only safe thing was to wipe the cache on every tracker
+// change, which made every first hover pay a full cold recompute.
+function reachabilityCacheKey(items: string[], options: { additionalStartAreas?: string[] }): string {
+  return JSON.stringify({
     items: items.map(normalize).sort(),
-    additionalStartAreas: additionalStartAreas.map(normalize).sort(),
+    additionalStartAreas: (options.additionalStartAreas || []).map(normalize).sort(),
     startingIsland: normalize(data.sphereStartingIsland),
     entranceMappings: Object.entries(sphere.entranceMappings)
       .map(([name, sector]) => [normalize(name), normalize(sector)])
       .sort(([first], [second]) => first.localeCompare(second))
   });
+}
+
+export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+  const additionalStartAreas = options.additionalStartAreas || [];
+  const cacheKey = reachabilityCacheKey(items, options);
   const cached = sphereReachabilityCache.get(cacheKey);
   if (cached) return cached;
 
@@ -179,11 +183,26 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
   return reachable;
 }
 
+/**
+ * Everything the player could ever be holding: the tracked item pool at full
+ * copies, every dungeon key, and the seed's starting gear.
+ *
+ * The starting gear matters because data.items is the *item grid's* list, and
+ * several things exist in a seed only as starting gear - songs and pearls, for
+ * one. Without them the logic judged anything behind Song of Passing (Outset's
+ * Mesa's House, say) unreachable no matter what, and the requirement tooltip
+ * reported "Impossible (please discover an entrance first)" for a chest with
+ * no entrance randomisation anywhere near it.
+ */
 export function getMaximalSphereLogicInventory(): string[] {
   const items: string[] = [];
   data.items.forEach((item) => {
     const copies = MAX_LOGIC_ITEM_COPIES[item] || 1;
     for (let index = 0; index < copies; index += 1) items.push(item);
+  });
+  const tracked = new Set(data.items.map(normalize));
+  data.sphereStartingGear.forEach((gear) => {
+    if (!tracked.has(normalize(gear))) items.push(gear);
   });
   DUNGEON_KEY_LOGIC.forEach(({ dungeon, smallKeyCount }) => {
     for (let index = 0; index < smallKeyCount; index += 1) items.push(`${dungeon} Small Key`);
@@ -202,6 +221,8 @@ let sphereOwnDungeonKeyPoolCache: { key: string; pools: Map<string, OwnDungeonKe
 
 export function clearOwnDungeonKeyPoolCache(): void {
   sphereOwnDungeonKeyPoolCache = { key: "", pools: new Map() };
+  // Keyed partly on the pool signature, so it can never outlive the pools.
+  ownDungeonKeyReachabilityCache.clear();
 }
 
 export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool> {
@@ -241,11 +262,24 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
   return pools;
 }
 
+const ownDungeonKeyReachabilityCache = new Map<string, Set<string>>();
+
 export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+  const keyPools = getOwnDungeonKeyPotentialPools();
+  if (!keyPools.size) return getSphereReachableLocationSet(items, options);
+
+  // Only the inner search was memoised, so the fixpoint below re-ran on every
+  // call: filtering the whole inventory once per key pool and re-deriving
+  // reachability for each key it grants. The requirement tooltip asks this
+  // ~70 times per location and the answers repeat across locations, so a
+  // hover cost ~200ms of re-derivation even with a completely warm inner
+  // cache and zero real searches.
+  const cacheKey = `${reachabilityCacheKey(items, options)}|${sphereOwnDungeonKeyPoolCache.key}`;
+  const memoised = ownDungeonKeyReachabilityCache.get(cacheKey);
+  if (memoised) return memoised;
+
   const effectiveItems = [...items];
   let reachable = getSphereReachableLocationSet(effectiveItems, options);
-  const keyPools = getOwnDungeonKeyPotentialPools();
-  if (!keyPools.size) return reachable;
 
   let changed = true;
   while (changed) {
@@ -263,6 +297,12 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
       }
     });
   }
+
+  if (ownDungeonKeyReachabilityCache.size >= REACHABILITY_CACHE_LIMIT) {
+    const oldest = ownDungeonKeyReachabilityCache.keys().next().value;
+    if (oldest !== undefined) ownDungeonKeyReachabilityCache.delete(oldest);
+  }
+  ownDungeonKeyReachabilityCache.set(cacheKey, reachable);
   return reachable;
 }
 

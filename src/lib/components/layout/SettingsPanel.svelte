@@ -219,11 +219,63 @@
     if (result.layout) await applyLoadedPreferences(result.layout);
     await refreshPresets();
   }
+
+  // One category at a time instead of all six stacked: the panel is a
+  // 380px column, so the whole page used to be one long scroll.
+  let activeTab = $state("appearance");
 </script>
 
 <section class="settings-section" aria-label="Tracker settings">
+  <div class="settings-tabs" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "appearance"}
+      aria-selected={activeTab === "appearance"}
+      onclick={() => (activeTab = "appearance")}
+    >Appearance</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "run-saves"}
+      aria-selected={activeTab === "run-saves"}
+      onclick={() => (activeTab = "run-saves")}
+    >Run saves</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "general"}
+      aria-selected={activeTab === "general"}
+      onclick={() => (activeTab = "general")}
+    >General</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "tracker"}
+      aria-selected={activeTab === "tracker"}
+      onclick={() => (activeTab = "tracker")}
+    >Tracker</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "preference-presets"}
+      aria-selected={activeTab === "preference-presets"}
+      onclick={() => (activeTab = "preference-presets")}
+    >Preference presets</button>
+  </div>
+
+  {#if activeTab === "appearance"}
   <fieldset class="settings-group">
     <legend>Appearance</legend>
+    <label class="setting-toggle stream-mode-setting">
+      <input type="checkbox" bind:checked={settings.streamMode} onchange={update} />
+      <span>Stream mode</span>
+    </label>
     <label class="setting-control page-background-setting">
       <span>Page background</span>
       <input type="color" bind:value={settings.pageBackground} oninput={updateLive} onchange={update} />
@@ -245,7 +297,9 @@
       <input type="range" min="28" max="72" bind:value={settings.hintArrowPosition} onchange={update} />
     </label>
   </fieldset>
+  {/if}
 
+  {#if activeTab === "appearance"}
   <fieldset class="settings-group">
     <legend>Colour presets</legend>
 
@@ -291,7 +345,9 @@
     </div>
     {#if colorStatus}<p class="setting-status">{colorStatus}</p>{/if}
   </fieldset>
+  {/if}
 
+  {#if activeTab === "run-saves"}
   <fieldset class="settings-group">
     <legend>Run saves</legend>
     <p class="setting-hint">
@@ -341,23 +397,19 @@
 
     {#if autosaveStatus}<p class="setting-status">{autosaveStatus}</p>{/if}
   </fieldset>
+  {/if}
 
+  {#if activeTab === "general"}
   <fieldset class="settings-group">
-    <legend>Display modes</legend>
-    <label class="setting-toggle stream-mode-setting">
-      <input type="checkbox" bind:checked={settings.streamMode} onchange={update} />
-      <span>Stream mode</span>
-    </label>
-    <label class="setting-toggle compact-mode-setting">
-      <input type="checkbox" bind:checked={settings.compactMode} onchange={update} />
-      <span>Compact mode</span>
-    </label>
+    <legend>General</legend>
     <label class="setting-toggle">
       <input type="checkbox" bind:checked={settings.groupPopoutWindows} onchange={update} />
       <span>Group popout windows</span>
     </label>
   </fieldset>
+  {/if}
 
+  {#if activeTab === "tracker"}
   <fieldset class="settings-group">
     <legend>Tracker</legend>
     <label class="setting-toggle">
@@ -369,7 +421,9 @@
       <span>Show Blue Chu Jelly</span>
     </label>
   </fieldset>
+  {/if}
 
+  {#if activeTab === "preference-presets"}
   <fieldset class="settings-group preset-group">
     <legend>Preference presets</legend>
 
@@ -433,4 +487,5 @@
 
     {#if presetStatus}<p class="setting-status">{presetStatus}</p>{/if}
   </fieldset>
+  {/if}
 </section>

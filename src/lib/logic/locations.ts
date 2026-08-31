@@ -41,10 +41,41 @@ function sortLocationsBySourceOrder(locations: string[]): string[] {
  * The seed's randomized location pool. Falls back to the full bundled pool
  * when no config.yaml has been synced (data.filteredLocationKeys is null).
  */
+let availableLocationsCache: {
+  locations: string[];
+  keys: Set<string> | null;
+  order: Map<string, number> | null;
+  result: string[];
+} | null = null;
+
+/**
+ * The seed's location pool, filtered and in source order.
+ *
+ * Memoised on the identity of the three pieces of `data` it reads, which
+ * applySphereLogic replaces wholesale rather than mutating. Rebuilding meant
+ * filtering and sorting ~300 locations - normalising each one twice - on every
+ * call, and this sits under every reachability lookup: about 70 per
+ * requirement tooltip, plus once per dungeon inside the own-dungeon-key pools.
+ *
+ * Callers only ever read or .filter() the result, so handing back the same
+ * array is safe; nothing sorts or pushes into it in place.
+ */
 export function getAvailableLocations(): string[] {
   const keys = data.filteredLocationKeys;
+  const order = data.locationOrder;
+  if (
+    availableLocationsCache &&
+    availableLocationsCache.locations === data.locations &&
+    availableLocationsCache.keys === keys &&
+    availableLocationsCache.order === order
+  ) {
+    return availableLocationsCache.result;
+  }
+
   const locations = keys ? data.locations.filter((location) => keys.has(normalize(location))) : data.locations;
-  return sortLocationsBySourceOrder(locations);
+  const result = sortLocationsBySourceOrder(locations);
+  availableLocationsCache = { locations: data.locations, keys, order, result };
+  return result;
 }
 
 export function getLocationCheckedId(location: string): string {

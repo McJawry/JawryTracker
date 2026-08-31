@@ -41,7 +41,8 @@ export interface SectionMeta {
    * defaultWidth here is only the zoom-1 reference, not a constraint.
    */
   autoWidth?: boolean;
-  popout: PopoutConfig;
+  /** Absent for a section that must stay docked - see control-panel. */
+  popout?: PopoutConfig;
 }
 
 export const SECTION_META: Record<string, SectionMeta> = {
@@ -50,8 +51,10 @@ export const SECTION_META: Record<string, SectionMeta> = {
     title: "Control Panel",
     defaultWidth: DEFAULT_SECTION_SIZES["control-panel"],
     canHide: false,
-    visibilityKey: null,
-    popout: { label: "control-panel-popout", popoutParam: "control-panel", title: "JawryTracker - Control Panel", width: 900, height: 200, minWidth: 400, minHeight: 140 }
+    visibilityKey: null
+    // No popout: undocking the Control Panel stranded it. Its title bar is the
+    // only way back to a hidden section, and a popped-out one had no dock
+    // button of its own, so there was no route home.
   },
   "main-tracker": {
     id: "main-tracker",

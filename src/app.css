@@ -107,31 +107,6 @@ textarea {
   overflow-x: auto;
 }
 
-/* Compact mode tightens the layout; it must not resize the window's content.
-   This used to clamp the whole shell to var(--hint-panel-width) - a leftover
-   from the original single-column app. In the docked multi-panel layout that
-   cut every panel off at ~360px with dead, unclickable space beside it, and
-   because the Settings button sits in the clipped region there was no way
-   back to the toggle that caused it. */
-body.compact-mode .app-shell {
-  gap: 10px;
-  padding: 12px;
-}
-
-body.compact-mode .setting-control,
-body.compact-mode .setting-toggle:has(#showHoHoInput),
-body.compact-mode .setting-toggle:has(#showBlueChuInput) {
-  display: none;
-}
-
-body.compact-mode .hint-arrow-position-setting {
-  display: inline-flex;
-}
-
-body.compact-mode .rando-folder-setting {
-  display: none;
-}
-
 body.chrome-hidden .section-control-panel {
   display: none;
 }
@@ -1997,10 +1972,6 @@ body.stream-mode .empty-state {
     padding: 10px calc(var(--hint-panel-width) + 28px) 10px 10px;
   }
 
-  body.compact-mode .app-shell {
-    padding: 10px;
-  }
-
   .top-bar {
     align-items: stretch;
     flex-direction: column;
@@ -2740,6 +2711,20 @@ body.stream-mode .empty-state {
   stroke-width: 3.25;
 }
 
+/* An area hinted at several bosses holds a separate path item for each, but
+   which one belongs to which is decided by shuffle order in the randomizer and
+   cannot be recovered. Dashed and dimmer reads as "one of these" rather than
+   asserting every candidate feeds every boss. Hovering a card still isolates
+   its own chain at full strength. */
+.sphere-edges path.path-hint-edge.path-hint-tentative {
+  stroke-dasharray: 6 5;
+  opacity: 0.6;
+}
+
+.sphere-edges path.path-hint-edge.path-hint-tentative.highlighted {
+  opacity: 1;
+}
+
 .sphere-canvas [data-node-id] {
   transition: opacity 120ms ease, filter 120ms ease;
 }
@@ -2760,10 +2745,6 @@ body.stream-mode .empty-state {
 /* The toolbar deliberately gets no stream background. It used to be painted
    with --stream-key, which is no longer a setting - leaving a stray green bar
    under the tracker's top buttons. */
-
-body.compact-mode .map-toolbar {
-  display: none;
-}
 
 .starting-items-prompt {
   position: fixed;
@@ -3332,23 +3313,65 @@ body.compact-mode .map-toolbar {
 
 
 /* Settings, grouped into labelled blocks. */
+/* One row of category tabs across the top of the panel. Wraps rather than
+   scrolls: the Settings popout can be narrowed to 320px, and a row of six
+   labels does not fit on one line there. */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-tab {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.settings-tab:hover {
+  opacity: 1;
+}
+
+.settings-tab.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--panel);
+  opacity: 1;
+}
+
 .settings-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 0 0 14px;
-  padding: 10px 12px 12px;
-  border: 1px solid rgba(32, 51, 59, 0.28);
-  border-radius: 4px;
+  /* No margin, border or legend any more: exactly one group is on screen at a
+     time and the active tab already names it, so the framing was a box drawn
+     around the panel's entire contents. */
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .settings-group legend {
-  padding: 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  opacity: 0.75;
+  display: none;
+}
+
+/* Appearance holds two groups (the colour controls and the colour presets).
+   With the legends gone they would otherwise run straight into each other,
+   and "Folder" arriving under "Hint arrow position" reads as a non-sequitur. */
+.settings-group + .settings-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .settings-group .setting-control {

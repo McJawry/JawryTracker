@@ -18,6 +18,7 @@ import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
 import { getBossLocation } from "$lib/logic/sphere-boss-icons";
 import { getSphereHintAreaLocations } from "$lib/logic/locations";
 import {
+  getSphereCalculationInput,
   getSphereLogicStartingGear,
   getSphereReachabilityWithOwnDungeonKeys,
   isOwnDungeonKeyForPath
@@ -321,7 +322,7 @@ export function getPathLogicalItems(
  * "confirmed" and, when any exist, they alone are offered - an item the logic
  * has never needed is a much weaker guess.
  */
-export function getPathHintCandidates(
+function buildPathHintCandidates(
   hint: Hint,
   knowledge: SphereTrackingKnowledge,
   calculation: SphereCalculationResult,
@@ -358,7 +359,7 @@ export function getPathHintCandidates(
       lineNumber: itemHint.lineNumber
     }));
 
-  return [
+  const candidates: PathCandidate[] = [
     ...selectedExact.map((placement) => ({
       id: placement.id,
       item: placement.item,
@@ -372,6 +373,127 @@ export function getPathHintCandidates(
       confirmed: usedDependencies.has(candidate.id)
     }))
   ];
+
+  return narrowCandidatesToGoal(candidates, hint, knowledge, calculation);
+}
+
+/**
+ * The candidates for one path hint, with the other hints on the same area
+ * taken into account.
+ *
+ * Every hinted goal gets its own location: the randomizer marks a location
+ * hasBeenHinted the moment it is used, so no two hints can name the same one
+ * (Hints.cpp, getHintableLocation). That makes this a matching problem - once
+ * a candidate is pinned to one boss it cannot be another's, and eliminating it
+ * can pin the next one in turn. It is deduction from the generator's own rule
+ * rather than a guess at which item "feels" like the path.
+ */
+export function getPathHintCandidates(
+  hint: Hint,
+  knowledge: SphereTrackingKnowledge,
+  calculation: SphereCalculationResult,
+  relativeUnknown: RelativeUnknownResult
+): PathCandidate[] {
+  const areaKey = normalize(hint.left.name);
+  const siblings = (knowledge.pathHints ?? []).filter((candidate) => normalize(candidate.left.name) === areaKey);
+  if (siblings.length < 2) return buildPathHintCandidates(hint, knowledge, calculation, relativeUnknown);
+
+  const sets = new Map<number, PathCandidate[]>();
+  siblings.forEach((sibling) => {
+    sets.set(sibling.lineNumber, buildPathHintCandidates(sibling, knowledge, calculation, relativeUnknown));
+  });
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    sets.forEach((set, ownerLine) => {
+      if (set.length !== 1) return;
+      const takenId = set[0].id;
+      sets.forEach((other, otherLine) => {
+        if (otherLine === ownerLine || other.length <= 1) return;
+        if (!other.some((candidate) => candidate.id === takenId)) return;
+        sets.set(otherLine, other.filter((candidate) => candidate.id !== takenId));
+        changed = true;
+      });
+    });
+  }
+
+  return sets.get(hint.lineNumber) ?? buildPathHintCandidates(hint, knowledge, calculation, relativeUnknown);
+}
+
+/**
+ * One cached answer per (analysis, boss, placement) - the search below is a
+ * full progression run and the board asks for it once per card per sibling.
+ */
+const goalGateCache = new WeakMap<SphereCalculationResult, Map<string, boolean>>();
+
+/**
+ * Whether withholding this placement's item puts the boss out of reach.
+ *
+ * This has to be the sphere progression, not a flat "here is every item you
+ * own" reachability check: the point is that the effect propagates. Withhold
+ * the Spoils Bag and you cannot reach Hoskit, so no Command Melody, so no
+ * Earth Temple, so no Deku Leaf - and the Deku Leaf is what the bosses
+ * actually need. A flat check hands you the Deku Leaf anyway and reports the
+ * Spoils Bag as harmless. Upstream's runGeneralSearch is a progression search
+ * for exactly this reason (Hints.cpp, calculatePossiblePathLocations).
+ */
+function withholdingBlocksGoal(
+  placementId: string,
+  bossKey: string,
+  knowledge: SphereTrackingKnowledge,
+  calculation: SphereCalculationResult
+): boolean {
+  let cache = goalGateCache.get(calculation);
+  if (!cache) {
+    cache = new Map();
+    goalGateCache.set(calculation, cache);
+  }
+  const cacheKey = `${bossKey}|${placementId}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const remaining = knowledge.placements.filter((placement) => placement.id !== placementId);
+  const result = WWRSphereEngine.calculate(getSphereCalculationInput(remaining, false));
+  const blocked = !Number.isInteger(result.locationSpheres[bossKey]);
+  cache.set(cacheKey, blocked);
+  return blocked;
+}
+
+/**
+ * Narrows an area's candidates to those that gate *this* boss.
+ *
+ * The randomizer builds each goal's path pool by blanking one location's item,
+ * re-running the search, and keeping the location if the goal fell out of
+ * reach (Hints.cpp, calculatePossiblePathLocations). Which of that pool
+ * becomes the printed hint is then just shuffle order, so the pairing itself
+ * can't be recovered - but the pools often differ, and when they do this pins
+ * one item per boss instead of showing every candidate on every card.
+ *
+ * Run against what the tracker knows rather than the finished seed, so it only
+ * narrows when the boss is reachable at all with everything known; otherwise
+ * the test says "unreachable" for every candidate and distinguishes nothing.
+ */
+export function narrowCandidatesToGoal(
+  candidates: PathCandidate[],
+  hint: Hint,
+  knowledge: SphereTrackingKnowledge,
+  calculation: SphereCalculationResult
+): PathCandidate[] {
+  if (candidates.length < 2) return candidates;
+  const bossLocation = getBossLocation(hint.right.name);
+  if (!bossLocation) return candidates;
+
+  const bossKey = normalize(bossLocation);
+  if (!Number.isInteger(calculation.locationSpheres[bossKey])) return candidates;
+
+  const placementIds = new Set(knowledge.placements.map((placement) => placement.id));
+  const gating = candidates.filter((candidate) => (
+    // Area hints and shard sources have no single placement to withhold.
+    !placementIds.has(candidate.id) || withholdingBlocksGoal(candidate.id, bossKey, knowledge, calculation)
+  ));
+
+  return gating.length ? gating : candidates;
 }
 
 /**

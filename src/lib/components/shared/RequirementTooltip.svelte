@@ -3,53 +3,13 @@
   // randomizer tracker's own tooltip: an optional entrance path, then the
   // location's rule split into one bullet per top-level AND term, with each
   // atom coloured by whether it's currently held.
-  import {
-    getLocationRequirements,
-    hasRequirementsReady,
-    requestLocationRequirements,
-    setRequirementFocus,
-    type LocationRequirements
-  } from "$lib/logic/requirement-text";
+  import { getLocationRequirements, type LocationRequirements } from "$lib/logic/requirement-text";
 
   let { location, x, y }: { location: string; x: number; y: number } = $props();
 
-  // Working out the requirements means ~50 reachability searches, about a
-  // second the first time a location is asked about. Doing that inside a
-  // $derived froze the whole window on hover, so it runs in chunks that yield
-  // to the browser and the tooltip fills in when it lands.
-  let ready = $state(false);
-
-  // Nothing starts until the pointer has settled. Moving down a location list
-  // enters every row on the way to the one being clicked, and starting a pass
-  // for each of those cost seconds of chunked work for answers nobody read.
-  const HOVER_DELAY_MS = 250;
-
-  $effect(() => {
-    const wanted = location;
-    // Published before anything else: an elimination pass still running for a
-    // row the pointer has left checks this and gives up at its next yield.
-    setRequirementFocus(wanted);
-
-    if (hasRequirementsReady(wanted)) {
-      ready = true;
-      return () => setRequirementFocus(null);
-    }
-
-    ready = false;
-    const timer = setTimeout(() => {
-      void requestLocationRequirements(wanted).then(() => {
-        // Ignore a result that arrives after the pointer moved on.
-        if (wanted === location) ready = true;
-      });
-    }, HOVER_DELAY_MS);
-
-    return () => {
-      clearTimeout(timer);
-      setRequirementFocus(null);
-    };
-  });
-
-  const requirements = $derived<LocationRequirements | null>(ready ? getLocationRequirements(location) : null);
+  // Requirements are flattened once when the logic loads, so this is a lookup
+  // plus a colouring pass - no waiting, no chunking, nothing to cancel.
+  const requirements = $derived<LocationRequirements>(getLocationRequirements(location));
 
   // Flipped toward whichever side has room, so the tooltip never runs off
   // the window on a location near the right or bottom edge.
@@ -65,16 +25,14 @@
   style="left: {x}px; top: {y}px; max-width: {MAX_WIDTH}px"
   role="tooltip"
 >
-  {#if requirements?.entrancePath}
+  {#if requirements.entrancePath}
     <div class="requirement-section-title">Entrance Path:</div>
     <ul class="requirement-list">
       <li class="requirement-term have">{requirements.entrancePath}</li>
     </ul>
   {/if}
 
-  {#if !requirements}
-    <div class="requirement-empty">Working out requirements...</div>
-  {:else if requirements.unknown}
+  {#if requirements.unknown}
     <div class="requirement-empty">No logic loaded for this location.</div>
   {:else if !requirements.terms.length}
     <div class="requirement-empty">No item requirements.</div>
