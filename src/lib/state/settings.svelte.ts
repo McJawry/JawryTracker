@@ -3,6 +3,7 @@ import {
   DEFAULT_SECTION_VISIBILITY,
   DEFAULT_SECTION_SIZES,
   DEFAULT_SECTION_WIDTHS,
+  DEFAULT_SPHERE_FILTERS,
   SETTINGS_KEY,
   type Settings
 } from "$lib/constants";
@@ -15,7 +16,8 @@ export function readStoredSettings(): Partial<Settings> {
   }
 }
 
-// sectionVisibility/sectionSizes/sectionWidths are merged one level deep so a
+// sectionVisibility/sectionSizes/sectionWidths/sphereFilters are merged one
+// level deep so a
 // section added after a user's first launch (e.g. a new future toggle)
 // defaults in instead of silently disappearing because it's missing from
 // their saved settings.
@@ -26,6 +28,7 @@ export function mergeSettings(stored: Partial<Settings>): Settings {
     sectionVisibility: { ...DEFAULT_SECTION_VISIBILITY, ...stored.sectionVisibility },
     sectionSizes: { ...DEFAULT_SECTION_SIZES, ...stored.sectionSizes },
     sectionWidths: { ...DEFAULT_SECTION_WIDTHS, ...stored.sectionWidths },
+    sphereFilters: { ...DEFAULT_SPHERE_FILTERS, ...stored.sphereFilters },
     popoutZoom: { ...stored.popoutZoom }
   };
 }

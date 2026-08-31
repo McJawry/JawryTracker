@@ -9,6 +9,7 @@ export const SETTINGS_KEY = "ww-rando-hint-tracker-settings";
 export const SPHERE_STORAGE_KEY = "ww-rando-hint-tracker-spheres";
 export const SPHERE_NOTES_STORAGE_KEY = "ww-rando-hint-tracker-sphere-notes";
 export const ITEM_STORAGE_KEY = "ww-rando-hint-tracker-items";
+export const MARK_STARTING_KEY = "ww-rando-hint-tracker-mark-starting";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
@@ -52,6 +53,17 @@ export interface SectionVisibility {
   notes: boolean;
   hintPanel: boolean;
 }
+
+export interface SphereFilters {
+  /** Hide dead ends - paths that end in junk - that are not required. */
+  paths: boolean;
+  /** Also hide anything unrequired, whether or not its path is spent. */
+  pathsAndRequired: boolean;
+  /** Keep dungeon keys visible no matter what the other filters say. */
+  showKeys: boolean;
+}
+
+export const DEFAULT_SPHERE_FILTERS: SphereFilters = { paths: false, pathsAndRequired: false, showKeys: false };
 
 export interface Settings {
   pageBackground: string;
@@ -104,6 +116,8 @@ export interface Settings {
   sectionWidths: Record<string, number>;
   /** Sphere Board scales from its own slider instead of section resizing. */
   sphereBoardZoom: number;
+  /** Sphere board Filters menu: which cards to hide. */
+  sphereFilters: SphereFilters;
   /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
@@ -171,5 +185,6 @@ export const DEFAULT_SETTINGS: Settings = {
   sectionSizes: { ...DEFAULT_SECTION_SIZES },
   sectionWidths: { ...DEFAULT_SECTION_WIDTHS },
   sphereBoardZoom: 100,
+  sphereFilters: { ...DEFAULT_SPHERE_FILTERS },
   popoutZoom: {}
 };

@@ -24,6 +24,7 @@
   import { getSectionContentStyle, getSectionLogicalWidth, getSectionScale } from "./section-scaling.svelte";
   import { SECTION_DRAG_MIME } from "./section-drag";
   import SphereZoomSlider from "./SphereZoomSlider.svelte";
+  import SphereFilterMenu from "./SphereFilterMenu.svelte";
 
   let { sectionId }: { sectionId: string } = $props();
 
@@ -154,6 +155,7 @@
           onpointerenter={() => (titlebarDraggable = false)}
           onpointerleave={() => (titlebarDraggable = true)}
         >
+          <SphereFilterMenu />
           <SphereZoomSlider />
         </span>
       {/if}

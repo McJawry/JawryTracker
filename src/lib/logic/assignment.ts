@@ -10,7 +10,8 @@
 import { getLocationCheckedId } from "$lib/logic/locations";
 import { addSpherePlacement, removeSpherePlacement, type SpherePlacement } from "$lib/state/sphere.svelte";
 import { setChecked } from "$lib/state/checked.svelte";
-import { ITEM_STAGE_TABLES, advanceItemStage } from "$lib/state/item-tracker.svelte";
+import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
+import { advanceEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { clearPendingLocationForItemAssignment } from "$lib/state/ui.svelte";
 import { retreatEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { setShardTrackingChecked } from "$lib/logic/shard-tracking";
@@ -19,7 +20,11 @@ import { cycleSmallKeys, getDungeonItems, toggleDungeonFlag } from "$lib/state/d
 export function assignPaletteEntryToLocation(itemName: string, location: string): void {
   addSpherePlacement(itemName, location);
   setChecked(getLocationCheckedId(location), true);
-  advanceItemStage(itemName);
+  // The effective stage, not the raw stored one: the seed's starting gear is a
+  // floor, so for anything it grants (a sword, a quiver, a bomb bag) the raw
+  // stage sits below what the icon already shows. Advancing it moved 0 -> 1
+  // while the icon stayed on 1, and the click looked like it did nothing.
+  advanceEffectiveItemStage(itemName);
   // Disarming belongs here rather than in each caller: the location is now
   // resolved, so its pulse has to stop no matter which of the four click
   // targets (item grid, shard column, dungeon item row, sphere board)

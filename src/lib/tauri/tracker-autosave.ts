@@ -21,7 +21,7 @@ import {
   type PresetResult
 } from "./preference-presets";
 import { isTauriRuntime } from "./is-tauri";
-import { CHECKED_KEY, ITEM_STORAGE_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
+import { CHECKED_KEY, ITEM_STORAGE_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 
 const AUTOSAVE_FILE = "autosave.json";
 const DUNGEON_ITEMS_KEY = "ww-rando-hint-tracker-dungeon-items";
@@ -35,6 +35,19 @@ export interface TrackerAutosave {
   items: Record<string, number>;
   sphere: unknown;
   dungeonItems: unknown;
+  /**
+   * The seed's config.yaml text.
+   *
+   * Not a preference despite living in settings: starting gear, excluded
+   * locations and required bosses all come from it, and several of those are
+   * *derived* rather than stored - a dungeon key granted by starting_gear has
+   * nothing in dungeonItems to save. Without the config, loading a run into
+   * another build silently dropped every one of them.
+   *
+   * Optional: files written before this existed simply don't have it, and
+   * load exactly as they did before.
+   */
+  config?: string;
 }
 
 /**
@@ -58,8 +71,15 @@ export function currentAutosave(): TrackerAutosave {
     checked: (readJson(CHECKED_KEY) as Record<string, boolean>) || {},
     items: (readJson(ITEM_STORAGE_KEY) as Record<string, number>) || {},
     sphere: readJson(SPHERE_STORAGE_KEY),
-    dungeonItems: readJson(DUNGEON_ITEMS_KEY)
+    dungeonItems: readJson(DUNGEON_ITEMS_KEY),
+    config: readStoredConfigText()
   };
+}
+
+/** The synced seed config, read from settings the same way as everything else. */
+function readStoredConfigText(): string {
+  const stored = readJson(SETTINGS_KEY) as { randoConfigText?: string } | null;
+  return typeof stored?.randoConfigText === "string" ? stored.randoConfigText : "";
 }
 
 async function autosavePath(): Promise<string> {
@@ -97,6 +117,16 @@ export function applyAutosave(save: Partial<TrackerAutosave> | null): boolean {
   if (save.items) localStorage.setItem(ITEM_STORAGE_KEY, JSON.stringify(save.items));
   if (save.sphere) localStorage.setItem(SPHERE_STORAGE_KEY, JSON.stringify(save.sphere));
   if (save.dungeonItems) localStorage.setItem(DUNGEON_ITEMS_KEY, JSON.stringify(save.dungeonItems));
+
+  // Merged into settings rather than replacing them: the config belongs to the
+  // run, but everything else in that blob is the user's own preferences and
+  // must survive loading someone else's save. restoreRandoSync() replays it on
+  // the reload that follows.
+  if (typeof save.config === "string" && save.config.trim()) {
+    const stored = (readJson(SETTINGS_KEY) as Record<string, unknown> | null) ?? {};
+    stored.randoConfigText = save.config;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(stored));
+  }
   return true;
 }
 
@@ -140,6 +170,40 @@ export async function loadTrackerAutosave(): Promise<AutosaveLoadResult> {
   if (!save) return { ok: false, message: "No autosave.json in the data folder." };
   if (!applyAutosave(save)) return { ok: false, message: "That autosave is empty or unreadable." };
   return { ok: true, message: `Loaded autosave from ${save.savedAt ? new Date(save.savedAt).toLocaleString() : "unknown time"}.` };
+}
+
+/**
+ * Load an autosave from anywhere on disk.
+ *
+ * Copying a file over `data/autosave.json` while the app runs is fragile: the
+ * app owns that file and rewrites it whenever the run changes, so a pasted
+ * copy can be gone before it is read - and in a dev build the folder is not
+ * the one beside the shipped exe, which makes it easy to paste into the wrong
+ * `data/` entirely. Picking the file directly sidesteps both.
+ */
+export async function loadAutosaveFromFile(): Promise<AutosaveLoadResult> {
+  if (!isTauriRuntime()) return { ok: false, message: "Loading an autosave requires the desktop app." };
+
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "Tracker autosave", extensions: ["json"] }]
+  });
+  // Cancelled: no message, so the status line isn't left with an error.
+  if (typeof picked !== "string") return { ok: false, message: "" };
+
+  try {
+    const save = JSON.parse(await readTextFile(picked)) as Partial<TrackerAutosave>;
+    if (!applyAutosave(save)) return { ok: false, message: "That file is empty or unreadable." };
+    // Bring autosave.json in step, so the run doesn't revert on next launch.
+    await saveTrackerAutosave();
+    const name = picked.split(/[\/]/).pop();
+    const savedAt = save.savedAt ? ` from ${new Date(save.savedAt).toLocaleString()}` : "";
+    return { ok: true, message: `Loaded ${name}${savedAt}.` };
+  } catch (error) {
+    return { ok: false, message: `Could not read that file: ${error instanceof Error ? error.message : String(error)}` };
+  }
 }
 
 /**

@@ -25,6 +25,7 @@
   import { isLocationMarked } from "$lib/logic/locations";
   import { getAreaFromLocation } from "$lib/logic/data-loading";
   import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+  import { computeHiddenPlacementIds, isSphereFilterActive } from "$lib/logic/sphere-usefulness";
   import {
     getPathBossProgressEntries,
     getPathHintCandidates,
@@ -115,7 +116,15 @@
     const redraw = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(() => drawSphereEdges(canvas, edges, zoom));
+        frame = requestAnimationFrame(() => {
+          // The draw decides which cards are purple, so it is also what tells
+          // the Filters menu what "Paths" should keep. Only republish on a real
+          // change, or hiding cards would redraw and loop.
+          const painted = drawSphereEdges(canvas, edges, zoom);
+          if (painted.size !== pathChainNodeIds.size || [...painted].some((id) => !pathChainNodeIds.has(id))) {
+            pathChainNodeIds = painted;
+          }
+        });
       });
     };
     redraw();
@@ -221,12 +230,41 @@
     return map;
   });
 
+  // Filters menu: cards to hide. The requirement walk runs a reachability pass
+  // per item, so it happens off the render path in an effect and yields
+  // between them - the board keeps painting while it works, and simply shows
+  // every card until the result lands.
+  let hiddenPlacementIds = $state(new Set<string>());
+  // Published by drawSphereEdges - the cards it painted purple.
+  let pathChainNodeIds = $state(new Set<string>());
+  $effect(() => {
+    const filters = { ...settings.sphereFilters };
+    if (!isSphereFilterActive(filters)) {
+      hiddenPlacementIds = new Set();
+      return;
+    }
+    const placements = knowledge.placements;
+    const sphereLocations = calculation?.sphereLocations;
+    const purpleCards = [...pathChainNodeIds];
+    let cancelled = false;
+    computeHiddenPlacementIds({ placements, filters, pathChainIds: purpleCards, sphereLocations })
+      .then((ids) => {
+        if (!cancelled) hiddenPlacementIds = ids;
+      })
+      .catch((error) => console.error(error));
+    return () => {
+      cancelled = true;
+    };
+  });
+
   const sphereColumns = $derived.by((): SphereColumnData[] => {
     if (!calculation) return [];
     const columns: SphereColumnData[] = [];
     calculation.sphereLocations.forEach((sphereLocations, sphereNumber) => {
       if (!sphereLocations?.length) return;
-      const placements = sphereLocations.filter((location) => placementByLocation.has(normalize(location)));
+      const placements = sphereLocations.filter(
+        (location) => placementByLocation.has(normalize(location)) && !hiddenPlacementIds.has(placementFor(location)?.id ?? "")
+      );
       const openLocations = sphereLocations.filter((location) => !placementByLocation.has(normalize(location)) && !isLocationMarked(location));
       // A solved path card counts as content: without this, a sphere whose
       // placements were all made and whose locations were all checked lost
@@ -285,7 +323,7 @@
 
     for (let level = 0; level <= maxLevel; level += 1) {
       const placements = relativeUnknown.unresolvedPlacements.filter(
-        (placement) => (relativeUnknown.placementLevels.get(placement.id) || 0) === level
+        (placement) => (relativeUnknown.placementLevels.get(placement.id) || 0) === level && !hiddenPlacementIds.has(placement.id)
       );
       // Each available location sits in the column for whatever unlocks it,
       // rather than all landing in level 0 - see availableLocationLevels.

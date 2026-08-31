@@ -1245,7 +1245,19 @@
       .filter((placement) => {
         const itemKey = getInventoryItemKey(placement.item, placement.location);
         if (/(?:small|big|boss) key$/.test(itemKey) || normalize(placement.item) === "game beatable") return false;
-        if (["progressive sword", "progressive bow", "progressive picto box"].includes(itemKey)) return false;
+        // Picto Box is deliberately not in this list. The randomizer's
+        // pareDownPlaythrough (Search.cpp) walks its spheres forward, drops any
+        // location whose item can be taken away with the game still beatable,
+        // then recomputes the spheres from the survivors - so with two copies
+        // the *earlier* one is dropped and everything it unlocked shifts to
+        // after the later one. Excluding Picto Box from pruning kept the early
+        // copy and put Pompie & Vera's Shield in sphere 1 where the spoiler log
+        // says 6.
+        //
+        // Sword and Bow stay excluded: each of their stages is normally
+        // required, so there is nothing to prune, and leaving them out avoids
+        // disturbing the stage each card displays.
+        if (["progressive sword", "progressive bow"].includes(itemKey)) return false;
         if (itemKey === "progressive shield" && Boolean(getOptionValue(input.options || {}, "Jalhalla Required").value)) return false;
         return goalIsReachable || (duplicateCounts.get(itemKey) || 0) > 1;
       })

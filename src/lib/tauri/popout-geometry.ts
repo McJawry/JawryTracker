@@ -84,6 +84,12 @@ export async function openPopoutForSection(sectionId: string): Promise<void> {
   if (remembered) await applyPopoutGeometry(sectionId, remembered);
 }
 
+// A freshly created window can ignore the first size it is given, so geometry
+// is re-applied a couple of times before giving up.
+const GEOMETRY_ATTEMPTS = 3;
+const GEOMETRY_RETRY_MS = 120;
+const GEOMETRY_TOLERANCE = 48;
+
 export async function applyPopoutGeometry(sectionId: string, geometry: PopoutGeometry | undefined): Promise<void> {
   if (!isTauriRuntime() || !geometry) return;
   const meta = SECTION_META[sectionId];
@@ -92,10 +98,30 @@ export async function applyPopoutGeometry(sectionId: string, geometry: PopoutGeo
   try {
     const found = await WebviewWindow.getByLabel(meta.popout.label);
     if (!found) return;
-    if (geometry.width > 0 && geometry.height > 0) {
-      await found.setSize(new PhysicalSize(geometry.width, geometry.height));
+
+    // Applied, checked, and applied again if it didn't take.
+    //
+    // getByLabel resolves as soon as the label is registered, which is before
+    // the window has finished being created - and a size set in that gap is
+    // overwritten by the window's own initial sizing. That is why loading a
+    // layout preset into a fresh build left every popout at its default size
+    // while a second click, when the windows already existed, worked.
+    for (let attempt = 0; attempt < GEOMETRY_ATTEMPTS; attempt += 1) {
+      if (geometry.width > 0 && geometry.height > 0) {
+        await found.setSize(new PhysicalSize(geometry.width, geometry.height));
+      }
+      await found.setPosition(new PhysicalPosition(geometry.x, geometry.y));
+
+      if (geometry.width <= 0 || geometry.height <= 0) return;
+      const size = await found.innerSize();
+      // Inner vs outer: the window frame means these never match exactly, so
+      // this only asks whether the size landed anywhere near what was asked.
+      if (Math.abs(size.width - geometry.width) <= GEOMETRY_TOLERANCE
+        && Math.abs(size.height - geometry.height) <= GEOMETRY_TOLERANCE) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, GEOMETRY_RETRY_MS));
     }
-    await found.setPosition(new PhysicalPosition(geometry.x, geometry.y));
   } catch (error) {
     console.error(`Could not position the ${sectionId} popout`, error);
   }

@@ -7,6 +7,7 @@
   import { onMount } from "svelte";
   import SphereBoard from "./SphereBoard.svelte";
   import SphereZoomSlider from "$lib/components/layout/SphereZoomSlider.svelte";
+  import SphereFilterMenu from "$lib/components/layout/SphereFilterMenu.svelte";
   import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { data } from "$lib/state/data.svelte";
   import { ui } from "$lib/state/ui.svelte";
@@ -39,12 +40,16 @@
 </script>
 
 <main class="popout-shell">
+  <!-- No heading, matching the other popout shells: the window's own title bar
+       already reads "JawryTracker - Sphere Tracking". Status sits left and the
+       zoom slider right, so the slider lines up with where it is in every
+       other popout. -->
   <header class="popout-header">
-    <h1>Sphere Tracking</h1>
-    <SphereZoomSlider />
     <span class="popout-status">
       {data.sphereLogicLoaded ? (data.sphereRules && Object.keys(data.sphereRules).length ? "Sphere logic ready" : "Sphere logic loading") : "Loading sphere logic..."}
     </span>
+    <SphereFilterMenu />
+    <SphereZoomSlider />
   </header>
   {#if !data.loaded}
     <p class="popout-loading">Loading reference data...</p>
@@ -81,16 +86,10 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    min-height: 42px;
-    padding: 6px 10px;
+    padding: 2px 8px;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
     color: var(--ink);
-  }
-
-  .popout-header h1 {
-    margin: 0;
-    font-size: 0.9rem;
   }
 
   .popout-status {

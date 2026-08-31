@@ -4,8 +4,9 @@
 // one writes to localStorage - so re-hydrating the matching reactive state
 // module from that event gives every window live updates for free, without
 // a custom cross-window IPC broadcast layer.
-import { STORAGE_KEY, CHECKED_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, ITEM_STORAGE_KEY } from "$lib/constants";
+import { STORAGE_KEY, CHECKED_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, ITEM_STORAGE_KEY, MARK_STARTING_KEY } from "$lib/constants";
 import { sphere, loadSphereState } from "$lib/state/sphere.svelte";
+import { reloadMarkStartingModeFromStorage } from "$lib/state/ui.svelte";
 import { settings, readStoredSettings, mergeSettings } from "$lib/state/settings.svelte";
 import { checked, loadChecked } from "$lib/state/checked.svelte";
 import { hintNotes, updateHintsFromNotes } from "$lib/state/hints.svelte";
@@ -26,6 +27,11 @@ export function initStorageSync(): void {
     if (!event.key) return;
 
     switch (event.key) {
+      // Start New Tracker arms this from the Control Panel, but the Item
+      // Tracker it applies to can be a different window.
+      case MARK_STARTING_KEY:
+        reloadMarkStartingModeFromStorage();
+        break;
       case SPHERE_STORAGE_KEY:
         Object.assign(sphere, loadSphereState());
         // randomStartingItems feeds data.sphereStartingGear, which the sphere

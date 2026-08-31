@@ -85,12 +85,14 @@ function applyPreferences(prefs: Partial<LayoutPreferences>): void {
   if (prefs.sectionWidths) Object.assign(settings.sectionWidths, { ...DEFAULT_SECTION_WIDTHS, ...prefs.sectionWidths });
   if (prefs.sectionVisibility) Object.assign(settings.sectionVisibility, { ...DEFAULT_SECTION_VISIBILITY, ...prefs.sectionVisibility });
   if (typeof prefs.sphereBoardZoom === "number") settings.sphereBoardZoom = prefs.sphereBoardZoom;
-  // Replaced, not merged: a preset that omits a section means "no scale
-  // override there", and merging would leave the previous preset's value.
-  if (prefs.popoutZoom) {
-    Object.keys(settings.popoutZoom).forEach((key) => delete settings.popoutZoom[key]);
-    Object.assign(settings.popoutZoom, prefs.popoutZoom);
-  }
+  // Replaced, not merged, and cleared even when the preset has no popoutZoom
+  // at all: a preset that omits a section means "no scale override there", and
+  // one saved before this field existed (anything older than 0.1.4) omits all
+  // of them. Leaving the previous values in place made loading such a preset
+  // look like it had silently ignored the scale; clearing puts every popout
+  // back on auto, which is what "not specified" should mean.
+  Object.keys(settings.popoutZoom).forEach((key) => delete settings.popoutZoom[key]);
+  Object.assign(settings.popoutZoom, prefs.popoutZoom ?? {});
   if (Array.isArray(prefs.undockedSections)) setUndockedIds(prefs.undockedSections);
   saveSettings();
 }

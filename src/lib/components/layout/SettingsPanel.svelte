@@ -23,6 +23,8 @@
     listRunSaves,
     saveRunAs,
     loadRunSave,
+    loadTrackerAutosave,
+    loadAutosaveFromFile,
     deleteRunSave,
     openRunSaveFolder
   } from "$lib/tauri/tracker-autosave";
@@ -199,6 +201,29 @@
     if (!selectedRun) return;
     if (!confirm(`Replace the current run with "${selectedRun}"?`)) return;
     const result = await loadRunSave(selectedRun, runLocation);
+    autosaveStatus = result.message;
+    if (result.ok) window.location.reload();
+  }
+
+  /**
+   * Re-reads data/autosave.json from disk.
+   *
+   * The app only reads that file at launch, and only into an empty profile -
+   * and it rewrites it on every change, so dropping a different one in while
+   * the app runs does nothing and then gets overwritten. This is the way to
+   * pick up a file swapped in from elsewhere.
+   */
+  async function refreshAutosave() {
+    if (!confirm("Replace the current run with whatever is in autosave.json?")) return;
+    autosaveStatus = "Reading autosave.json...";
+    const result = await loadTrackerAutosave();
+    autosaveStatus = result.message;
+    if (result.ok) window.location.reload();
+  }
+
+  /** Pick an autosave.json from anywhere - no copying into the data folder. */
+  async function openAutosaveFile() {
+    const result = await loadAutosaveFromFile();
     autosaveStatus = result.message;
     if (result.ok) window.location.reload();
   }
@@ -394,6 +419,18 @@
       <button class="tool-button" type="button" onclick={() => openRunSaveFolder("app")}>Open portable save folder</button>
       <button class="tool-button" type="button" onclick={() => openRunSaveFolder("user")}>Open shared save folder</button>
     </div>
+
+    <div class="setting-row">
+      <button class="tool-button" type="button" onclick={refreshAutosave}>Refresh Autosave</button>
+      <button class="tool-button" type="button" onclick={openAutosaveFile}>Load autosave file...</button>
+    </div>
+    <p class="setting-hint">
+      <strong>Refresh</strong> re-reads this build's own
+      <code>data/autosave.json</code>. <strong>Load autosave file</strong>
+      takes one from anywhere - use that for a file from another build, since
+      each build has its own <code>data</code> folder and the running app
+      keeps rewriting its copy.
+    </p>
 
     {#if autosaveStatus}<p class="setting-status">{autosaveStatus}</p>{/if}
   </fieldset>

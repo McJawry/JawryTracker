@@ -38,7 +38,14 @@ const edgeKey = (sourceId: string, targetId: string) => `${sourceId}\n${targetId
  * scrollHeight are in unscaled layout pixels, so dividing puts both into the
  * same space as the SVG's own viewBox.
  */
-export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom = 1): void {
+/**
+ * Ids of the cards painted purple by the last draw - the full chain from each
+ * path hint's source cards up to its boss card, which is what the Filters
+ * menu's "Paths" means by a purple card. Reported from here rather than
+ * recomputed because it is decided during the draw, off the same graph the
+ * edges are drawn from.
+ */
+export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom = 1): Set<string> {
   const canvasRect = canvas.getBoundingClientRect();
   const width = Math.max(canvas.scrollWidth, canvas.clientWidth);
   const height = Math.max(canvas.scrollHeight, canvas.clientHeight);
@@ -80,7 +87,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
   });
   edges.appendChild(fragment);
 
-  markPathHintEdges(nodes, canvas, edges);
+  return markPathHintEdges(nodes, canvas, edges);
 }
 
 /**
@@ -92,7 +99,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
  * through those ancestors - so only edges that actually lie between the
  * source and the boss are painted, not the source's whole subtree.
  */
-function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement, edges: SVGSVGElement): void {
+function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement, edges: SVGSVGElement): Set<string> {
   nodes.forEach((node) => {
     node.classList.remove("path-chain-location");
     delete node.dataset.pathTargetIds;
@@ -172,6 +179,7 @@ function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement,
   });
   pathNodeIds.forEach((nodeId) => nodes.get(nodeId)?.classList.add("path-chain-location"));
   purple.forEach((path) => edges.appendChild(path));
+  return pathNodeIds;
 }
 
 /** Mirrors isOwnDungeonKeyForPath without importing the sphere logic here. */

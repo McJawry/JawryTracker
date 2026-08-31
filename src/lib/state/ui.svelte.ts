@@ -1,7 +1,11 @@
-// Transient, non-persisted UI state - the Svelte equivalent of the original
+import { MARK_STARTING_KEY } from "$lib/constants";
+// Transient, per-window UI state - the Svelte equivalent of the original
 // app's module-level `let` variables for things like drag state and popups
 // (dev/app/app.js:499-529). Populated incrementally as each feature that
-// needs it gets ported.
+// needs it gets ported. markStartingMode is the one exception: it is a mode
+// the user is in rather than a moment of interaction, and the button that
+// arms it sits in a different section from the grid it applies to, so it is
+// persisted and mirrored across windows.
 
 export interface LocationDropListState {
   areaName: string;
@@ -20,6 +24,14 @@ export interface ItemDragState {
   image?: string;
   x: number;
   y: number;
+}
+
+function readMarkStartingMode(): boolean {
+  try {
+    return Boolean(localStorage.getItem(MARK_STARTING_KEY));
+  } catch {
+    return false;
+  }
 }
 
 export const ui: {
@@ -56,15 +68,33 @@ export const ui: {
   pendingEntranceAssignment: null,
   itemDrag: null,
   requirementTooltip: null,
-  markStartingMode: false
+  markStartingMode: readMarkStartingMode()
 });
 
+/**
+ * Mark starting is the one piece of `ui` that has to cross windows. Everything
+ * else here is per-window by design, but Start New Tracker lives in the
+ * Control Panel while the Item Tracker you would click is in Main Tracker -
+ * undock either and arming the mode in one window never reached the other.
+ * Written to localStorage so storage-sync mirrors it, the same way the
+ * persisted state modules already travel between windows.
+ */
 export function setMarkStartingMode(active: boolean): void {
   ui.markStartingMode = active;
+  try {
+    localStorage.setItem(MARK_STARTING_KEY, active ? "1" : "");
+  } catch {
+    // A window that cannot persist still gets the mode locally.
+  }
 }
 
 export function toggleMarkStartingMode(): void {
-  ui.markStartingMode = !ui.markStartingMode;
+  setMarkStartingMode(!ui.markStartingMode);
+}
+
+/** Re-read after another window wrote the key (storage-sync). */
+export function reloadMarkStartingModeFromStorage(): void {
+  ui.markStartingMode = readMarkStartingMode();
 }
 
 export function showRequirementTooltip(location: string, x: number, y: number): void {

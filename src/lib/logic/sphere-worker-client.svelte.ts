@@ -22,7 +22,7 @@ import type { SphereCalculationResult } from "$lib/logic";
 import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
-import type { SpherePlacement } from "$lib/state/sphere.svelte";
+import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
 import { getSphereTrackingKnowledge, type SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import {
   getSphereBlueChuJellyCount,
@@ -56,6 +56,15 @@ function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
     acquiredShards: knowledge.acquiredShardSources.map((source) => source.number),
     autosaveItems: knowledge.autosaveItemSources.map((source) => source.item),
     startingGear: data.sphereStartingGear,
+    // Assigning a dungeon to an island changes what is reachable, and it does
+    // it without touching placements, items or checks - so without this the
+    // key never moved and the cached analysis stood. Marking Forbidden Woods
+    // at Gale Isle left its whole location list red at 0/17 while the
+    // requirement tooltip, which keys on entrances itself, already showed the
+    // path as satisfied.
+    entranceMappings: Object.entries(sphere.entranceMappings)
+      .map(([name, sector]) => [normalize(name), normalize(sector)])
+      .sort(([first], [second]) => first.localeCompare(second)),
     // Without this the cache never invalidates when an item is acquired on
     // the Item Tracker, so the map's counts would stay frozen.
     unplacedItems: getUnplacedAcquiredItems().map((entry) => entry.item),
