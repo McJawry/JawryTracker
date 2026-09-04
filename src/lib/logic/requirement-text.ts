@@ -8,12 +8,33 @@
 // rule means. Only the *rendering* and the have/don't-have colouring live
 // here.
 import { WWRSphereEngine, type ExpressionNode } from "$lib/logic";
+import {
+  findEntranceRouteChainTo,
+  findEntranceRouteTo,
+  getDungeonEntranceNameForSector,
+  getEffectiveEntranceMappings,
+  getLocationWorldArea
+} from "$lib/logic/entrances";
+import {
+  getEntranceSourcePath,
+  getLocationEntrancePath,
+  getRequiredBossOptions
+} from "$lib/logic/entrance-paths";
 import { data } from "$lib/state/data.svelte";
+import { ui } from "$lib/state/ui.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
 import { getEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { getDungeonItems } from "$lib/state/dungeon-items.svelte";
+import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
 import { DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
-import { getMaximalSphereLogicInventory, getSphereReachabilityWithOwnDungeonKeys } from "$lib/logic/sphere-calculation";
+import { getHeldTriforceShardCount, TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
+import {
+  getMaximalSphereLogicInventory,
+  getOwnedInventory,
+  getSavewarpStartAreas,
+  getSphereInventoryItemKey,
+  getSphereReachabilityWithOwnDungeonKeys
+} from "$lib/logic/sphere-calculation";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -33,8 +54,12 @@ export interface RequirementTerm {
 }
 
 export interface LocationRequirements {
-  /** Present only when the location's dungeon has a mapped entrance. */
-  entrancePath: string | null;
+  /**
+   * The doors walked through to get here, in order. A location reports the one
+   * that gets you in; an entrance reports the whole journey from the start of
+   * the run, which is what the randomizer's own tracker shows.
+   */
+  entrancePath: string[];
   terms: RequirementTerm[];
   /** No rule found for this location - usually means logic isn't loaded. */
   unknown: boolean;
@@ -59,8 +84,15 @@ function getOwnedCount(itemName: string): number {
     if (key.includes("big key") || key.includes("boss key")) return items.bigKey ? 1 : 0;
   }
 
-  const startingCopies = data.sphereStartingGear.filter((gear) => normalize(gear) === key).length;
-  const placedCopies = sphere.placements.filter((placement) => normalize(placement.item) === key).length;
+  // Compared by the engine's own item key, not the raw name. The logic and the
+  // item pool disagree on wording - the logic asks for "Bombs" while the pool
+  // and the grid call it "Bomb" - so a plain name match reported nothing owned
+  // and painted a held item red.
+  const inventoryKey = getSphereInventoryItemKey(itemName);
+  const startingCopies = data.sphereStartingGear.filter((gear) => getSphereInventoryItemKey(gear) === inventoryKey).length;
+  const placedCopies = sphere.placements.filter(
+    (placement) => getSphereInventoryItemKey(placement.item, placement.location) === inventoryKey
+  ).length;
   // ITEM_STAGE_TABLES keys are the grid's names; getEffectiveItemStage
   // already folds in starting gear for those it knows.
   const trackedCopies = getEffectiveItemStage(matchGridItemName(itemName) ?? itemName);
@@ -68,12 +100,15 @@ function getOwnedCount(itemName: string): number {
   return Math.max(trackedCopies, startingCopies + placedCopies);
 }
 
-// The logic's item names and the item grid's keys mostly agree, but the logic
-// uses the "Progressive X" form for several the grid names plainly.
+/**
+ * The grid entry a logic item refers to. The two naming schemes differ in more
+ * ways than one - "Progressive X" against a plain X, and singular against
+ * plural - so they are matched on the engine's inventory key, which already
+ * knows every alias the logic uses.
+ */
 function matchGridItemName(itemName: string): string | null {
-  const key = normalize(itemName).replace(/^progressive /, "");
-  const candidates = [itemName, `Progressive ${itemName}`, itemName.replace(/^Progressive /, "")];
-  return candidates.find((candidate) => normalize(candidate).replace(/^progressive /, "") === key) ?? null;
+  const key = getSphereInventoryItemKey(itemName);
+  return Object.keys(ITEM_STAGE_TABLES).find((name) => getSphereInventoryItemKey(name) === key) ?? null;
 }
 
 interface WorldArea {
@@ -173,22 +208,28 @@ function getShuffledEntranceAreas(): Set<string> {
 
 /** Human-readable route, plus the randomized dungeon entrance when mapped. */
 function describeEntrancePath(location: string, route: { areaNames: string[] } | null): string | null {
-  // A mapping the user recorded themselves is always worth showing.
-  const mapped = Object.entries(sphere.entranceMappings).find(([dungeon]) =>
+  // The door you would actually go through, when it is known. This has to come
+  // first: the vanilla route is exactly what entrance randomizer has changed,
+  // so naming it is worse than saying nothing.
+  const discovered = findEntranceRouteTo(getLocationWorldArea(location));
+  if (discovered) return discovered;
+
+  // A mapping recorded through the older dungeon list. Reported as the door
+  // you go through rather than "sector -> dungeon", which names the
+  // destination and leaves out the part entrance randomizer changed.
+  const mapped = Object.entries(getEffectiveEntranceMappings()).find(([dungeon]) =>
     normalize(location).startsWith(normalize(dungeon))
   );
-  if (mapped) return `${mapped[1]} -> ${mapped[0]}`;
-  if (!route?.areaNames.length) return null;
+  if (mapped) return getDungeonEntranceNameForSector(mapped[1]) || `${mapped[1]} -> ${mapped[0]}`;
 
-  // Otherwise only when the route actually crosses a shuffled entrance. With
-  // vanilla entrances the path is fixed and naming it is pure noise.
-  const shuffled = getShuffledEntranceAreas();
-  if (!shuffled.size) return null;
-  if (!route.areaNames.some((area) => shuffled.has(normalize(area)))) return null;
-
-  // Only the last couple of hops are informative; the full chain from Root is
-  // long and mostly noise.
-  return route.areaNames.slice(-2).join(" -> ");
+  // Nothing else. There used to be a guess here - the last two hops of a
+  // breadth-first walk from the start, printed whenever that walk happened to
+  // pass through any shuffled area - and it named doors that had nothing to do
+  // with the location: Northern Fairy Island's submarine chest reported "DRC
+  // First Room -> Dragon Roost Pond Past Statues". Real routes come from
+  // entrance-paths.ts now, which walks the doors actually recorded; when it
+  // has nothing to say, so should this.
+  return null;
 }
 
 
@@ -274,10 +315,19 @@ let flattenedKey = "";
  * needs - so they key the cache.
  */
 function entranceSignature(): string {
-  return Object.entries(sphere.entranceMappings)
+  // Both models: the dungeon-only mappings the logic still reads, and the
+  // general entrance connections. Keying on the mappings alone meant recording
+  // anything that was not a dungeon - a shop door, a cave - invalidated
+  // nothing, so the tooltip kept describing the route it worked out before.
+  const mappings = Object.entries(getEffectiveEntranceMappings())
     .map(([name, sector]) => `${normalize(name)}>${normalize(sector)}`)
     .sort()
     .join("|");
+  const connections = Object.entries(sphere.entranceConnections)
+    .map(([source, target]) => `${normalize(source)}>${normalize(target)}`)
+    .sort()
+    .join("|");
+  return `${mappings}::${connections}`;
 }
 
 const entrancePathCache = new Map<string, string | null>();
@@ -289,8 +339,15 @@ export function clearRequirementCache(): void {
   areaByLocationCache = null;
 }
 
+let entrancePathKey = "";
+
 /** Memoised twin of describeEntrancePath - same inputs as the flatten cache. */
 function getEntrancePath(location: string): string | null {
+  const signature = entranceSignature();
+  if (signature !== entrancePathKey) {
+    entrancePathCache.clear();
+    entrancePathKey = signature;
+  }
   const key = normalize(location);
   if (entrancePathCache.has(key)) return entrancePathCache.get(key)!;
   const path = describeEntrancePath(location, findEntranceRoute(location));
@@ -299,7 +356,15 @@ function getEntrancePath(location: string): string | null {
 }
 
 function getFlattenedRequirements(): Record<string, FlatRequirement> {
-  const key = entranceSignature();
+  // Keyed on the seeded areas rather than the inventory itself: the set only
+  // changes when a dungeon is entered for the first time, so flattening still
+  // happens about as often as it did before.
+  const savewarpStarts = getSavewarpStartAreas(getOwnedInventory());
+  // The marks decide which bosses the run has to beat, and that is part of
+  // what the flattened requirements say, so a mark naming its boss has to
+  // rebuild them the way a recorded entrance does.
+  const requiredBosses = Object.entries(getRequiredBossOptions()).map(([option, required]) => `${option}=${required}`).sort().join("|");
+  const key = `${entranceSignature()}::${savewarpStarts.map(normalize).sort().join("|")}::${requiredBosses}`;
   if (flattenedRequirements && flattenedKey === key) return flattenedRequirements;
   if (!data.sphereLogicLoaded || !data.sphereWorld) return {};
   entrancePathCache.clear();
@@ -308,11 +373,22 @@ function getFlattenedRequirements(): Record<string, FlatRequirement> {
     rules: data.sphereRules,
     macros: data.sphereMacros,
     world: data.sphereWorld,
-    options: data.sphereOptions,
-    entranceMappings: { ...sphere.entranceMappings },
-    entranceConnections: {},
+    options: { ...data.sphereOptions, ...getRequiredBossOptions() },
+    entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
+    entranceConnections: { ...sphere.entranceConnections },
     chartMappings: {},
-    startingIsland: data.sphereStartingIsland
+    startingIsland: data.sphereStartingIsland,
+    // Seeded with the dungeon starts you could ever savewarp to, which is
+    // what the colouring is computed from as well. Sharing the basis is the
+    // point: a check inside a dungeon you have entered reports what that room
+    // costs, while one in a dungeon you have never found the way into reports
+    // that it cannot be reached, and neither can contradict its own colour.
+    //
+    // Measured against what is held right now, which is what the colouring
+    // uses. Seeding from everything you could ever hold instead let a dungeon
+    // you cannot yet reach report only what its rooms cost, skipping the
+    // journey there - and a red check would claim you had all it needed.
+    additionalStartAreas: savewarpStarts
   }) as Record<string, FlatRequirement>;
   Object.keys(flattenedRequirements).forEach((locationKey) => {
     flattenedRequirements![locationKey] = collapseTriforce(flattenedRequirements![locationKey]);
@@ -335,7 +411,10 @@ function isSatisfied(requirement: FlatRequirement): boolean {
     case "item":
       return getOwnedCount(requirement.item) >= requirement.count;
     case "triforce":
-      return [...TRIFORCE_SHARD_KEYS].every((shard) => getOwnedCount(shard) >= 1);
+      // By the count, not shard by shard: a shard tracked generically is one
+      // of the eight without saying which, and asking after Triforce Shard 5
+      // by name would call the set incomplete with all eight in hand.
+      return getHeldTriforceShardCount() >= TRIFORCE_SHARD_COUNT;
     case "and":
       return requirement.args.every(isSatisfied);
     case "or":
@@ -383,8 +462,29 @@ function renderRequirement(
   if (needsParentheses) tokens.push({ text: ")", kind: "punctuation" });
 }
 
+/**
+ * The doors walked through to reach a location, one per step.
+ *
+ * The whole chain rather than just the last door: the randomizer's tracker
+ * lists every shuffled entrance on the way, and with decoupled entrances a
+ * room can sit several unrelated doors deep.
+ *
+ * The chain itself comes from the ported findEntrancePaths, which is why two
+ * checks in one dungeon can name different doors - see entrance-paths.ts. The
+ * older walk-backwards search stays as the fallback for what it has always
+ * covered: a dungeon recorded through the dungeon list, or a vanilla route.
+ */
+function getEntrancePathSteps(location: string): string[] {
+  const steps = getLocationEntrancePath(location, ui.locationDropList?.areaName ?? "");
+  if (steps.length) return steps;
+  const chain = findEntranceRouteChainTo(getLocationWorldArea(location));
+  if (chain.length) return chain;
+  const single = getEntrancePath(location);
+  return single ? [single] : [];
+}
+
 export function getLocationRequirements(location: string): LocationRequirements {
-  const entrancePath = getEntrancePath(location);
+  const entrancePath = getEntrancePathSteps(location);
   const requirement = getFlattenedRequirements()[normalize(location)];
 
   // No entry at all: the logic isn't loaded, or this location isn't in the seed.
@@ -392,6 +492,33 @@ export function getLocationRequirements(location: string): LocationRequirements 
 
   // One bullet per argument of a top-level AND, one bullet for anything else -
   // the split tracker_label.cpp makes.
+  const parts = requirement.type === "and" ? requirement.args : [requirement];
+  const terms = parts
+    .map((part) => {
+      const tokens: RequirementToken[] = [];
+      renderRequirement(part, tokens, null);
+      return { tokens, satisfied: isSatisfied(part) };
+    })
+    .filter((term) => term.tokens.length);
+
+  return { entrancePath, terms, unknown: false };
+}
+
+/**
+ * What it takes to use an entrance: reaching the area it stands in, and
+ * whatever the door itself asks for. Same shape as a location's requirements,
+ * so the tooltip renders identically - the entrance lists gain the reasoning
+ * the location lists already show.
+ */
+export function getEntranceRequirements(entranceName: string): LocationRequirements {
+  // The parent side is where the door stands, so the journey is the one that
+  // reaches that area.
+  const parent = entranceName.split(" -> ")[0] ?? "";
+  const ported = getEntranceSourcePath(entranceName, ui.locationDropList?.areaName ?? "");
+  const entrancePath = ported.length ? ported : findEntranceRouteChainTo(parent);
+  const requirement = getFlattenedRequirements()[normalize(entranceName)];
+  if (!requirement) return { entrancePath, terms: [], unknown: true };
+
   const parts = requirement.type === "and" ? requirement.args : [requirement];
   const terms = parts
     .map((part) => {

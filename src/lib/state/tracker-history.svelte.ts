@@ -18,6 +18,8 @@ interface TrackerSnapshot {
   placements: typeof sphere.placements;
   items: Record<string, number>;
   dungeonItems: Record<string, DungeonItems>;
+  /** Discovered entrances - assigning one is a tracker action like any other. */
+  entranceConnections: Record<string, string>;
 }
 
 const history: { entries: TrackerSnapshot[] } = $state({ entries: [] });
@@ -29,7 +31,8 @@ function snapshot(): TrackerSnapshot {
     checked: { ...checked },
     placements: sphere.placements.map((placement) => ({ ...placement })),
     items: { ...itemTrackerState },
-    dungeonItems: Object.fromEntries(Object.entries(dungeonItemsState).map(([key, value]) => [key, { ...value }]))
+    dungeonItems: Object.fromEntries(Object.entries(dungeonItemsState).map(([key, value]) => [key, { ...value }])),
+    entranceConnections: { ...sphere.entranceConnections }
   };
 }
 
@@ -50,6 +53,7 @@ export function undoTrackerAction(): void {
   saveChecked();
 
   sphere.placements = previous.placements;
+  sphere.entranceConnections = { ...previous.entranceConnections };
   saveSphereState();
 
   Object.keys(itemTrackerState).forEach((key) => delete itemTrackerState[key]);

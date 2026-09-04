@@ -18,5 +18,6 @@
     location={ui.requirementTooltip.location}
     x={ui.requirementTooltip.x}
     y={ui.requirementTooltip.y}
+    kind={ui.requirementTooltip.kind}
   />
 {/if}

@@ -16,7 +16,7 @@ import type { Hint } from "$lib/state/hints.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
 import { getBossLocation } from "$lib/logic/sphere-boss-icons";
-import { getSphereHintAreaLocations } from "$lib/logic/locations";
+import { getPathHintAreaLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
 import {
   getSphereCalculationInput,
   getSphereLogicStartingGear,
@@ -210,7 +210,7 @@ export function getPathHintSourceIds(
     dependenciesFor(sourceId).forEach((id) => pending.push(id));
   }
 
-  const hintedAreaLocations = new Set(getSphereHintAreaLocations(hint.left.name).map(normalize));
+  const hintedAreaLocations = new Set(getPathHintAreaLocations(hint));
   const prunedIds = calculation.prunedPlacementIds ?? [];
   const placementSources = knowledge.placements
     .filter(
@@ -267,8 +267,18 @@ export function selectLatestPathCandidates(
  * area down to the same single candidate.
  */
 export function countPathHintsForArea(hint: Hint, knowledge: SphereTrackingKnowledge): number {
-  const areaKey = normalize(hint.left.name);
-  return (knowledge.pathHints ?? []).filter((candidate) => normalize(candidate.left.name) === areaKey).length;
+  const key = pathHintAreaKey(hint);
+  return (knowledge.pathHints ?? []).filter((candidate) => pathHintAreaKey(candidate) === key).length;
+}
+
+/**
+ * Identifies the *set* of areas a path hint names, so two hints count as being
+ * about the same place only when they name the same places. "Pawprint Isle and
+ * Forest Haven" is not the same hint target as "Pawprint Isle" alone.
+ */
+export function pathHintAreaKey(hint: Hint): string {
+  const named = hint.areas?.length ? hint.areas : [hint.left.name];
+  return named.map(normalize).sort().join(" & ");
 }
 
 export interface PathCandidate {
@@ -329,7 +339,7 @@ function buildPathHintCandidates(
   relativeUnknown: RelativeUnknownResult
 ): PathCandidate[] {
   const prunedIds = new Set(calculation.prunedPlacementIds ?? []);
-  const areaLocations = new Set(getSphereHintAreaLocations(hint.left.name).map(normalize));
+  const areaLocations = new Set(getPathHintAreaLocations(hint));
   const barrenKeys = getBarrenSphereLocationKeys(knowledge);
 
   const exactCandidates = knowledge.placements.filter(

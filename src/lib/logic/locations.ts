@@ -7,6 +7,16 @@
 import { WWRSphereEngine } from "$lib/logic";
 import { TRACKED_AREAS, LOCATION_ORDER_OVERRIDES } from "$lib/gameData";
 import { getAreaFromLocation, unique } from "$lib/logic/data-loading";
+import {
+  getEntranceConnection,
+  getEntrancesForArea,
+  getLocationRegions,
+  getOwnRegion,
+  getSectorAreaName,
+  getLocationWorldArea,
+  isEntranceConnected,
+  isLocationAreaDiscovered
+} from "$lib/logic/entrances";
 import { data } from "$lib/state/data.svelte";
 import { checked, setChecked } from "$lib/state/checked.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
@@ -102,8 +112,13 @@ export function toggleLocationChecked(location: string): void {
 
 export function getAreaLocationChoices(areaName: string, targetKind: "sector" | "area"): string[] {
   const possibleAreas = [areaName];
-  if (targetKind === "sector" && !/\bsector\b/i.test(areaName)) {
-    possibleAreas.unshift(`${areaName} Sector`);
+  if (targetKind === "sector") {
+    // Only the sector's own island. Keeping the bare name as well handed the
+    // Forsaken Fortress sector every check inside the fortress, because the
+    // dungeon carries that name too - and the fortress has its own cell.
+    const sectorArea = getSectorAreaName(areaName);
+    if (sectorArea !== areaName) possibleAreas.length = 0;
+    possibleAreas.unshift(sectorArea);
   } else if (targetKind === "area") {
     const trackedArea = TRACKED_AREAS.find((area) => normalize(area.name) === normalize(areaName));
     if (trackedArea) possibleAreas.push(...trackedArea.matchNames);
@@ -116,13 +131,37 @@ export function getAreaLocationChoices(areaName: string, targetKind: "sector" | 
   // randomizes (its Tingle Statue chest with progression_tingle_chests off,
   // say) and counted them in its own accessible/remaining fraction, while the
   // sector cells and the summary counted only the filtered pool.
-  return getAvailableLocations().filter((location) => areaKeys.includes(normalize(getAreaFromLocation(location))));
+  return getAvailableLocations().filter((location) => {
+    // Where the check actually is now, which entrance randomizer can move:
+    // the Horseshoe Cave chest belongs to Windfall once the Windfall bomb shop
+    // door turns out to lead there. Falls back to the name when the world
+    // graph has nothing to say about it.
+    const regions = getLocationRegions(location);
+    if (!regions.length) return !isLocationAreaDiscovered(location) ? false : areaKeys.includes(normalize(getAreaFromLocation(location)));
+    return regions.some((region) => areaKeys.includes(normalize(region)));
+  });
 }
 
 // Ported from getSphereHintAreaLocations() (dev/app/app.js:2768).
 export function getSphereHintAreaLocations(areaName: string): string[] {
-  const targetKind = data.sectors.some((sector) => normalize(sector) === normalize(areaName)) ? "sector" : "area";
-  return getAreaLocationChoices(areaName, targetKind);
+  // A hint that says "Forsaken Fortress" means the fortress, not the water
+  // around it - the sea there is its own hint region, "Forsaken Fortress
+  // Sector". So a name the trackers know as a dungeon is read as one, even
+  // though the map also has a sector by that name.
+  const isTrackedArea = TRACKED_AREAS.some((area) => normalize(area.name) === normalize(areaName));
+  const isSector = !isTrackedArea && data.sectors.some((sector) => normalize(sector) === normalize(areaName));
+  return getAreaLocationChoices(areaName, isSector ? "sector" : "area");
+}
+
+/**
+ * Whether everything needed to finish the run is in hand.
+ *
+ * Computed beside the other reachability sets (computeGoMode in
+ * sphere-worker-client) because it needs an inventory this module cannot build
+ * without closing an import cycle.
+ */
+export function isGoMode(): boolean {
+  return sphereAnalysisCache.goMode;
 }
 
 /**
@@ -176,10 +215,27 @@ export function isLocationAccessible(location: string): boolean {
   return calculation.sphereLocations.some((sphere) => sphere.some((candidate) => normalize(candidate) === key));
 }
 
+/**
+ * Every check in the seed's pool - what "View all locations" means.
+ *
+ * Deliberately not the union of the per-area lists. Those hide a check whose
+ * area has not been found yet, because until then there is no honest sector to
+ * file it under; this list is not organised by sector, so it has no such
+ * problem and hiding would just make it wrong. With entrance randomizer on,
+ * every interior starts undiscovered - the potion shop, Orca's house, the Rito
+ * aerie - so the union quietly left out most of the shops and houses in the
+ * game while claiming to be everything.
+ */
+export function getAllListedLocations(): string[] {
+  return getAvailableLocations();
+}
+
 export interface AreaAccessibility {
   accessible: number;
   remaining: number;
   colorClass: "done" | "stuck" | "open";
+  /** Any entrance here still unrecorded, so the total is not yet knowable. */
+  hasUndiscoveredEntrances: boolean;
 }
 
 // Ported from TrackerAreaWidget::updateArea() (tracker_area_widget.cpp:96-147
@@ -187,8 +243,9 @@ export interface AreaAccessibility {
 // the subset of those currently logically reachable. Reads the same shared
 // sphereAnalysisCache the sphere board and summary panel populate via their
 // own dispatching $effect, rather than recomputing reachability per cell.
-// Simplification: the real tracker also shows "N/?" when the area has an
-// undiscovered entrance-rando entrance; not implemented here.
+// The total reads "?" while the area still has an unrecorded entrance: what
+// lies beyond it is unknown, so no honest count exists yet. Every dungeon
+// shows this until its boss and miniboss doors are found.
 export function getAreaAccessibility(areaName: string, targetKind: "sector" | "area"): AreaAccessibility {
   const locations = getAreaLocationChoices(areaName, targetKind);
   const remainingLocations = locations.filter((location) => !isLocationMarked(location));
@@ -200,6 +257,114 @@ export function getAreaAccessibility(areaName: string, targetKind: "sector" | "a
   const accessible = remainingLocations.filter((location) => isLocationAccessible(location)).length;
 
   const colorClass: AreaAccessibility["colorClass"] = remaining === 0 && accessible === 0 ? "done" : accessible === 0 ? "stuck" : "open";
+  // The sector cell asks its island about entrances, not the dungeon that
+  // shares its name - the Forsaken Fortress sector has no doors of its own.
+  const cellArea = targetKind === "sector" ? getSectorAreaName(areaName) : areaName;
+  const hasUndiscoveredEntrances = getEntrancesForArea(cellArea).some((entrance) => !isEntranceConnected(entrance));
 
-  return { accessible, remaining, colorClass };
+  return { accessible, remaining, colorClass, hasUndiscoveredEntrances };
+}
+
+/**
+ * Whether coming out here means the door led anywhere new.
+ *
+ * An island exterior is open from the moment you can sail, so a door that
+ * spits you out on Windfall has granted access to nothing: the checks there
+ * were already yours, and none of them can be what a hint on the *other* side
+ * of that door was pointing at. The sea and Hyrule are the same kind of place.
+ * A dungeon is not - it names its own region but a door may well be the only
+ * way in - so this asks about islands rather than about naming a region.
+ */
+function isAlreadyOpenPlace(area: { name: string; island?: string; hintRegion?: string } | undefined): boolean {
+  if (!area) return true;
+  if (area.name === "The Great Sea" || area.hintRegion === "Hyrule" || area.hintRegion === "The Great Sea") return true;
+  return Boolean(area.island) && normalize(area.island!) === normalize(area.name);
+}
+
+/**
+ * Areas you can walk to from here without going through another door.
+ *
+ * The walk stays inside the region it lands in. Without that it sails: an
+ * island exterior has a plain exit to The Great Sea, and the sea reaches every
+ * other island and the mailbox, so one door found on Forest Haven put 179
+ * areas "behind" it and hung a path-hint icon on almost every check in the
+ * game. Upstream's own walk refuses the same crossings (islands, Hyrule and
+ * the sea) in Area::findEntrancePaths; regions cover those and the mailbox,
+ * which is reachable from nineteen islands and belongs to none of them.
+ */
+function areasBehindDoor(destination: string): Set<string> {
+  const world = data.sphereWorld;
+  const reached = new Set<string>();
+  if (!world?.areas || !destination) return reached;
+  // Came out somewhere that was already open: the door is a shortcut, not a
+  // way in, and nothing here belongs to whatever led into it.
+  if (isAlreadyOpenPlace(world.areas[normalize(destination)])) return reached;
+
+  const region = getOwnRegion(world.areas[normalize(destination)]);
+  const pending = [destination];
+  reached.add(normalize(destination));
+  while (pending.length) {
+    const current = pending.pop()!;
+    const area = world.areas[normalize(current)];
+    Object.values(area?.exits ?? {}).forEach((exit) => {
+      const next = (exit as { name?: string }).name ?? "";
+      if (!next || reached.has(normalize(next))) return;
+      // A shuffled entrance is a door of its own: what lies past it belongs to
+      // whatever that door turns out to lead to, not to this interior.
+      if (world.shuffleEntranceByEdge?.[normalize(`${current} -> ${next}`)]) return;
+      // A room that names no region of its own is part of whatever leads into
+      // it, so it belongs here; one that names another region is a way out.
+      const ownRegion = getOwnRegion(world.areas[normalize(next)]);
+      if (ownRegion && ownRegion !== region) return;
+      reached.add(normalize(next));
+      pending.push(next);
+    });
+  }
+  return reached;
+}
+
+/**
+ * What sits behind the doors of an area that have actually been found.
+ *
+ * An area with no discovered entrance yields nothing: where its doors lead is
+ * genuinely unknown, and guessing would mark checks that cannot hold the item.
+ */
+function getLocationsBehindDiscoveredEntrances(areaName: string): string[] {
+  const interiors = new Set<string>();
+  getEntrancesForArea(areaName)
+    .filter((entrance) => !entrance.isReverse && isEntranceConnected(entrance))
+    .forEach((entrance) => areasBehindDoor(getEntranceConnection(entrance)).forEach((area) => interiors.add(area)));
+
+  if (!interiors.size) return [];
+  return getAvailableLocations()
+    .filter((location) => interiors.has(normalize(getLocationWorldArea(location))))
+    .map(normalize);
+}
+
+/**
+ * The locations a path hint is pointing into.
+ *
+ * One named area means its own locations, as it always has. Several means the
+ * path item sits where all of them can reach - and crucially *not* among their
+ * own checks: naming two areas is the randomizer saying the item is through a
+ * door, somewhere both of them open onto. So each area is followed through the
+ * doors that have been found, and the answer is what those have in common.
+ * Before they meet, everything found behind either one is still a candidate;
+ * where they meet on several areas at once, all of it counts.
+ */
+export function getPathHintAreaLocations(hint: { left: { name: string }; areas?: string[] }): string[] {
+  return getSharedAreaLocations(hint.areas?.length ? hint.areas : [hint.left.name]);
+}
+
+/** Same question asked of a plain list of area names. */
+export function getSharedAreaLocations(named: string[]): string[] {
+  if (!named.length) return [];
+  if (named.length < 2) return getSphereHintAreaLocations(named[0]).map(normalize);
+
+  const behind = named.map((area) => getLocationsBehindDiscoveredEntrances(area));
+  const shared = behind.reduce((left, right) => left.filter((location) => right.includes(location)));
+  if (shared.length) return shared;
+  // Not collapsed yet - keep whatever each side has turned up so far, which is
+  // nothing at all until a door is found.
+  return [...new Set(behind.flat())];
 }

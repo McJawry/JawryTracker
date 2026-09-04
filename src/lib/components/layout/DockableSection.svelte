@@ -19,7 +19,7 @@
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { moveSectionToPosition, type DropZone } from "$lib/state/layout.svelte";
   import { openPopoutForSection } from "$lib/tauri/popout-geometry";
-  import { markUndocked, undockedState } from "$lib/state/undocked.svelte";
+  import { markUndocked } from "$lib/state/undocked.svelte";
   import { startEdgeResize, startUniformResize } from "$lib/logic/resize-panel";
   import { getSectionContentStyle, getSectionLogicalWidth, getSectionScale } from "./section-scaling.svelte";
   import { SECTION_DRAG_MIME } from "./section-drag";
@@ -29,15 +29,10 @@
   let { sectionId }: { sectionId: string } = $props();
 
   const def = $derived(DOCKABLE_SECTIONS[sectionId]);
-  // A section that is popped out must not also render inline - otherwise
-  // undocking leaves a duplicate copy behind in the docked layout. When its
-  // window closes, popout-session marks it docked again and it reappears.
-  // A section with no popout can never be undocked, which also heals a stale
-  // id left in the persisted list from before the Control Panel lost its.
-  const isUndocked = $derived(Boolean(def.popout) && undockedState.ids.includes(sectionId));
-  const isVisible = $derived(
-    (!def.visibilityKey || settings.sectionVisibility[def.visibilityKey]) && !isUndocked
-  );
+  // Being in the layout and having its own window are independent: a panel
+  // can be in both at once, and opening one must not take the other away.
+  // The layout copy is governed purely by its own visibility.
+  const isVisible = $derived(!def.visibilityKey || settings.sectionVisibility[def.visibilityKey]);
   const contentStyle = $derived(getSectionContentStyle(sectionId));
 
   let sectionEl: HTMLDivElement | undefined = $state();

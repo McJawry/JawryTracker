@@ -67,21 +67,33 @@ export async function readPopoutGeometry(): Promise<PopoutGeometryMap> {
  * one; otherwise openPopoutWindow's default placement puts it beside the main
  * window rather than wherever the OS fancies.
  */
+/**
+ * Opens one section's window, holding the sync guard for the whole attempt.
+ *
+ * Without it, undocking by hand was a race against reconcileUndockedWindows:
+ * that runs on every window focus, and opening a popout moves focus to it and
+ * back. Two of those before the new window is registered and the section was
+ * "no window, so not undocked" - it snapped back into the layout while its
+ * window sat there open. A preset load was already guarded this way; a manual
+ * undock never was.
+ */
 export async function openPopoutForSection(sectionId: string): Promise<void> {
   if (!isTauriRuntime()) return;
   const meta = SECTION_META[sectionId];
   if (!meta?.popout) return;
 
-  const alreadyOpen = await WebviewWindow.getByLabel(meta.popout.label);
-  const remembered = storedGeometry[sectionId];
+  await withSyncGuard(async () => {
+    const alreadyOpen = await WebviewWindow.getByLabel(meta.popout!.label);
+    const remembered = storedGeometry[sectionId];
 
-  // Skip the default placement when geometry is about to be applied - it
-  // would show as a visible jump.
-  await openPopoutWindow(meta.popout, { place: !alreadyOpen && !remembered });
+    // Skip the default placement when geometry is about to be applied - it
+    // would show as a visible jump.
+    await openPopoutWindow(meta.popout!, { place: !alreadyOpen && !remembered });
 
-  // Re-focusing an already-open window must not move it.
-  if (alreadyOpen) return;
-  if (remembered) await applyPopoutGeometry(sectionId, remembered);
+    // Re-focusing an already-open window must not move it.
+    if (alreadyOpen) return;
+    if (remembered) await applyPopoutGeometry(sectionId, remembered);
+  });
 }
 
 // A freshly created window can ignore the first size it is given, so geometry
@@ -136,21 +148,27 @@ export async function applyPopoutGeometry(sectionId: string, geometry: PopoutGeo
 // While a sync is running, sections are marked undocked before their windows
 // exist. The main window's periodic reconcile would see that mismatch and
 // "helpfully" strip them, undoing the restore mid-flight.
-let syncInProgress = false;
+// Depth rather than a flag: opening one popout can happen inside a wider
+// sync, and the inner finish must not drop the guard the outer still needs.
+let syncDepth = 0;
+
+async function withSyncGuard<T>(run: () => Promise<T>): Promise<T> {
+  syncDepth += 1;
+  try {
+    return await run();
+  } finally {
+    syncDepth -= 1;
+  }
+}
 
 export function isPopoutSyncInProgress(): boolean {
-  return syncInProgress;
+  return syncDepth > 0;
 }
 
 export async function syncPopoutWindows(wantedIds: string[], geometry: PopoutGeometryMap): Promise<void> {
   if (!isTauriRuntime()) return;
 
-  syncInProgress = true;
-  try {
-    await runPopoutSync(wantedIds, geometry);
-  } finally {
-    syncInProgress = false;
-  }
+  await withSyncGuard(() => runPopoutSync(wantedIds, geometry));
 }
 
 async function runPopoutSync(wantedIds: string[], geometry: PopoutGeometryMap): Promise<void> {

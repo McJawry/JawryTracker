@@ -14,8 +14,8 @@
   } from "$lib/state/dungeon-items.svelte";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { beginItemDrag } from "$lib/logic/item-drag";
-  import { assignPaletteEntryToLocation } from "$lib/logic/assignment";
-  import { ui } from "$lib/state/ui.svelte";
+  import { assignPaletteEntryToLocation, needsRemovalChoice, syncDungeonItemPlacements } from "$lib/logic/assignment";
+  import { ui, openItemCardPicker } from "$lib/state/ui.svelte";
 
   let { dungeon }: { dungeon: string } = $props();
 
@@ -42,14 +42,34 @@
     return true;
   }
 
+  /**
+   * Counting a key back down gives a copy up, and one of them may be sitting
+   * at a location - so the same "which one did you mean?" popup the Item
+   * Tracker raises is raised here, and the cards are trimmed to what is left
+   * when the answer is not in doubt.
+   *
+   * A left-click at the maximum wraps round to none, which gives up every copy
+   * at once; that is the other way to strand a recorded key, so it asks too.
+   */
+  function removeSmallKey(): boolean {
+    if (needsRemovalChoice(hintNames.smallKey)) {
+      openItemCardPicker(hintNames.smallKey);
+      return true;
+    }
+    return false;
+  }
+
   function onSmallKey(step: 1 | -1) {
     if (step === 1 && assignIfArmed(hintNames.smallKey)) {
       // Placing a key means you have it, so count it too.
       cycleSmallKeys(dungeon, 1);
       return;
     }
+    const givingUp = step === -1 || items.smallKeys >= maxKeys;
+    if (givingUp && removeSmallKey()) return;
     recordTrackerAction();
     cycleSmallKeys(dungeon, step);
+    syncDungeonItemPlacements(hintNames.smallKey, getDungeonItems(dungeon).smallKeys);
   }
 
   function onFlag(flag: "bigKey" | "map" | "compass") {
@@ -58,8 +78,13 @@
       if (!getDungeonItems(dungeon)[flag]) toggleDungeonFlag(dungeon, flag);
       return;
     }
+    if (getDungeonItems(dungeon)[flag] && needsRemovalChoice(named)) {
+      openItemCardPicker(named);
+      return;
+    }
     recordTrackerAction();
     toggleDungeonFlag(dungeon, flag);
+    syncDungeonItemPlacements(named, getDungeonItems(dungeon)[flag] ? 1 : 0);
   }
 
   // Dungeon-qualified names, so a hint says which dungeon's key it is. "Boss

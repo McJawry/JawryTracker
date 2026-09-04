@@ -12,7 +12,7 @@
   import { ui } from "$lib/state/ui.svelte";
   import { updateHintsFromNotes, initHintsHistory } from "$lib/state/hints.svelte";
 
-  // A popout window (see $lib/tauri/popout-sphere.ts) loads this same
+  // A popout window (see $lib/tauri/popout-window.ts) loads this same
   // index.html with ?popout=spheres rather than a second SvelteKit route,
   // since adapter-static's SPA fallback only guarantees the one real
   // index.html resolves for any window.

@@ -10,13 +10,31 @@ export interface SpherePlacement {
 
 export interface SphereState {
   placements: SpherePlacement[];
+  /**
+   * The old dungeon-only entrance model: dungeon name -> island sector. Kept
+   * because evaluateDungeonAccess still reads it and older saves only have
+   * this; entranceConnections is the general form and the one the UI writes.
+   */
   entranceMappings: Record<string, string>;
+  /**
+   * Discovered entrances, keyed the way the randomizer's own tracker saves
+   * them: "Parent -> Connected" of the entrance you walked into, mapped to the
+   * "Parent -> Connected" of where it actually came out. Covers every shuffled
+   * type, not just dungeons.
+   */
+  entranceConnections: Record<string, string>;
   randomStartingItems: string[];
   requiredBossOverrides: Record<string, boolean>;
+  /**
+   * Sectors the player has flagged as leading to a required boss, drawn
+   * with the game's own important-location marker. Purely cosmetic - no
+   * logic reads it - but it belongs to the run, so it is saved with one.
+   */
+  highlightedSectors: string[];
 }
 
 function defaultSphereState(): SphereState {
-  return { placements: [], entranceMappings: {}, randomStartingItems: [], requiredBossOverrides: {} };
+  return { placements: [], entranceMappings: {}, entranceConnections: {}, randomStartingItems: [], requiredBossOverrides: {}, highlightedSectors: [] };
 }
 
 export function loadSphereState(): SphereState {
@@ -25,8 +43,10 @@ export function loadSphereState(): SphereState {
     return {
       placements: Array.isArray(stored.placements) ? stored.placements : [],
       entranceMappings: stored.entranceMappings || {},
+      entranceConnections: stored.entranceConnections || {},
       randomStartingItems: Array.isArray(stored.randomStartingItems) ? stored.randomStartingItems : [],
-      requiredBossOverrides: stored.requiredBossOverrides || {}
+      requiredBossOverrides: stored.requiredBossOverrides || {},
+      highlightedSectors: Array.isArray(stored.highlightedSectors) ? stored.highlightedSectors : []
     };
   } catch {
     return defaultSphereState();
@@ -113,5 +133,13 @@ export function setRequiredBossOverride(bossName: string, required: boolean): vo
 export function clearRequiredBossOverride(bossName: string): void {
   if (!(bossName in sphere.requiredBossOverrides)) return;
   delete sphere.requiredBossOverrides[bossName];
+  saveSphereState();
+}
+
+/** Marks or unmarks a sector as leading to a required boss. */
+export function toggleSectorHighlight(sector: string): void {
+  const index = sphere.highlightedSectors.indexOf(sector);
+  if (index >= 0) sphere.highlightedSectors.splice(index, 1);
+  else sphere.highlightedSectors.push(sector);
   saveSphereState();
 }

@@ -308,7 +308,14 @@ export const NUMBERED_ITEM_GROUPS: NumberedItemGroup[] = [
   { baseName: "Triforce Chart", count: 8, aliases: [] }
 ];
 
-export type PaletteEntryKind = "item" | "boss" | "blank" | "pearl-cluster" | "triforce-cluster";
+export type PaletteEntryKind =
+  | "item"
+  | "boss"
+  | "blank"
+  | "pearl-cluster"
+  | "triforce-cluster"
+  | "blue-chu-counter"
+  | "chart-menu";
 
 export interface PaletteEntry {
   kind: PaletteEntryKind;
@@ -354,7 +361,9 @@ export const ITEM_PALETTE_ENTRIES: PaletteEntry[] = [
   { kind: "item", itemName: "Hero's Charm", row: 4, column: 8 },
   { kind: "pearl-cluster", row: 5, column: 1 },
   { kind: "triforce-cluster", itemName: "Triforce Shard", imageName: "Triforce of Courage", row: 5, column: 3 },
-  { kind: "blank", row: 5, column: 5 },
+  // The gap beside Tingle Statue, which reads the same way: an icon with a
+  // running count on it.
+  { kind: "blue-chu-counter", row: 5, column: 5 },
   { kind: "item", itemName: "Tingle Statue", row: 5, column: 6 },
   { kind: "item", itemName: "Ghost Ship Chart", row: 5, column: 7 },
   { kind: "item", itemName: "Hurricane Spin", row: 5, column: 8 },
@@ -362,6 +371,8 @@ export const ITEM_PALETTE_ENTRIES: PaletteEntry[] = [
   { kind: "item", itemName: "Quiver", row: 6, column: 6 },
   { kind: "item", itemName: "Progressive Wallet", row: 6, column: 7 },
   { kind: "item", itemName: "Progressive Magic Meter", row: 6, column: 8 },
+  // Opens the chart menu over the grid - directly under Progressive Magic.
+  { kind: "chart-menu", row: 7, column: 8 },
   { kind: "item", itemName: "Small Key", row: 7, column: 1 },
   { kind: "item", itemName: "Boss Key", row: 7, column: 2 },
   { kind: "item", itemName: "Treasure Chart", row: 7, column: 3 },
@@ -374,3 +385,66 @@ export const ITEM_PALETTE_ENTRIES: PaletteEntry[] = [
   { kind: "boss", bossName: "Molgera", row: 8, column: 6 },
   { kind: "boss", bossName: "Ganondorf", row: 8, column: 7 }
 ];
+
+/**
+ * The chart that maps each island, by the island's number on the sea chart
+ * (1 = Forsaken Fortress Sector, 49 = Five Star Isles - the same numbering the
+ * logic's Chart_For_Island_N macros use).
+ *
+ * Transcribed from the randomizer's own roomNumToDefaultChart
+ * (logic/GameItem.cpp upstream), which is where a seed with randomize_charts
+ * off gets its assignment. Every island appears exactly once and every chart
+ * is used exactly once: Treasure Charts 1-46 and Triforce Charts 1-3 - HD has
+ * only three, the other five shards being found directly rather than salvaged.
+ */
+export const CHART_FOR_ISLAND: Record<number, string> = {
+  1: "Treasure Chart 25",
+  2: "Treasure Chart 7",
+  3: "Treasure Chart 24",
+  4: "Treasure Chart 42",
+  5: "Treasure Chart 11",
+  6: "Treasure Chart 45",
+  7: "Treasure Chart 13",
+  8: "Treasure Chart 41",
+  9: "Treasure Chart 29",
+  10: "Treasure Chart 22",
+  11: "Treasure Chart 18",
+  12: "Treasure Chart 30",
+  13: "Treasure Chart 39",
+  14: "Treasure Chart 19",
+  15: "Treasure Chart 8",
+  16: "Treasure Chart 2",
+  17: "Treasure Chart 10",
+  18: "Treasure Chart 26",
+  19: "Treasure Chart 3",
+  20: "Treasure Chart 37",
+  21: "Treasure Chart 27",
+  22: "Treasure Chart 38",
+  23: "Triforce Chart 1",
+  24: "Treasure Chart 21",
+  25: "Treasure Chart 6",
+  26: "Treasure Chart 14",
+  27: "Treasure Chart 34",
+  28: "Treasure Chart 5",
+  29: "Treasure Chart 28",
+  30: "Treasure Chart 35",
+  31: "Triforce Chart 2",
+  32: "Treasure Chart 44",
+  33: "Treasure Chart 1",
+  34: "Treasure Chart 20",
+  35: "Treasure Chart 36",
+  36: "Treasure Chart 23",
+  37: "Treasure Chart 12",
+  38: "Treasure Chart 16",
+  39: "Treasure Chart 4",
+  40: "Treasure Chart 17",
+  41: "Treasure Chart 31",
+  42: "Triforce Chart 3",
+  43: "Treasure Chart 9",
+  44: "Treasure Chart 43",
+  45: "Treasure Chart 40",
+  46: "Treasure Chart 46",
+  47: "Treasure Chart 15",
+  48: "Treasure Chart 32",
+  49: "Treasure Chart 33",
+};

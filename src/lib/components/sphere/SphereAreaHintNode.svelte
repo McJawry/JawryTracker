@@ -7,7 +7,7 @@
   import { itemImage, getItemNumberBadge } from "$lib/logic/images";
   import { removeHintLine } from "$lib/state/hints.svelte";
   import { WWRSphereEngine } from "$lib/logic";
-  import { getSphereHintAreaLocations, isLocationMarked } from "$lib/logic/locations";
+  import { getSharedAreaLocations, isLocationMarked } from "$lib/logic/locations";
   import { getSphereHintPrediction } from "$lib/logic/sphere-path-progress";
 
   let {
@@ -21,7 +21,9 @@
   // Only locations still in play: somewhere already holding a placement, or
   // already checked, can't be where this hint's item is hiding.
   const locations = $derived(
-    getSphereHintAreaLocations(hint.right.name).filter(
+    // Every area the hint named. Several of them means one item somewhere they
+    // all reach, not one per area.
+    getSharedAreaLocations(hint.areas?.length ? hint.areas : [hint.right.name]).filter(
       (location) => !occupiedLocationKeys.has(normalize(location)) && !isLocationMarked(location)
     )
   );
@@ -38,7 +40,7 @@
   data-node-id={`sphere-area-hint-${hint.lineNumber}`}
   data-hint-line={hint.lineNumber}
   data-dependencies={dependencies.join(",")}
-  title={`${hint.left.name} at ${hint.right.name}\n${prediction}\nExact location unknown\nRight-click to remove hint`}
+  title={`${hint.left.name} at ${(hint.areas?.length ? hint.areas : [hint.right.name]).join(", ")}\n${prediction}\nExact location unknown\nRight-click to remove hint`}
   oncontextmenu={(event) => { event.preventDefault(); removeHintLine(hint.lineNumber); }}
 >
   <span class="sphere-item-icon">

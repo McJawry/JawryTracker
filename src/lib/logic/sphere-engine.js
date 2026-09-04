@@ -164,6 +164,11 @@
           exits: {},
           island: "",
           dungeon: "",
+          // Which area heading an entrance in here is listed under. Upstream
+          // groups the tracker's entrance lists by findHintRegions(), which
+          // reads this same field (Area::hintRegion) before falling back to
+          // the island or dungeon an area belongs to.
+          hintRegion: "",
           dungeonStartingRoom: ""
         };
         areas[normalize(name)] = currentArea;
@@ -185,6 +190,7 @@
         const key = normalize(metadataMatch[1]);
         const value = unwrapYamlValue(metadataMatch[2]);
         if (key === "island") currentArea.island = value;
+        if (key === "hint region") currentArea.hintRegion = value;
         if (key === "dungeon") currentArea.dungeon = value;
         if (key === "dungeon starting room") currentArea.dungeonStartingRoom = value;
         return;
@@ -775,17 +781,51 @@
 
     world.shuffleEntrances.forEach((entry) => {
       if (!isShuffleTypeEnabled(entry.type, context.options)) return;
+      // Both sides. A shuffled door is taken apart in both directions until
+      // something is recorded for it: coupled, writing down the way in restores
+      // the way back (below); decoupled, the way back is its own discovery and
+      // walking out of a cave lands you somewhere else entirely.
+      //
+      // Leaving reverse sides connected let you walk out of any interior into
+      // its vanilla surroundings, which reached places nothing leads to - the
+      // Forest Haven ledges are only ever entered from inside, and read as
+      // reachable while the door into the Haven led to Cliff Plateau Isles.
       disconnected.add(normalize(`${entry.forward.parent} -> ${entry.forward.connected}`));
-      if (!getOptionValue(context.options || {}, "decouple_entrances").value && entry.reverse) {
+      if (entry.reverse) {
         disconnected.add(normalize(`${entry.reverse.parent} -> ${entry.reverse.connected}`));
       }
     });
 
+    const decoupled = Boolean(getOptionValue(context.options || {}, "decouple_entrances").value);
+
     Object.entries(context.entranceConnections || {}).forEach(([sourceName, targetName]) => {
-      const source = world.shuffleEntranceByEdge?.[normalize(sourceName)];
-      const target = world.shuffleEntranceByEdge?.[normalize(targetName)];
+      let source = world.shuffleEntranceByEdge?.[normalize(sourceName)];
+      let target = world.shuffleEntranceByEdge?.[normalize(targetName)];
       const isForward = (match) => match?.entry && normalize(`${match.side.parent} -> ${match.side.connected}`)
         === normalize(`${match.entry.forward.parent} -> ${match.entry.forward.connected}`);
+
+      // Decoupled: each direction is its own discovery, so a record is taken
+      // exactly as written - this side came out there - and says nothing about
+      // the way back. Mirroring it would invent a connection the seed never
+      // made.
+      if (decoupled && source && target) {
+        const sourceKey = normalize(`${source.side.parent} -> ${source.side.connected}`);
+        connections[sourceKey] = target.side.connected;
+        disconnected.delete(sourceKey);
+        return;
+      }
+
+      // A connection recorded from the inside out - "leaving Rose's House put
+      // me at X" - is the same pairing as "X's door leads into Rose's House",
+      // so mirror it rather than ignoring it. Some interiors have an
+      // unrandomized second way in, which is how you come to know an exit
+      // before you know the entrance. Coupled seeds only.
+      if (source && target && !isForward(source) && !isForward(target)) {
+        const exitedEntry = source.entry;
+        const arrivedEntry = target.entry;
+        source = { entry: arrivedEntry, side: arrivedEntry.forward };
+        target = { entry: exitedEntry, side: exitedEntry.forward };
+      }
       if (!isForward(source) || !isForward(target)) return;
       const sourceKey = normalize(`${source.entry.forward.parent} -> ${source.entry.forward.connected}`);
       connections[sourceKey] = target.entry.forward.connected;
@@ -863,7 +903,14 @@
           normalize(world.startArea || "Root"),
           ...(contextBase.additionalStartAreas || []).map(normalize)
         ].filter(Boolean));
-    const events = seed?.events ? new Set(seed.events) : new Set();
+    // additionalEvents are the ones the caller already knows have happened -
+    // a boss the player has beaten, which the tracker learns from its heart
+    // container being checked rather than from the logic being able to walk
+    // back into the arena. Only the first call needs them: a seeded call
+    // inherits them in seed.events.
+    const events = seed?.events
+      ? new Set(seed.events)
+      : new Set((contextBase.additionalEvents || []).map(normalize));
     const entranceState = buildEntranceConnections({ ...contextBase, world });
     const context = { ...contextBase, world, accessibleAreas, events, entranceState };
     let eventChanged = true;
@@ -1000,10 +1047,64 @@
     return locationSet;
   }
 
-  function getReachableLocations({ locations, rules, macros, world, items, options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland }) {
+  /**
+   * Which areas the current inventory can stand in. analyzeWorld works this
+   * out on the way to deciding which locations are reachable; the entrance
+   * tracker needs it directly, to say whether you can get to an entrance at
+   * all (logic/entrances.ts).
+   */
+  function getAccessibleAreas({ locations, rules, macros, world, items, options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents }) {
     const inventory = {};
     (items || []).forEach((item) => addInventoryItem(inventory, item, ""));
-    const contextBase = { rules, macros: getSeedMacros(macros, world, options, chartMappings), options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, world };
+    const contextBase = { rules, macros: getSeedMacros(macros, world, options, chartMappings), options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents, world };
+    const out = {};
+    getReachableLocationSet(locations || [], rules, world, { ...contextBase, inventory }, undefined, out);
+    return out.accessibleAreas || new Set();
+  }
+
+  /**
+   * Exits you could actually walk through right now, as "Parent -> Connected".
+   *
+   * Standing in an area is not the same as being able to use every door in it:
+   * Outset Mesa's House needs the Song of Passing and Jabun's Cave needs bombs.
+   * The entrance tracker colours a row by this, so an entrance you cannot open
+   * yet reads red even though the island around it is reachable.
+   */
+  function getTraversableExits(input) {
+    const world = input.world;
+    if (!world?.areas) return new Set();
+    const inventory = {};
+    (input.items || []).forEach((item) => addInventoryItem(inventory, item, ""));
+    const contextBase = {
+      rules: input.rules,
+      macros: getSeedMacros(input.macros, world, input.options, input.chartMappings),
+      options: input.options,
+      entranceMappings: input.entranceMappings,
+      entranceConnections: input.entranceConnections,
+      chartMappings: input.chartMappings,
+      additionalStartAreas: input.additionalStartAreas,
+      additionalEvents: input.additionalEvents,
+      startingIsland: input.startingIsland,
+      world
+    };
+    const out = {};
+    getReachableLocationSet(input.locations || [], input.rules, world, { ...contextBase, inventory }, undefined, out);
+    const context = { ...contextBase, inventory, ...out, world, rules: input.rules };
+
+    const traversable = new Set();
+    Object.values(world.areas).forEach((area) => {
+      if (!out.accessibleAreas?.has(normalize(area.name))) return;
+      Object.values(area.exits || {}).forEach((exit) => {
+        if (evaluateExpression(exit.need, context)) traversable.add(normalize(`${area.name} -> ${exit.name}`));
+      });
+    });
+    return traversable;
+  }
+
+  function getReachableLocations({ locations, rules, macros, world, items, options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents }) {
+    const inventory = {};
+    (items || []).forEach((item) => addInventoryItem(inventory, item, ""));
+    const contextBase = { rules, macros: getSeedMacros(macros, world, options, chartMappings), options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents, world };
     return [...getReachableLocationSet(locations, rules, world, { ...contextBase, inventory })];
   }
 
@@ -1034,7 +1135,7 @@
     return reachable;
   }
 
-  function calculateCore({ locations, rules, macros, world, placements, startingGear, options, entranceMappings, entranceConnections, chartMappings, includeDependencies = true, referencedItemKeys, startingIsland, reachabilityCache }) {
+  function calculateCore({ locations, rules, macros, world, placements, startingGear, options, entranceMappings, entranceConnections, chartMappings, includeDependencies = true, referencedItemKeys, startingIsland, additionalStartAreas, additionalEvents, reachabilityCache }) {
     const inventory = {};
     (startingGear || []).forEach((item) => addInventoryItem(inventory, item, ""));
     const placementByLocation = new Map((placements || []).map((placement) => [normalize(placement.location), placement]));
@@ -1055,6 +1156,12 @@
       entranceConnections,
       chartMappings,
       startingIsland,
+      // Passed through like getAccessibleAreas and getReachableLocations do.
+      // Dropping it here left the spheres alone in not knowing about savewarp,
+      // so a dungeon entered through a shuffled door had reachable checks that
+      // no sphere would own - they read "?" against a perfectly blue location.
+      additionalStartAreas,
+      additionalEvents,
       world
     };
 
@@ -1294,6 +1401,23 @@
       const displaySphere = result.locationSpheres[normalize(placement.location)];
       if (Number.isInteger(displaySphere)) result.placementSpheres[placementId] = displaySphere;
     });
+    // A location only the dropped copy could open still has an answer to "when
+    // could I get here" - the one the run before pruning gave. Dropping the
+    // early Picto Box is what the spoiler log does, and Pompie & Vera keeps the
+    // sphere that follows from it; but Minenco's picture wants two boxes, and
+    // reading "unknown" for a check you can walk to is worse than reading the
+    // sphere you could first have walked there in. The playthrough's own
+    // ordering is untouched: these are filled in, never moved.
+    initial.sphereLocations.forEach((locations, sphereNumber) => {
+      (locations || []).forEach((location) => {
+        const locationKey = normalize(location);
+        if (Number.isInteger(result.locationSpheres[locationKey])) return;
+        result.locationSpheres[locationKey] = sphereNumber;
+        if (!result.sphereLocations[sphereNumber]) result.sphereLocations[sphereNumber] = [];
+        result.sphereLocations[sphereNumber].push(location);
+      });
+    });
+
     result.prunedPlacementIds = [...prunedPlacementIds];
     return result;
   }
@@ -1480,48 +1604,233 @@
     return { terms: [1n << BigInt(search.bitIndex.bitFor({ kind: "item", item: classification.itemName, count: classification.count }))] };
   }
 
-  /** DNF back to a readable AND/OR tree - DNFToExpr, minus the factoring. */
+  // --- Algebraic factoring (simplify_algebraic.cpp) -------------------------
+  //
+  // A flattened requirement in plain DNF lists every winning combination on its
+  // own line, which for a mini-boss runs to ten. Upstream factors out shared
+  // structure first, turning that into three decisions plus a fallback. This is
+  // the kernel/co-kernel rectangle method it uses: find sub-expressions that
+  // divide the whole cleanly, take the division saving the most literals, and
+  // recurse on the pieces.
+  //
+  // Cubes are the same bigint masks the DNF already uses, so everything
+  // BitVector does upstream is a bitwise operation here.
+
+  const popcount = (mask) => {
+    let count = 0;
+    let rest = mask;
+    while (rest) {
+      rest &= rest - 1n;
+      count += 1;
+    }
+    return count;
+  };
+
+  const cubeBits = (mask, total) => {
+    const bits = [];
+    for (let bit = 0; bit < total; bit += 1) if ((mask >> BigInt(bit)) & 1n) bits.push(bit);
+    return bits;
+  };
+
+  /** expr = quotient * divisor + remainder, over cubes. */
+  function algebraicDivision(expr, divisor) {
+    let quot = null;
+    for (const divCube of divisor) {
+      const divisible = expr.filter((cube) => (cube & divCube) === divCube).map((cube) => cube & ~divCube);
+      if (!divisible.length) return { quot: [], remainder: expr.slice() };
+      quot = quot === null ? divisible : quot.filter((cube) => divisible.includes(cube));
+    }
+    quot = quot ?? [];
+
+    const product = new Set();
+    quot.forEach((q) => divisor.forEach((d) => product.add(q | d)));
+    const remainder = expr.filter((cube) => ![...product].some((term) => includedIn(term, cube)));
+    return { quot, remainder };
+  }
+
+  /**
+   * Every co-kernel of the expression paired with the kernel it divides out. A
+   * co-kernel is a cube the whole expression divides by cleanly, leaving
+   * something with no common factor of its own.
+   */
+  function findKernels(cubes, variables, coKernelPath, seenCoKernels, minIdx, budget) {
+    const kernels = [];
+    for (let idx = 0; idx < variables.length; idx += 1) {
+      if (idx < minIdx || budget.spent > budget.limit) continue;
+      const mask = 1n << BigInt(variables[idx]);
+      const sharing = cubes.filter((cube) => (cube & mask) !== 0n);
+      if (sharing.length < 2) continue;
+
+      budget.spent += 1;
+      let coKernel = sharing[0];
+      sharing.forEach((cube) => {
+        coKernel &= cube;
+      });
+      const divided = algebraicDivision(cubes, [coKernel]);
+      findKernels(divided.quot, variables, coKernelPath | coKernel, seenCoKernels, idx + 1, budget).forEach((sub) => {
+        if (seenCoKernels.includes(sub.coKernel)) return;
+        seenCoKernels.push(sub.coKernel);
+        kernels.push(sub);
+      });
+    }
+
+    // A cube-free expression is its own kernel, with the trivial co-kernel 1.
+    if (!seenCoKernels.includes(coKernelPath)) kernels.push({ kernel: cubes, coKernel: coKernelPath });
+    return kernels;
+  }
+
+  /** Prime rectangles of the kernel/co-kernel matrix (Rudell). */
+  function genRectangles(allRows, allCols, matrix, callback) {
+    allRows.forEach((row) => {
+      const ones = allCols.filter((col) => matrix[row][col]);
+      if (!ones.length) return;
+      const covered = allRows.some((other) => other !== row && ones.every((col) => matrix[other][col]));
+      if (!covered) callback([row], ones);
+    });
+
+    allCols.forEach((col) => {
+      const ones = allRows.filter((row) => matrix[row][col]);
+      if (!ones.length) return;
+      const covered = allCols.some((other) => other !== col && ones.every((row) => matrix[row][other]));
+      if (!covered) callback(ones, [col]);
+    });
+
+    genRectanglesRecursive(allRows, allCols, matrix, 0, [], callback);
+  }
+
+  function genRectanglesRecursive(allRows, allCols, matrix, index, rectCols, callback) {
+    for (const col of allCols) {
+      if (col < index) continue;
+      const onesInCol = allRows.filter((row) => matrix[row][col]).length;
+      if (onesInCol < 2) continue;
+
+      const submatrix = matrix.map((row, rowIdx) => (matrix[rowIdx][col] ? row.slice() : row.map(() => 0)));
+      const rectRows = allRows.filter((row) => matrix[row][col]);
+      const nextCols = rectCols.slice();
+
+      let prune = false;
+      for (const other of allCols) {
+        if (allRows.filter((row) => submatrix[row][other]).length !== onesInCol) continue;
+        // A full column before the starting index means this submatrix was
+        // already covered when that column was processed (Rudell).
+        if (other < col) {
+          prune = true;
+          break;
+        }
+        nextCols.push(other);
+        allRows.forEach((row) => {
+          submatrix[row][other] = 0;
+        });
+      }
+
+      if (prune) continue;
+      callback(rectRows, nextCols);
+      genRectanglesRecursive(allRows, allCols, submatrix, col, nextCols, callback);
+    }
+  }
+
+  /** DNF back to a readable AND/OR tree - DNFToExpr, factoring included. */
   function dnfToRequirement(bitIndex, dnf) {
     if (dnfIsFalse(dnf)) return { type: "impossible" };
     if (dnfIsTrue(dnf)) return { type: "nothing" };
 
-    const deduped = dnfDedup(dnf);
-    const termBits = deduped.terms.map((term) => {
-      const set = new Set();
-      for (let bit = 0; bit < bitIndex.reverse.length; bit += 1) {
-        if ((term >> BigInt(bit)) & 1n) set.add(bit);
-      }
-      return set;
-    });
+    const total = bitIndex.reverse.length;
+    let expr = dnfDedup(dnf).terms.slice();
 
     // "Wallet x1 and Wallet x2" reads badly - keep only the strongest count of
-    // each item within a term.
-    termBits.forEach((set) => {
-      [...set].forEach((bit) => {
+    // each item in a term. Done before factoring, or the weaker count gets
+    // pulled out as a common factor and the result reads as nonsense.
+    expr = expr.map((cube) => {
+      let stripped = cube;
+      cubeBits(cube, total).forEach((bit) => {
         const atom = bitIndex.reverse[bit];
         if (atom.kind !== "item" || atom.count <= 1) return;
         for (let lesser = 1; lesser < atom.count; lesser += 1) {
-          set.delete(bitIndex.bitFor({ kind: "item", item: atom.item, count: lesser }));
+          stripped &= ~(1n << BigInt(bitIndex.bitFor({ kind: "item", item: atom.item, count: lesser })));
         }
       });
+      return stripped;
     });
 
-    let commonFactors = new Set(termBits[0]);
-    termBits.forEach((set) => { commonFactors = new Set([...commonFactors].filter((bit) => set.has(bit))); });
-    termBits.forEach((set) => commonFactors.forEach((bit) => set.delete(bit)));
+    let commonFactors = expr[0];
+    expr.forEach((cube) => {
+      commonFactors &= cube;
+    });
+    expr = expr.map((cube) => cube & ~commonFactors);
 
-    const toAtoms = (bitSet) => [...bitSet].map((bit) => bitIndex.reverse[bit]).map((atom) => (
+    const toAtoms = (mask) => cubeBits(mask, total).map((bit) => bitIndex.reverse[bit]).map((atom) => (
       atom.kind === "health" ? { type: "health", count: atom.count } : { type: "item", item: atom.item, count: atom.count }
     ));
     const andOf = (args) => (args.length === 1 ? args[0] : { type: "and", args });
-
     const commonArgs = toAtoms(commonFactors);
-    const remaining = termBits.filter((set) => set.size);
-    if (!remaining.length) return commonArgs.length ? andOf(commonArgs) : { type: "nothing" };
 
-    const alternatives = remaining.map((set) => andOf(toAtoms(set)));
-    const disjunction = alternatives.length === 1 ? alternatives[0] : { type: "or", args: alternatives };
-    return commonArgs.length ? andOf([...commonArgs, disjunction]) : disjunction;
+    const variables = [...new Set(expr.flatMap((cube) => cubeBits(cube, total)))];
+    if (!variables.length) return commonArgs.length ? andOf(commonArgs) : { type: "nothing" };
+
+    const fallback = () => {
+      const alternatives = expr.filter((cube) => cube !== 0n).map((cube) => andOf(toAtoms(cube)));
+      if (!alternatives.length) return commonArgs.length ? andOf(commonArgs) : { type: "nothing" };
+      const disjunction = alternatives.length === 1 ? alternatives[0] : { type: "or", args: alternatives };
+      return commonArgs.length ? andOf([...commonArgs, disjunction]) : disjunction;
+    };
+
+    // The kernel search is exponential in the variable count. Real
+    // requirements sit far below this; the guard only means a pathological one
+    // costs a longer tooltip instead of a stalled load.
+    if (expr.length > 40 || variables.length > 24) return fallback();
+
+    const budget = { spent: 0, limit: 4000 };
+    const kernels = findKernels(expr, variables, 0n, [], 0, budget).filter((entry) => entry.coKernel !== 0n);
+
+    const columns = [];
+    kernels.forEach((entry) => entry.kernel.forEach((cube) => {
+      if (!columns.includes(cube)) columns.push(cube);
+    }));
+    if (!kernels.length || !columns.length) return fallback();
+
+    const matrix = kernels.map((entry) => columns.map((cube) => (entry.kernel.includes(cube) ? 1 : 0)));
+    const allRows = kernels.map((unused, index) => index);
+    const allCols = columns.map((unused, index) => index);
+
+    // Optimise for literals saved, which stands in well for a shorter read.
+    const literalsSaved = (rectRows, rectCols) => {
+      let weight = 0;
+      rectRows.forEach((row) => rectCols.forEach((col) => {
+        if (matrix[row][col]) weight += popcount(kernels[row].coKernel | columns[col]);
+      }));
+      rectRows.forEach((row) => {
+        weight -= popcount(kernels[row].coKernel) + 1;
+      });
+      rectCols.forEach((col) => {
+        weight -= popcount(columns[col]);
+      });
+      return weight;
+    };
+
+    let bestCols = null;
+    let bestValue = -Infinity;
+    genRectangles(allRows, allCols, matrix, (rectRows, rectCols) => {
+      const value = literalsSaved(rectRows, rectCols);
+      if (value > bestValue) {
+        bestValue = value;
+        bestCols = rectCols;
+      }
+    });
+    if (!bestCols || !bestCols.length) return fallback();
+
+    const divisor = bestCols.map((col) => columns[col]);
+    const divided = algebraicDivision(expr, divisor);
+    if (!divided.quot.length) return fallback();
+
+    const product = {
+      type: "and",
+      args: [dnfToRequirement(bitIndex, { terms: divided.quot }), dnfToRequirement(bitIndex, { terms: divisor })]
+    };
+    const sum = divided.remainder.length
+      ? { type: "or", args: [product, dnfToRequirement(bitIndex, { terms: divided.remainder })] }
+      : product;
+
+    return commonArgs.length ? andOf([...commonArgs, sum]) : sum;
   }
 
   /**
@@ -1629,6 +1938,22 @@
       });
     });
 
+    // Entrances get the same treatment, keyed by "Parent -> Connected": what
+    // it takes to stand at that door and open it, which is reaching its area
+    // and satisfying the exit's own condition. The tracker's entrance lists
+    // show this the way the location lists show a location's requirement.
+    Object.entries(world.areas).forEach(([areaKey, area]) => {
+      // An area with no expression was never reached; its doors still get an
+      // entry so they report "impossible" rather than looking like the logic
+      // failed to load.
+      const areaExpr = search.areaExprs.get(areaKey) || dnfFalse();
+      Object.values(area.exits || {}).forEach((exit) => {
+        const key = normalize(`${area.name} -> ${exit.name}`);
+        const combined = dnfAnd(areaExpr, evaluatePartial(compileExpression(exit.need), search, new Set()));
+        perLocation.set(key, dnfOr(perLocation.get(key) || dnfFalse(), combined));
+      });
+    });
+
     const requirements = {};
     perLocation.forEach((dnf, key) => {
       requirements[key] = dnfToRequirement(search.bitIndex, dnfDedup(dnf));
@@ -1641,6 +1966,8 @@
     parseLogicData,
     parseConfig,
     getReachableLocations,
+    getAccessibleAreas,
+    getTraversableExits,
     calculate,
     // Exposed for the location requirement tooltip (logic/requirement-text.ts)
     // so it parses and classifies expressions with exactly the same code the
@@ -1648,6 +1975,15 @@
     // silently disagree with the engine about what a rule means.
     compileExpression,
     classifyAtom,
-    flattenRequirements
+    flattenRequirements,
+    // Exposed for the entrance tracker (logic/entrances.ts) for the same
+    // reason: which entrance types a seed shuffles is a logic question, and a
+    // second copy of the rule in the UI would be free to disagree with the one
+    // the reachability pass actually uses.
+    isShuffleTypeEnabled,
+    // Which sector each dungeon sits on before any shuffling - the old
+    // dungeon-list model records "this dungeon was found on that sector", and
+    // naming the door involved means knowing whose door normally lives there.
+    VANILLA_DUNGEON_SECTORS
   };
-}(typeof window !== "undefined" ? window : self));
+}(typeof window !== "undefined" ? window : globalThis));

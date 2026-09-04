@@ -6,9 +6,9 @@
 // hold a handle to it - so the main window listens for the announcement
 // instead of tracking handles.
 import { emit, listen } from "@tauri-apps/api/event";
-import { getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
+import { getAllWebviewWindows, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { SECTION_META } from "$lib/section-meta";
-import { markDocked, setUndockedIds, undockedState } from "$lib/state/undocked.svelte";
+import { isUndockPending, markDocked, setUndockedIds, undockedState } from "$lib/state/undocked.svelte";
 import { getStoredPopoutGeometry, isPopoutSyncInProgress, syncPopoutWindows } from "./popout-geometry";
 import { onWindowGeometryChanged } from "./window-size";
 import { savePreferencesFile } from "./layout-file";
@@ -17,12 +17,22 @@ import { isTauriRuntime } from "./is-tauri";
 export const REDOCKED_EVENT = "section:redocked";
 export const GEOMETRY_CHANGED_EVENT = "section:geometry-changed";
 
-/** Called from a popout window so the main window can drop it from the list. */
+/**
+ * Called from a popout window so the main window can drop it from the list.
+ *
+ * Listens for the window actually being closed, not for the page unloading.
+ * `beforeunload` fires on a plain reload too - a dev-server hot reload, or any
+ * navigation - and announcing a re-dock then put the panel back in the layout
+ * while its window was still sitting there open, so the section showed up
+ * twice at once.
+ */
 export function announceRedockOnUnload(sectionId: string): void {
   if (!isTauriRuntime()) return;
-  window.addEventListener("beforeunload", () => {
-    void emit(REDOCKED_EVENT, sectionId);
-  });
+  void getCurrentWebviewWindow()
+    .onCloseRequested(() => {
+      void emit(REDOCKED_EVENT, sectionId);
+    })
+    .catch((error) => console.error(`Could not watch the ${sectionId} window for closing`, error));
 }
 
 /**
@@ -75,6 +85,9 @@ export async function reconcileUndockedWindows(): Promise<void> {
         missedReconciles.delete(id);
         return true;
       }
+      // Asked for moments ago: its window is still being created, so absence
+      // proves nothing yet.
+      if (isUndockPending(id)) return true;
       const misses = (missedReconciles.get(id) ?? 0) + 1;
       missedReconciles.set(id, misses);
       return misses < MISSES_BEFORE_DOCKED;
@@ -85,8 +98,15 @@ export async function reconcileUndockedWindows(): Promise<void> {
   }
 }
 
+let sessionStarted = false;
+
 export async function initPopoutSession(): Promise<void> {
   if (!isTauriRuntime()) return;
+  // Re-running this stacked another redock listener and another reconcile
+  // timer on top of the last, so one closing window was handled several times
+  // over and reconciles fired in bursts.
+  if (sessionStarted) return;
+  sessionStarted = true;
 
   await listen<string>(REDOCKED_EVENT, (event) => markDocked(event.payload));
 

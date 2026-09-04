@@ -11,12 +11,14 @@ import { WWRSphereEngine } from "$lib/logic";
 import type { SphereCalculationResult } from "$lib/logic";
 import { BOSS_LOCATIONS } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
-import { getSphereHintAreaLocations, isLocationMarked } from "$lib/logic/locations";
+import { getPathHintAreaLocations, isLocationMarked } from "$lib/logic/locations";
 import { getMaximalSphereLogicInventory, getSphereInventoryItemKey, getSphereReachabilityWithOwnDungeonKeys, isOwnDungeonKeyForPath } from "$lib/logic/sphere-calculation";
+import { pathHintAreaKey } from "$lib/logic/sphere-path-progress";
 import { data } from "$lib/state/data.svelte";
 import type { SpherePlacement } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
+import { buildAreaBranchModel, planPathBossIcons } from "$lib/logic/path-boss-rules";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -89,8 +91,27 @@ export function buildPathBossLocationIcons(
   const locationDependencies = (location: string) =>
     unique([...(calculation.dependencies[normalize(location)] || []), ...(relativeUnknown.availableDependencies.get(normalize(location)) || [])]);
 
+  // Hints are handled per hinted area rather than one at a time: when an area
+  // is on the path to more than one boss, those bosses have *different* path
+  // items in it, so one found item cannot account for all of them.
+  // Keyed by the whole set of areas a hint names: two hints only describe the
+  // same place when they name the same places.
+  const hintsByArea = new Map<string, { areaName: string; locations: string[]; bosses: string[] }>();
   knowledge.pathHints.forEach((hint) => {
-    const hintedAreaLocations = new Set(getSphereHintAreaLocations(hint.left.name).map(normalize));
+    const areaKey = pathHintAreaKey(hint);
+    if (!hintsByArea.has(areaKey)) {
+      hintsByArea.set(areaKey, {
+        areaName: (hint.areas?.length ? hint.areas : [hint.left.name]).join(" and "),
+        locations: getPathHintAreaLocations(hint),
+        bosses: []
+      });
+    }
+    const group = hintsByArea.get(areaKey)!;
+    if (!group.bosses.includes(hint.right.name)) group.bosses.push(hint.right.name);
+  });
+
+  hintsByArea.forEach((group) => {
+    const hintedAreaLocations = new Set(group.locations);
     const treeSourceIds = new Set(collectedPlacements.filter((placement) => hintedAreaLocations.has(normalize(placement.location))).map((placement) => placement.id));
 
     let changed = true;
@@ -104,14 +125,37 @@ export function buildPathBossLocationIcons(
       });
     }
 
-    const pathResolved = [...treeSourceIds].some((sourceId) => isHardRequiredItemForBoss(placementsById.get(sourceId), hint.right.name));
-    if (pathResolved) return;
+    const treeAvailableLocations = availableLocations.filter(
+      (location) => hintedAreaLocations.has(normalize(location)) || locationDependencies(location).some((sourceId) => treeSourceIds.has(sourceId))
+    );
 
-    availableLocations.forEach((location) => {
-      if (hintedAreaLocations.has(normalize(location)) || locationDependencies(location).some((sourceId) => treeSourceIds.has(sourceId))) {
-        addBoss(location, hint.right.name);
-      }
+    if (group.bosses.length === 1) {
+      // One boss: any hard-required item in the tree is its path item. Left
+      // exactly as it was, short-circuit included - the branch model below is
+      // only needed once bosses have to compete for distinct items.
+      const resolved = [...treeSourceIds].some((sourceId) => isHardRequiredItemForBoss(placementsById.get(sourceId), group.bosses[0]));
+      if (resolved) return;
+      treeAvailableLocations.forEach((location) => addBoss(location, group.bosses[0]));
+      return;
+    }
+
+    const rootIds = collectedPlacements.filter((placement) => hintedAreaLocations.has(normalize(placement.location))).map((placement) => placement.id);
+    const byId = new Map(collectedPlacements.map((placement) => [placement.id, placement]));
+    const { candidatesByBoss, locations, openRootIds } = buildAreaBranchModel({
+      bosses: group.bosses,
+      rootIds,
+      placementIds: collectedPlacements.map((placement) => placement.id),
+      dependenciesOf: (placementId) => {
+        const placement = byId.get(placementId);
+        return placement ? placementDependencies(placement) : [];
+      },
+      isHardRequired: (placementId, bossName) => isHardRequiredItemForBoss(byId.get(placementId), bossName),
+      availableLocations: treeAvailableLocations,
+      locationDependenciesOf: locationDependencies
     });
+
+    const plan = planPathBossIcons(group.bosses, candidatesByBoss, locations, openRootIds);
+    plan.forEach((bossNames, location) => bossNames.forEach((bossName) => addBoss(location, bossName)));
   });
 
   return bossesByLocation;

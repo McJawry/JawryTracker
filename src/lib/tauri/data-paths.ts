@@ -13,7 +13,7 @@
 //    set of presets.
 import { invoke } from "@tauri-apps/api/core";
 import { appConfigDir, documentDir, join } from "@tauri-apps/api/path";
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import { exists, mkdir, readDir, rename } from "@tauri-apps/plugin-fs";
 import { isTauriRuntime } from "./is-tauri";
 
 export type PresetLocation = "app" | "user";
@@ -62,13 +62,15 @@ export async function getDataRoot(location: PresetLocation): Promise<string> {
  * swapped independently - picking a new colour scheme shouldn't move every
  * panel, and vice versa.
  *
- * Layout presets stay directly in `presets/` (where they have always been);
- * colours get a subfolder.
+ * Each kind gets its own subfolder. Layout presets used to sit loose in
+ * `presets/` alongside the colours folder; they now have `presets/Layout/`,
+ * and anything left in the old place is moved across on first use (see
+ * migrateLooseLayoutPresets).
  */
 export type PresetKind = "layout" | "colors" | "runs";
 
 export const PRESET_KIND_FOLDERS: Record<PresetKind, string[]> = {
-  layout: ["presets"],
+  layout: ["presets", "Layout"],
   colors: ["presets", "colors"],
   // Runs are saved state, not preferences, so they get their own folder
   // rather than sitting among the presets. Keeping them out of the data root
@@ -80,7 +82,46 @@ export const PRESET_KIND_FOLDERS: Record<PresetKind, string[]> = {
 export async function getPresetsDir(location: PresetLocation, kind: PresetKind = "layout"): Promise<string> {
   let dir = await getDataRoot(location);
   for (const segment of PRESET_KIND_FOLDERS[kind]) dir = await join(dir, segment);
-  return ensureDir(dir);
+  const ready = await ensureDir(dir);
+  if (kind === "layout") await migrateLooseLayoutPresets(location, ready);
+  return ready;
+}
+
+// Once per location per session: the check is a single readDir of a folder
+// that is empty in any install made since the move.
+const migrations = new Map<PresetLocation, Promise<void>>();
+
+/**
+ * Moves layout presets saved by older versions - loose .json files in
+ * `presets/` - into `presets/Layout/`.
+ *
+ * Only files are considered, so the `colors/` folder beside them is left
+ * alone, and a name already present in the new folder is never overwritten:
+ * the newer file wins and the old one stays put rather than being destroyed.
+ */
+function migrateLooseLayoutPresets(location: PresetLocation, target: string): Promise<void> {
+  const running = migrations.get(location);
+  if (running) return running;
+
+  const run = (async () => {
+    try {
+      const legacyDir = await join(await getDataRoot(location), "presets");
+      if (!(await exists(legacyDir))) return;
+      for (const entry of await readDir(legacyDir)) {
+        if (!entry.isFile || !entry.name.toLowerCase().endsWith(".json")) continue;
+        const destination = await join(target, entry.name);
+        if (await exists(destination)) continue;
+        await rename(await join(legacyDir, entry.name), destination);
+      }
+    } catch (error) {
+      // A preset that cannot be moved is still readable where it is, so this
+      // must never stop the folder from being returned.
+      console.error("Could not move older layout presets into presets/Layout", error);
+    }
+  })();
+
+  migrations.set(location, run);
+  return run;
 }
 
 /** Opens a preset/save folder in the system file manager. */
@@ -107,4 +148,20 @@ export async function describeDataRoots(): Promise<{ app: string; user: string; 
     portable = false;
   }
   return { app: await getAppDataRoot(), user: await getUserDataRoot(), portable };
+}
+
+/**
+ * Runs the loose-preset move for both roots without needing a folder back.
+ * Called once at startup; safe to call again, and a no-op on an install that
+ * never had loose presets.
+ */
+export async function migrateLayoutPresetFolders(): Promise<void> {
+  if (!isTauriRuntime()) return;
+  for (const location of ["app", "user"] as PresetLocation[]) {
+    try {
+      await getPresetsDir(location, "layout");
+    } catch (error) {
+      console.error(`Could not prepare the ${location} layout preset folder`, error);
+    }
+  }
 }

@@ -77,7 +77,7 @@ function currentPreferences(
   };
 }
 
-function applyPreferences(prefs: Partial<LayoutPreferences>): void {
+function applyPreferences(prefs: Partial<LayoutPreferences>, { trustLiveUndocked = false } = {}): void {
   // setLayoutRows normalizes, so presets written before the column level
   // existed (rows were a flat list of ids) still load correctly.
   if (prefs.layoutRows) setLayoutRows(prefs.layoutRows);
@@ -93,7 +93,15 @@ function applyPreferences(prefs: Partial<LayoutPreferences>): void {
   // back on auto, which is what "not specified" should mean.
   Object.keys(settings.popoutZoom).forEach((key) => delete settings.popoutZoom[key]);
   Object.assign(settings.popoutZoom, prefs.popoutZoom ?? {});
-  if (Array.isArray(prefs.undockedSections)) setUndockedIds(prefs.undockedSections);
+  // The live list (localStorage, written the moment a panel is undocked) is
+  // never older than this file, which is only written on a debounce. Startup
+  // therefore keeps what the session already has and falls back to the file
+  // only when there is nothing live to keep - otherwise reloading before that
+  // debounced write landed put an undocked panel back into the layout while
+  // its window was still open, showing the section twice. A preset is an
+  // explicit instruction, so it still applies its list as given.
+  const keepLive = trustLiveUndocked && undockedState.ids.length > 0;
+  if (Array.isArray(prefs.undockedSections) && !keepLive) setUndockedIds(prefs.undockedSections);
   saveSettings();
 }
 
@@ -122,7 +130,7 @@ export async function loadPreferencesFile(): Promise<boolean> {
     if (!(await exists(path))) return false;
     const prefs: Partial<LayoutPreferences> = JSON.parse(await readTextFile(path));
     setStoredPopoutGeometry(prefs.popoutWindows);
-    applyPreferences(prefs);
+    applyPreferences(prefs, { trustLiveUndocked: true });
     await applyWindowSize(prefs.windowSize);
     await applyWindowPosition(prefs.windowPosition);
     return true;

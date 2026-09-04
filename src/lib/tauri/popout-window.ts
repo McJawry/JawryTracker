@@ -1,6 +1,6 @@
-// Generic get-or-focus popout window helper, generalized from
-// popout-sphere.ts's openSpherePopout() so any section can be popped into
-// its own native window the same way (loads this same app's index.html with
+// Generic get-or-focus popout window helper. Every section that can be popped
+// out is described in section-meta.ts and opened through here, so they all
+// behave the same way (loads this same app's index.html with
 // a query flag rather than a second SvelteKit route - see
 // src/routes/+page.svelte - since adapter-static's SPA fallback only
 // guarantees the one real index.html resolves for any window).

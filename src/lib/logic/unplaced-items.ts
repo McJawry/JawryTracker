@@ -19,6 +19,7 @@ import { REQUIRED_BOSS_OPTION_KEYS, TRACKED_AREAS } from "$lib/gameData";
 import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
 import { getEffectiveItemStage, getStartingItemStage } from "$lib/logic/starting-gear-items";
 import { getShardTrackingState } from "$lib/logic/shard-tracking";
+import { getAcquiredCharts } from "$lib/logic/chart-tracking";
 import {
   getDungeonItems,
   getStartingSmallKeys,
@@ -91,6 +92,11 @@ export function getUnplacedAcquiredItems(): UnplacedItem[] {
     if (!getShardTrackingState(number).isChecked) continue;
     push(`Triforce Shard ${number}`, 1);
   }
+
+  // Charts are held in their own store (chart-tracking.ts) for the same
+  // reason the shards are: they are clicked somewhere of their own, and
+  // ITEM_STAGE_TABLES only describes the fixed inventory grid.
+  getAcquiredCharts().forEach((chart) => push(chart, 1));
 
   KEY_DUNGEONS.forEach((dungeon) => {
     const items = getDungeonItems(dungeon);

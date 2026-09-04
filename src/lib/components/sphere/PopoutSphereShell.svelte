@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Ported from the popup-document shell built in openSpherePopout()
+  // Ported from the popup-document shell the old app built by hand
   // (dev/app/app.js:2369+) - the original hand-built this DOM (and injected
   // inline CSS overrides) because it was a raw window.open() document. This
   // is a real page in the same app bundle, so it reuses SphereBoard.svelte

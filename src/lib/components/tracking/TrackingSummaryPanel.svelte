@@ -11,6 +11,8 @@
   import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
   import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
   import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
+  import { hasShuffledEntrances } from "$lib/logic/entrances";
+  import { openAllEntrancesList, openAllLocationsList } from "$lib/state/ui.svelte";
 
   const knowledge = $derived(getSphereTrackingKnowledge());
 
@@ -38,9 +40,30 @@
 </script>
 
 <div class="tracking-summary-panel" aria-label="Tracking summary">
-  <div class="tracking-summary-counts">
-    <div><strong>{checkedCount}</strong> Locations Checked</div>
-    <div><strong>{accessibleCount}</strong> Locations Accessible</div>
-    <div><strong>{remainingCount}</strong> Locations Remaining</div>
+  <div class="tracking-summary-row">
+    <div class="tracking-summary-counts">
+      <div><strong>{checkedCount}</strong> Locations Checked</div>
+      <div><strong>{accessibleCount}</strong> Locations Accessible</div>
+      <div><strong>{remainingCount}</strong> Locations Remaining</div>
+    </div>
+    <button
+      type="button"
+      class="tracking-summary-action"
+      title="List every location found so far, from every area"
+      onclick={openAllLocationsList}
+    >
+      View all<br />locations
+    </button>
+    <!-- Nothing to list when the seed leaves every entrance where it was. -->
+    {#if hasShuffledEntrances()}
+      <button
+        type="button"
+        class="tracking-summary-action"
+        title="List every entrance in the seed, from every area"
+        onclick={openAllEntrancesList}
+      >
+        View all<br />entrances
+      </button>
+    {/if}
   </div>
 </div>

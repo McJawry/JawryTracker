@@ -18,6 +18,11 @@ const packageVersion = JSON.parse(readFileSync(new URL("./package.json", import.
 export default defineConfig(async () => ({
   plugins: [sveltekit()],
 
+  test: {
+    // Logic-only suites - the pure rule modules, no DOM required.
+    include: ["src/**/*.test.ts"]
+  },
+
   define: {
     __APP_VERSION__: JSON.stringify(packageVersion),
   },

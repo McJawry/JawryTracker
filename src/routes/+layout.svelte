@@ -6,6 +6,7 @@
   import { initWindowGroupSync } from "$lib/tauri/window-group";
   import { initStorageSync } from "$lib/tauri/storage-sync";
   import { loadPreferencesFile, savePreferencesFile } from "$lib/tauri/layout-file";
+  import { migrateLayoutPresetFolders } from "$lib/tauri/data-paths";
   import { initPopoutSession } from "$lib/tauri/popout-session";
   import { onWindowMoved, showMainWindow } from "$lib/tauri/window-size";
   import { layoutState } from "$lib/state/layout.svelte";
@@ -41,6 +42,12 @@
     // be applied before it paints, so it must be shown even if restoring
     // throws - otherwise a bad preferences file means no window at all.
     const showFallback = setTimeout(() => void showMainWindow(), 4000);
+
+    // Touching the layout preset folders moves any presets an older version
+    // left loose in `presets/` into `presets/Layout/`. Done at startup rather
+    // than waiting for Settings to be opened, so the tidy-up has happened by
+    // the time anyone looks in the folder.
+    void migrateLayoutPresetFolders();
 
     void loadPreferencesFile()
       .finally(() => {

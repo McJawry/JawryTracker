@@ -14,11 +14,13 @@
   import { getAreaAccessibility, getAreaLocationChoices, getLocationCheckedId } from "$lib/logic/locations";
   import { setChecked } from "$lib/state/checked.svelte";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
-  import { openLocationDropList, ui, clearPendingEntranceAssignment } from "$lib/state/ui.svelte";
-  import { setDungeonEntranceMapping } from "$lib/state/sphere.svelte";
+  import { openLocationDropList, ui, clearPendingEntranceAssignment, setHighlightSectorMode } from "$lib/state/ui.svelte";
+  import { sphere, toggleSectorHighlight } from "$lib/state/sphere.svelte";
   import { DUNGEON_DRAG_MIME } from "$lib/components/map/dungeon-drag";
   import { TRACKED_AREAS } from "$lib/gameData";
   import { getSectorHints, getStaticSectorIcons, getAreaHints } from "$lib/logic/map-icons";
+  import { assignDungeonToSector } from "$lib/logic/entrances";
+  import { canOpenSectorDoor, isBossFoundOnSector } from "$lib/logic/entrance-paths";
   import MapIcon from "$lib/components/map/MapIcon.svelte";
 
   let {
@@ -48,7 +50,9 @@
   // have fully checked also reads 0/0 and should keep showing that.
   const hasNoLocations = $derived(getAreaLocationChoices(areaName, targetKind).length === 0);
   const fractionText = $derived(
-    hasNoLocations ? "-" : `${accessibility.accessible}/${accessibility.remaining}`
+    hasNoLocations && !accessibility.hasUndiscoveredEntrances
+      ? "-"
+      : `${accessibility.accessible}/${accessibility.hasUndiscoveredEntrances ? "?" : accessibility.remaining}`
   );
 
   // Preserves the parsed-hint icon overlays SeaGrid.svelte/AreaStrip.svelte
@@ -58,10 +62,21 @@
     const trackedArea = TRACKED_AREAS.find((area) => area.name === areaName);
     return trackedArea ? getAreaHints(trackedArea) : [];
   });
-  // Old Man Ho Ho / Blue Chu Jelly markers are parked for now - they sat
-  // awkwardly on the new sea-chart map and their role isn't settled yet.
-  // getStaticSectorIcons still exists for when they come back.
-  const markerIcons: ReturnType<typeof getStaticSectorIcons> = [];
+  // Old Man Ho Ho / Blue Chu Jelly sit along the top of their sector as
+  // plain markers - they fade once marked, but the marking itself happens
+  // on the matching control in the area's location list.
+  const markerIcons = $derived(targetKind === "sector" ? getStaticSectorIcons(areaName) : []);
+
+  const isHighlighted = $derived(targetKind === "sector" && sphere.highlightedSectors.includes(areaName));
+  // Once the boss behind the sector is known the marker has done its job, so
+  // it settles into a found state rather than vanishing - the answer stays on
+  // the map. Until then it spins when a door here will actually open, so a
+  // marked sector reads at a glance as "ready" rather than just "noted".
+  //
+  // The boss, not the dungeon: with boss entrances mixed into the pool, the
+  // dungeon found on a sector says nothing about where its boss went.
+  const highlightFound = $derived(isHighlighted && isBossFoundOnSector(areaName));
+  const canEnterHighlighted = $derived(isHighlighted && !highlightFound && canOpenSectorDoor(areaName));
 
   const isPulsing = $derived(
     ui.pendingLocationForItemAssignment !== null &&
@@ -72,8 +87,14 @@
     // A drag ending on this cell is handled by the drag controller's pointerup
     // (item-drag.ts), not as a click.
     if (ui.itemDrag) return;
+    // Marking a sector as leading to a required boss takes over the click -
+    // the location list would otherwise open on top of what is being marked.
+    if (ui.highlightSectorMode && targetKind === "sector") {
+      toggleSectorHighlight(areaName);
+      return;
+    }
     if (ui.pendingEntranceAssignment) {
-      setDungeonEntranceMapping(ui.pendingEntranceAssignment, areaName);
+      assignDungeonToSector(ui.pendingEntranceAssignment, areaName);
       clearPendingEntranceAssignment();
       return;
     }
@@ -84,6 +105,13 @@
   // Matches the upstream tracker's right-click-clears-an-area behaviour.
   function handleContextMenu(event: MouseEvent) {
     event.preventDefault();
+    // The way out of the marking mode, from anywhere on the map. Checked
+    // before the clear-this-area behaviour so leaving the mode never also
+    // wipes a sector.
+    if (ui.highlightSectorMode) {
+      setHighlightSectorMode(false);
+      return;
+    }
     // Suspended while an item is being dragged: right-click then means
     // "open this area's list so I can pin the item to one location".
     if (ui.itemDrag) return;
@@ -109,7 +137,7 @@
     dragOver = false;
     if (!dungeonName) return;
     event.preventDefault();
-    setDungeonEntranceMapping(dungeonName, areaName);
+    assignDungeonToSector(dungeonName, areaName);
   }
 </script>
 
@@ -133,14 +161,24 @@
   {#if hintIcons.length}
     <div class="sector-hint-icons">
       {#each hintIcons as icon (icon.id)}
-        <MapIcon {icon} />
+        <!-- A hint is something the map is telling you, not a thing to mark
+             off: acquiring belongs to the Item Tracker. -->
+        <MapIcon {icon} interactive={false} />
       {/each}
     </div>
+  {/if}
+  {#if isHighlighted}
+    <span
+      class="sector-important-highlight important-location-mark"
+      class:ready={canEnterHighlighted}
+      class:found={highlightFound}
+      aria-hidden="true"
+    ></span>
   {/if}
   {#if markerIcons.length}
     <div class="sector-marker-icons">
       {#each markerIcons as icon (icon.id)}
-        <MapIcon {icon} />
+        <MapIcon {icon} interactive={false} />
       {/each}
     </div>
   {/if}

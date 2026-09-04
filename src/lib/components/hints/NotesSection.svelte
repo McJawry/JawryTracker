@@ -4,7 +4,7 @@
   // 5769, 5774). The Sphere Tracking textarea uses a simplified text
   // round-trip (see sphere-notes-text.ts) rather than the original's
   // ID-stable line diffing.
-  import { hintNotes, updateHintsFromNotes } from "$lib/state/hints.svelte";
+  import { hints, hintNotes, updateHintsFromNotes, setNotesEditorFocused } from "$lib/state/hints.svelte";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { sphere } from "$lib/state/sphere.svelte";
   import { parseSphereNotesText, serializeSpherePlacements } from "$lib/logic/sphere-notes-text";
@@ -14,6 +14,43 @@
   let hintTextarea: HTMLTextAreaElement | undefined = $state();
   let sphereTextarea: HTMLTextAreaElement | undefined = $state();
   let sphereText = $state(serializeSpherePlacements());
+
+  /**
+   * A textarea cannot colour its own text, so the notes are drawn twice: a
+   * layer behind carries one span per line with the colour, and the textarea
+   * sits in front with transparent glyphs and a visible caret. The two share
+   * every typographic property, so the lines land exactly on each other.
+   */
+  const hintByLine = $derived(new Map(hints.map((hint) => [hint.lineNumber, hint])));
+
+  const highlightedLines = $derived(
+    hintNotes.value.split(/\r?\n/).map((text, index) => ({ text, className: lineClass(index + 1) }))
+  );
+
+  function lineClass(lineNumber: number): string {
+    const hint = hintByLine.get(lineNumber);
+    if (!hint) return "";
+    // Path and location hints are told apart by their kind; only an item hint
+    // carries a requirement, and there the tag is the more useful thing to see
+    // at a glance, so it decides the colour.
+    if (hint.type === "path") return "hint-line path";
+    if (hint.type === "location") return "hint-line location";
+    if (hint.type !== "item") return "";
+    const key = hint.requirement?.key;
+    if (key === "required") return "hint-line required";
+    if (key === "possibly-required") return "hint-line possible";
+    if (key === "not-required") return "hint-line not-required";
+    return "hint-line item";
+  }
+
+  let highlightEl: HTMLPreElement | undefined = $state();
+
+  /** The layer has no scrollbar of its own - it follows the textarea's. */
+  function syncScroll() {
+    if (!highlightEl || !hintTextarea) return;
+    highlightEl.scrollTop = hintTextarea.scrollTop;
+    highlightEl.scrollLeft = hintTextarea.scrollLeft;
+  }
 
   const MIN_HEIGHT = 135;
 
@@ -112,18 +149,23 @@
       <span>Grow with text</span>
     </label>
   </div>
-  <textarea
-    bind:this={hintTextarea}
-    bind:value={hintNotes.value}
-    oninput={handleHintInput}
-    class="notes-input"
-    class:fixed-height={!settings.notesAutoGrow}
-    onmouseup={handleManualResize}
-    spellcheck="false"
-    aria-label="Hint notes"
-    hidden={activeTab !== "hint"}
-    placeholder={"Type hints here, one per line.\n\nExamples:\ndragon roost to gohma\nhookshot at needle rock\nprogressive sword in dragon roost cavern boss"}
-  ></textarea>
+  <div class="notes-editor" hidden={activeTab !== "hint"}>
+    <pre class="notes-highlight" bind:this={highlightEl} aria-hidden="true">{#each highlightedLines as line, index (index)}<span class={line.className}>{line.text}</span>{"\n"}{/each}</pre>
+    <textarea
+      bind:this={hintTextarea}
+      bind:value={hintNotes.value}
+      oninput={handleHintInput}
+      onscroll={syncScroll}
+      onfocus={() => setNotesEditorFocused(true)}
+      onblur={() => setNotesEditorFocused(false)}
+      class="notes-input"
+      class:fixed-height={!settings.notesAutoGrow}
+      onmouseup={handleManualResize}
+      spellcheck="false"
+      aria-label="Hint notes"
+      placeholder={"Type hints here, one per line.\n\nExamples:\ndragon roost to gohma\nhookshot at needle rock\nprogressive sword in dragon roost cavern boss"}
+    ></textarea>
+  </div>
   <textarea
     bind:this={sphereTextarea}
     bind:value={sphereText}

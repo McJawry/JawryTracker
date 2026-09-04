@@ -23,7 +23,10 @@
   let { entry, sourceIds = [] }: { entry: PathProgressEntry; sourceIds?: string[] } = $props();
 
   const label = $derived(getPathSphereLabel(entry.progress));
-  const area = $derived(entry.hint.left.name.replace(" Sector", ""));
+  // Every area the hint named, not just the first - a hint reading "A and B"
+  // is about one path item that both of them can reach.
+  const areaNames = $derived(entry.hint.areas?.length ? entry.hint.areas : [entry.hint.left.name]);
+  const area = $derived(areaNames.map((name) => name.replace(" Sector", "")).join(" and "));
   const solved = $derived(entry.progress.kind !== "unknown");
 
   const displayedItems = $derived.by((): PathCandidate[] => {
@@ -84,7 +87,7 @@
   data-hint-line={entry.hint.lineNumber}
   data-dependencies={[...new Set(linkedItems.map((item) => item.id))].join(",")}
   data-path-source-ids={sourceIds.join(",")}
-  title={`${entry.hint.left.name} to ${entry.hint.right.name}\n${label}${itemSummary}\nRight-click to remove hint`}
+  title={`${areaNames.join(" and ")} to ${entry.hint.right.name}\n${label}${itemSummary}\nRight-click to remove hint`}
   oncontextmenu={(event) => { event.preventDefault(); removeHintLine(entry.hint.lineNumber); }}
 >
   <span class="sphere-path-header">

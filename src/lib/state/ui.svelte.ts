@@ -1,4 +1,4 @@
-import { MARK_STARTING_KEY } from "$lib/constants";
+import { MARK_STARTING_KEY, PENDING_LOCATION_KEY } from "$lib/constants";
 // Transient, per-window UI state - the Svelte equivalent of the original
 // app's module-level `let` variables for things like drag state and popups
 // (dev/app/app.js:499-529). Populated incrementally as each feature that
@@ -9,7 +9,9 @@ import { MARK_STARTING_KEY } from "$lib/constants";
 
 export interface LocationDropListState {
   areaName: string;
-  targetKind: "sector" | "area";
+  /** "all" lists every location found so far, across every area, and
+   *  "all-entrances" does the same for entrances. */
+  targetKind: "sector" | "area" | "all" | "all-entrances";
   x: number;
   y: number;
 }
@@ -24,6 +26,23 @@ export interface ItemDragState {
   image?: string;
   x: number;
   y: number;
+}
+
+function readPendingLocation(): string | null {
+  try {
+    return localStorage.getItem(PENDING_LOCATION_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingLocation(location: string | null): void {
+  try {
+    if (location) localStorage.setItem(PENDING_LOCATION_KEY, location);
+    else localStorage.removeItem(PENDING_LOCATION_KEY);
+  } catch {
+    // A window that cannot persist still arms locally.
+  }
 }
 
 function readMarkStartingMode(): boolean {
@@ -53,7 +72,7 @@ export const ui: {
    * its coordinates multiplied by that zoom, so anchoring them to pointer
    * coordinates only works outside every scaled section.
    */
-  requirementTooltip: { location: string; x: number; y: number } | null;
+  requirementTooltip: { location: string; x: number; y: number; kind: "location" | "entrance" } | null;
   /**
    * "Mark starting" - while on, clicking an item in the Item Tracker records
    * it as one of the seed's random starting items instead of acquiring it.
@@ -61,14 +80,31 @@ export const ui: {
    * Tracker, since that is when a run's starting items get entered.
    */
   markStartingMode: boolean;
+  /**
+   * While on, clicking a sector flags it as leading to a required boss
+   * instead of opening its location list.
+   */
+  highlightSectorMode: boolean;
+  /**
+   * The entrance the pointer is over, shown as its vanilla wiring - what that
+   * door would have been without entrance randomizer. Mirrors upstream's
+   * tracker_display_current_entrance, which writes it beside the map.
+   */
+  /** Full name of the list row under the pointer, shown under the item grid. */
+  hoveredRowName: string;
+  /** Item whose copies are being offered for removal, if any. */
+  itemCardPicker: string | null;
 } = $state({
   dataStatus: "Loading data...",
   locationDropList: null,
-  pendingLocationForItemAssignment: null,
+  pendingLocationForItemAssignment: readPendingLocation(),
   pendingEntranceAssignment: null,
   itemDrag: null,
   requirementTooltip: null,
-  markStartingMode: readMarkStartingMode()
+  markStartingMode: readMarkStartingMode(),
+  highlightSectorMode: false,
+  hoveredRowName: "",
+  itemCardPicker: null
 });
 
 /**
@@ -97,8 +133,13 @@ export function reloadMarkStartingModeFromStorage(): void {
   ui.markStartingMode = readMarkStartingMode();
 }
 
-export function showRequirementTooltip(location: string, x: number, y: number): void {
-  ui.requirementTooltip = { location, x, y };
+export function showRequirementTooltip(
+  location: string,
+  x: number,
+  y: number,
+  kind: "location" | "entrance" = "location"
+): void {
+  ui.requirementTooltip = { location, x, y, kind };
 }
 
 export function hideRequirementTooltip(): void {
@@ -139,6 +180,24 @@ export function openLocationDropList(areaName: string, targetKind: "sector" | "a
   ui.locationDropList = { areaName, targetKind, x, y };
 }
 
+/** Every location found so far, in one list. */
+export function openAllLocationsList(): void {
+  if (ui.locationDropList?.targetKind === "all") {
+    closeLocationDropList();
+    return;
+  }
+  ui.locationDropList = { areaName: "", targetKind: "all", x: 0, y: 0 };
+}
+
+/** The same for entrances - the real tracker's "View All Entrances". */
+export function openAllEntrancesList(): void {
+  if (ui.locationDropList?.targetKind === "all-entrances") {
+    closeLocationDropList();
+    return;
+  }
+  ui.locationDropList = { areaName: "", targetKind: "all-entrances", x: 0, y: 0 };
+}
+
 export function closeLocationDropList(): void {
   ui.locationDropList = null;
   // The list can close while a location is hovered (assigning an item closes
@@ -153,8 +212,42 @@ export function closeLocationDropList(): void {
 /** Right-clicking the same location again clears the highlight. */
 export function armLocationForItemAssignment(location: string): void {
   ui.pendingLocationForItemAssignment = ui.pendingLocationForItemAssignment === location ? null : location;
+  // Mirrored for the other windows: the location is armed from the map, and
+  // the item that answers it is often a card on a popped-out Sphere Board,
+  // which is a separate runtime with its own copy of this state.
+  writePendingLocation(ui.pendingLocationForItemAssignment);
 }
 
 export function clearPendingLocationForItemAssignment(): void {
   ui.pendingLocationForItemAssignment = null;
+  writePendingLocation(null);
+}
+
+/** Re-read after another window wrote the key (storage-sync). */
+export function reloadPendingLocationFromStorage(): void {
+  ui.pendingLocationForItemAssignment = readPendingLocation();
+}
+
+export function openItemCardPicker(itemName: string): void {
+  ui.itemCardPicker = itemName;
+}
+
+export function closeItemCardPicker(): void {
+  ui.itemCardPicker = null;
+}
+
+export function showHoveredRowName(name: string): void {
+  ui.hoveredRowName = name;
+}
+
+export function clearHoveredRowName(): void {
+  ui.hoveredRowName = "";
+}
+
+export function setHighlightSectorMode(active: boolean): void {
+  ui.highlightSectorMode = active;
+}
+
+export function toggleHighlightSectorMode(): void {
+  ui.highlightSectorMode = !ui.highlightSectorMode;
 }

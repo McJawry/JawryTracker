@@ -5,12 +5,38 @@
 // re-exposes that as a normal TypeScript import.
 import "./sphere-engine.js";
 
+/** One side of an entrance: walking from `parent` into `connected`. */
+export interface EntranceSide {
+  parent: string;
+  connected: string;
+}
+
+/** A row of entrance_shuffle_table.yaml - a two-way entrance and its type. */
+export interface EntranceTableEntry {
+  type: string;
+  forward: EntranceSide;
+  reverse: EntranceSide | null;
+}
+
+/** An area of world.yaml, as far as the entrance tracker needs it. */
+export interface SphereArea {
+  name: string;
+  island: string;
+  dungeon: string;
+  hintRegion: string;
+  dungeonStartingRoom: string;
+  exits: Record<string, { name: string; need: unknown }>;
+  [key: string]: unknown;
+}
+
 export interface SphereWorld {
-  areas: Record<string, unknown>;
+  areas: Record<string, SphereArea>;
   locations: Record<string, unknown>;
   dungeonStarts: Record<string, string>;
   chartMacroByIsland: Record<string, string>;
   startArea: string;
+  shuffleEntrances?: EntranceTableEntry[];
+  shuffleEntranceByEdge?: Record<string, { entry: EntranceTableEntry; side: EntranceSide }>;
   [key: string]: unknown;
 }
 
@@ -49,6 +75,8 @@ export interface SphereCalculationInput {
   chartMappings?: Record<string, string>;
   startingIsland?: string;
   additionalStartAreas?: string[];
+  /** Events already known to have happened, e.g. "Gohma Defeated". */
+  additionalEvents?: string[];
   includeDependencies?: boolean;
 }
 
@@ -71,6 +99,10 @@ interface WWRSphereEngineApi {
   ): ParsedLogicData;
   parseConfig(configText: string): Record<string, unknown>;
   getReachableLocations(input: SphereCalculationInput): string[];
+  /** Areas the given inventory can reach, normalized. */
+  getAccessibleAreas(input: SphereCalculationInput): Set<string>;
+  /** Exits usable right now, keyed "Parent -> Connected", normalized. */
+  getTraversableExits(input: SphereCalculationInput): Set<string>;
   calculate(input: SphereCalculationInput): SphereCalculationResult;
   compileExpression(expression: unknown): ExpressionNode;
   classifyAtom(atom: string): AtomClassification;
@@ -90,6 +122,10 @@ interface WWRSphereEngineApi {
     startingIsland: string;
     additionalStartAreas?: string[];
   }): Record<string, unknown>;
+  /** Whether a seed's settings shuffle the given entrance type. */
+  isShuffleTypeEnabled(type: string, options: Record<string, unknown>): boolean;
+  /** Normalized dungeon name -> the sector it sits on with vanilla entrances. */
+  VANILLA_DUNGEON_SECTORS: Record<string, string>;
 }
 
 /** Parsed requirement expression: a binary and/or tree over leaf atoms. */
@@ -131,4 +167,6 @@ declare global {
   }
 }
 
-export const WWRSphereEngine: WWRSphereEngineApi = window.WWRSphereEngine;
+// globalThis rather than window: identical in the webview, and it lets the
+// logic-only test suites load the engine outside a DOM.
+export const WWRSphereEngine: WWRSphereEngineApi = (globalThis as unknown as Window).WWRSphereEngine;

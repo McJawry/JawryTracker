@@ -20,12 +20,18 @@ export interface SphereAnalysisCache {
    * showing red. See computeInventoryReachableKeys() in sphere-worker-client.
    */
   inventoryReachableKeys: Set<string> | null;
+  /**
+   * Everything needed to finish the run is in hand - see computeGoMode() in
+   * sphere-worker-client. Kept beside the other derived sets because it is the
+   * same reachability question asked once more with a different inventory.
+   */
+  goMode: boolean;
   pending: boolean;
   dependenciesReady: boolean;
 }
 
 function emptyCache(): SphereAnalysisCache {
-  return { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, pending: false, dependenciesReady: false };
+  return { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, goMode: false, pending: false, dependenciesReady: false };
 }
 
 // Reactive - any Svelte component reading this re-renders automatically when

@@ -57,3 +57,12 @@ function emptyReferenceData(): ReferenceData {
 }
 
 export const data: ReferenceData = $state(emptyReferenceData());
+
+/**
+ * Whether the randomizer's config.yaml has moved on since the last Sync.
+ *
+ * Its own object rather than a field on `data`: that one is replaced wholesale
+ * every time logic loads, and this outlives a reload of it. Filled in by
+ * refreshRandoConfigChanged (tauri/rando-sync.ts).
+ */
+export const randoConfig = $state({ changedSinceSync: false });

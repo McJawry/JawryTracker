@@ -15,6 +15,13 @@ export interface Hint {
   line: string;
   lineNumber: number;
   left: HintSide;
+  /**
+   * Every area a path hint names. Usually one, and `left` is always the first
+   * of them; a hint like "Pawprint Isle and Forest Haven to Gohdan" names two,
+   * meaning the path item sits somewhere both of them can reach - one item, not
+   * one each.
+   */
+  areas?: string[];
   right: HintSide;
   title: string;
   detail: string;
@@ -71,9 +78,14 @@ export function registerHintsParser(parser: (text: string) => Hint[]): void {
 
 // Ported from updateFromInput() (dev/app/app.js:5758) - the hint-notes half;
 // renderGrid()/resizeHintInput() are handled by Svelte's own reactivity.
-export function updateHintsFromNotes(options: { recordHistory?: boolean } = {}): void {
+export function updateHintsFromNotes(options: { recordHistory?: boolean; save?: boolean } = {}): void {
   if (hintsParser) hints.splice(0, hints.length, ...hintsParser(hintNotes.value));
-  saveHintNotes();
+  // `save: false` is for re-parsing notes that came *from* storage. Writing
+  // them straight back would fire a storage event in every other window, each
+  // of which would write back in turn - with several windows open that echo
+  // storm lands back in the one being typed in and overwrites the textarea
+  // mid-keystroke, which reads as the text typing and deleting itself.
+  if (options.save !== false) saveHintNotes();
   saveStatus.value = "Saved locally";
   if (options.recordHistory !== false) pushHistory(hintNotes.value);
 }
@@ -117,4 +129,49 @@ export function redoNotes(): void {
 export function initHintsHistory(): void {
   pushHistory(hintNotes.value);
   updateHistoryButtons();
+}
+
+/**
+ * Notes are one shared buffer across windows, so an edit made elsewhere has to
+ * land here somehow - but not while someone is mid-sentence in this window.
+ * The editor holds its own text while focused and the incoming value waits.
+ */
+let notesEditorFocused = false;
+let notesValueAtFocus = "";
+let pendingRemoteNotes: string | null = null;
+
+export function setNotesEditorFocused(focused: boolean): void {
+  if (focused) {
+    notesEditorFocused = true;
+    notesValueAtFocus = hintNotes.value;
+    pendingRemoteNotes = null;
+    return;
+  }
+
+  notesEditorFocused = false;
+  const pending = pendingRemoteNotes;
+  pendingRemoteNotes = null;
+  if (pending === null) return;
+
+  if (hintNotes.value === notesValueAtFocus) {
+    // Focused but never typed in, so the other window's version is simply the
+    // newer one and there is nothing here to lose.
+    hintNotes.value = pending;
+    updateHintsFromNotes({ recordHistory: false, save: false });
+    return;
+  }
+
+  // Typed in here, so this text wins - and every other window is still showing
+  // the version that arrived while typing, so publish to bring them back in line.
+  updateHintsFromNotes({ recordHistory: false });
+}
+
+/** Notes changed in another window. */
+export function applyRemoteHintNotes(value: string): void {
+  if (notesEditorFocused) {
+    pendingRemoteNotes = value;
+    return;
+  }
+  hintNotes.value = value;
+  updateHintsFromNotes({ recordHistory: false, save: false });
 }

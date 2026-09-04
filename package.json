@@ -1,6 +1,6 @@
 {
   "name": "ww-rando-hint-tracker",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Wind Waker HD Randomizer Hint Tracker",
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
     "build:app": "tauri build && node scripts/collect-build.mjs",
-    "collect": "node scripts/collect-build.mjs"
+    "collect": "node scripts/collect-build.mjs",
+    "test": "vitest run"
   },
   "license": "MIT",
   "dependencies": {
@@ -30,7 +31,8 @@
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^4.1.11"
   },
   "allowScripts": {
     "esbuild@0.25.12": true

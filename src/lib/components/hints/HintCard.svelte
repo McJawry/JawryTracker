@@ -27,15 +27,26 @@
     hint.needsReview ? "Review" : hint.type === "path" ? "Path" : hint.type === "barren" ? "Foolish" : hint.requirement ? hint.requirement.label : labelForType(hint.type)
   );
 
+  /**
+   * A hint can name a dozen areas when one interior has that many doors into
+   * it. Spelling them all out buries the card, so past a handful it says how
+   * many - the full list stays on the card's tooltip.
+   */
+  function areaSummary(areas: string[]): string {
+    return areas.length > 3 ? `${areas.length} areas` : areas.join(" and ");
+  }
+
   const leftBadge = $derived(getItemNumberBadge(hint.left.name));
   const showLeftStatus = $derived(Boolean(hint.requirement || hint.needsReview));
 </script>
 
 <article class={cardClass} oncontextmenu={(event) => { event.preventDefault(); removeHintLine(hint.lineNumber); }}>
   <div class="hint-flow">
-    {@render side(hint.left, "left")}
+    <!-- A path hint can name more than one area, and each of them is part of
+         what the hint said - showing only the first read as a different hint. -->
+    {@render side(hint.type === "path" && hint.areas && hint.areas.length > 1 ? { ...hint.left, name: areaSummary(hint.areas) } : hint.left, "left")}
     <img class="hint-arrow" src={miscImage("Arrow")} alt="to" />
-    {@render side(hint.right, "right")}
+    {@render side(hint.type !== "path" && hint.areas && hint.areas.length > 1 ? { ...hint.right, name: areaSummary(hint.areas) } : hint.right, "right")}
   </div>
   <div class="hint-meta">
     <span class="hint-status {statusClass}">{statusText}</span>
@@ -44,7 +55,8 @@
 </article>
 
 {#snippet side(hintSide: HintSide, position: "left" | "right")}
-  <div class="hint-side {position} {hintSide.kind}">
+  <!-- The full list of areas when the label had to summarise them. -->
+  <div class="hint-side {position} {hintSide.kind}" title={hint.areas && hint.areas.length > 3 ? hint.areas.join(", ") : undefined}>
     {#if hintSide.image}
       {#if hintSide.kind === "boss"}
         <!-- Portrait only: the artwork identifies the boss, and the name

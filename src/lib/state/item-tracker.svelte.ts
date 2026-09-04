@@ -7,6 +7,7 @@
 // the exact stage lists live in a Qt Designer .ui file upstream rather than
 // plain source. Stage 0 is always "not acquired" (the *_gray asset).
 import { ITEM_STORAGE_KEY } from "$lib/constants";
+import { DUNGEON_KEY_LOGIC } from "$lib/gameData";
 
 export interface ItemStageTable {
   stages: string[]; // asset stems under static/assets/tracker/, no extension
@@ -76,7 +77,15 @@ export const ITEM_STAGE_TABLES: Record<string, ItemStageTable> = {
 
 export function getItemMaxStage(itemName: string): number {
   const table = ITEM_STAGE_TABLES[itemName];
-  return table ? table.stages.length - 1 : 1;
+  if (table) return table.stages.length - 1;
+  // A dungeon's small keys are one item held several times over, and how many
+  // depends on the dungeon. Without this they fell to the default of 1, so
+  // recording a second key wrapped the count back to zero - and because
+  // placements are trimmed to the count, that deleted the location of every
+  // key in that dungeon, not just the new one.
+  const keys = DUNGEON_KEY_LOGIC.find((entry) => itemName.toLowerCase() === `${entry.dungeon} Small Key`.toLowerCase());
+  if (keys) return keys.smallKeyCount;
+  return 1;
 }
 
 function loadItemTrackerState(): Record<string, number> {

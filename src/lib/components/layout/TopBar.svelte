@@ -9,7 +9,8 @@
   import { resetItemTrackerState } from "$lib/state/item-tracker.svelte";
   import { openPopoutWindow } from "$lib/tauri/popout-window";
   import { HIDEABLE_SECTIONS, SECTION_META } from "$lib/section-meta";
-  import { markUndocked } from "$lib/state/undocked.svelte";
+  import { markDocked, markUndocked, undockedState } from "$lib/state/undocked.svelte";
+  import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { openPopoutForSection } from "$lib/tauri/popout-geometry";
   import UpdateNotice from "./UpdateNotice.svelte";
 
@@ -51,13 +52,35 @@
     setMarkStartingMode(true);
   }
 
-  // A section is hidden from its own title bar's X button
-  // (DockableSection.svelte), which removes that title bar from the layout -
-  // so the only way back is from here.
-  const hiddenSections = $derived(HIDEABLE_SECTIONS.filter((section) => !settings.sectionVisibility[section.visibilityKey]));
+  // Every panel keeps a button here whether it is open or not, so the control
+  // panel always shows the full set and one click closes what is open. An
+  // undocked panel counts as open: it is visible, just in its own window.
+  const isSectionOpen = (visibilityKey: keyof typeof settings.sectionVisibility) =>
+    Boolean(settings.sectionVisibility[visibilityKey]);
 
-  // Restoring a hidden section splits into Dock/Undock so bringing one back
-  // as its own window doesn't need a dock-then-undock round trip.
+  // The two places a panel can be, tracked independently: it can sit in the
+  // layout, in its own window, in both at once, or in neither. Each button
+  // reports and toggles only its own place, so opening one never disturbs the
+  // other.
+  const isDocked = (section: { id: string; visibilityKey: keyof typeof settings.sectionVisibility }) =>
+    isSectionOpen(section.visibilityKey);
+  const isUndocked = (section: { id: string; visibilityKey: keyof typeof settings.sectionVisibility }) =>
+    undockedState.ids.includes(section.id);
+
+  /** Closes a section's window if it has one. Safe when there is none. */
+  async function closePopoutFor(sectionId: string) {
+    const meta = SECTION_META[sectionId];
+    if (!meta?.popout) return;
+    markDocked(sectionId);
+    try {
+      const popout = await WebviewWindow.getByLabel(meta.popout.label);
+      await popout?.close();
+    } catch (error) {
+      console.error(`Could not close the ${sectionId} popout`, error);
+    }
+  }
+
+  /** Shows the panel in the layout. Leaves any window it has alone. */
   function dockSection(sectionId: string) {
     const meta = SECTION_META[sectionId];
     if (!meta?.visibilityKey) return;
@@ -65,13 +88,18 @@
     saveSettings();
   }
 
-  function undockSection(sectionId: string) {
+  /** Takes the panel out of the layout. Leaves any window it has alone. */
+  function closeDockedSection(sectionId: string) {
     const meta = SECTION_META[sectionId];
     if (!meta?.visibilityKey) return;
-    // Visible *and* undocked: a hidden section has no title bar to pop out
-    // from, so its window is opened directly.
-    settings.sectionVisibility[meta.visibilityKey] = true;
+    settings.sectionVisibility[meta.visibilityKey] = false;
     saveSettings();
+  }
+
+  /** Opens the panel's own window, whether or not it is also in the layout. */
+  function undockSection(sectionId: string) {
+    const meta = SECTION_META[sectionId];
+    if (!meta?.popout) return;
     markUndocked(sectionId);
     void openPopoutForSection(sectionId);
   }
@@ -79,9 +107,15 @@
 
 <header class="top-bar">
   <div class="top-bar-row">
-    <div>
-      <h1>JawryTracker</h1>
-      <p>v{APP_VERSION}</p>
+    <!-- Start New Tracker sits with the title rather than on the row below,
+         which leaves that row wide enough for every panel entry to fit on one
+         line instead of wrapping onto a second. -->
+    <div class="top-bar-identity">
+      <div>
+        <h1>JawryTracker</h1>
+        <p>v{APP_VERSION}</p>
+      </div>
+      <button class="danger-button" type="button" onclick={startNewTracker}>Start New Tracker</button>
     </div>
     <div class="top-actions">
       <span>{ui.dataStatus}</span>
@@ -90,24 +124,38 @@
     </div>
   </div>
 
-  <div class="top-bar-row hidden-sections-row" aria-label="Layout and run actions">
-    <button class="danger-button" type="button" onclick={startNewTracker}>Start New Tracker</button>
-    {#if hiddenSections.length}
-      <span class="hidden-sections-label">Hidden:</span>
-      {#each hiddenSections as section (section.id)}
-        <!-- Collapsed to a name; hover or keyboard focus reveals the two
-             restore choices. focus-within keeps it reachable by tab. -->
-        <span class="restore-section">
-          <span class="restore-section-name">{section.title}</span>
-          <span class="restore-section-options">
-            <button class="tool-button" type="button" onclick={() => dockSection(section.id)}>Dock</button>
-            <button class="tool-button" type="button" onclick={() => undockSection(section.id)}>Undock</button>
-          </span>
+  <div class="top-bar-row hidden-sections-row" aria-label="Panel layout">
+    <span class="hidden-sections-label">Panels:</span>
+    {#each HIDEABLE_SECTIONS as section (section.id)}
+      {@const docked = isDocked(section)}
+      {@const undocked = isUndocked(section)}
+      <!-- Every panel keeps an entry, open or not. Collapsed to a name; hover
+           or keyboard focus reveals the two choices, and whichever one is
+           where the panel already is wears a cross and closes it. -->
+      <span class="restore-section">
+        <span class="restore-section-name">{section.title}</span>
+        <span class="restore-section-options">
+          <button
+            class="tool-button section-toggle"
+            class:open={docked}
+            type="button"
+            title={docked ? `Remove ${section.title} from the layout` : `Show ${section.title} in the layout`}
+            onclick={() => (docked ? closeDockedSection(section.id) : dockSection(section.id))}
+          >
+            Dock
+          </button>
+          <button
+            class="tool-button section-toggle"
+            class:open={undocked}
+            type="button"
+            title={undocked ? `Close the ${section.title} window` : `Open ${section.title} in its own window`}
+            onclick={() => (undocked ? closePopoutFor(section.id) : undockSection(section.id))}
+          >
+            Undock
+          </button>
         </span>
-      {/each}
-    {:else}
-      <span class="hidden-sections-label">All sections visible</span>
-    {/if}
+      </span>
+    {/each}
   </div>
 
   <UpdateNotice />

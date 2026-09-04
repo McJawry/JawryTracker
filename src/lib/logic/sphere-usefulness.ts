@@ -12,6 +12,10 @@
  *   "Paths + required" also shows what beating the game depends on, worked out
  *                      transitively: the items needed to reach Ganondorf, then
  *                      the items needed to reach wherever those sit, and so on.
+ *                      It keeps an item whose branch is still unfinished too -
+ *                      hiding one is a claim that nothing down its path helps
+ *                      beat the game, and that can only be claimed once every
+ *                      location it opens has actually been checked.
  *
  * The requirement walk seeds every dungeon's start area, the same trick
  * isLogicRequiredItemForLocation uses for dungeon interiors. Without it an
@@ -24,8 +28,11 @@ import type { SphereFilters } from "$lib/constants";
 import {
   getMaximalSphereLogicInventory,
   getSphereInventoryItemKey,
-  getSphereReachabilityWithOwnDungeonKeys
+  getSphereReachabilityWithOwnDungeonKeys,
+  getTraversableExitsWith
 } from "$lib/logic/sphere-calculation";
+import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
+import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
 import { data } from "$lib/state/data.svelte";
 import { type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -78,7 +85,7 @@ function getDungeonStartAreas(): string[] {
  * walk itself is only set lookups: with all dungeon starts seeded, "how many
  * copies of K does location L need" is the first count whose set contains L.
  */
-async function getTransitivelyRequiredPlacementIds(placements: SpherePlacement[], sphereLocations: string[][]): Promise<Set<string>> {
+async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[], sphereLocations: string[][]): Promise<Set<string>> {
   const required = new Set<string>();
   const additionalStartAreas = getDungeonStartAreas();
   const maximalInventory = getMaximalSphereLogicInventory();
@@ -149,6 +156,45 @@ async function getTransitivelyRequiredPlacementIds(placements: SpherePlacement[]
       });
     }
   }
+
+  // A sector marked as holding a required boss says the doors on the way there
+  // have to be opened to finish the run, so whatever they depend on is required.
+  // See getRequiredBossDoors for which doors those are before the boss is found.
+  const bossDoors = getRequiredBossDoors();
+  if (bossDoors.length) {
+    const openable = getTraversableExitsWith(maximalInventory);
+    const doorKeys = bossDoors
+      .map((door) => normalize(`${door.parent} -> ${door.connected}`))
+      .filter((door) => openable.has(door));
+
+    for (const [itemKey, holders] of placementsByItemKey) {
+      if (!doorKeys.length) break;
+      const without = getTraversableExitsWith(maximalInventory.filter((item) => getSphereInventoryItemKey(item) !== itemKey));
+      if (doorKeys.some((door) => !without.has(door))) holders.forEach((holder) => required.add(holder.id));
+      await yieldToBrowser();
+    }
+  }
+
+  // An item that still opens somewhere unchecked has an unfinished branch, so
+  // whether it leads to anything needed is not yet knowable - and an unknown
+  // is not grounds for hiding it. Once every location it opens has been
+  // checked, the question is settled and the answer above decides.
+  const occupied = new Set(placements.map((placement) => normalize(placement.location)));
+  const unchecked = getAvailableLocations().filter((location) => {
+    const key = normalize(location);
+    return withEverything.has(key) && !occupied.has(key) && !isLocationMarked(location);
+  });
+
+  for (const [itemKey, holders] of placementsByItemKey) {
+    const sets = reachableWithCopies.get(itemKey);
+    if (!sets) continue;
+    // Index 0 means that location is reachable without the item, so it is not
+    // one this item opens; -1 means out of reach either way.
+    const opensSomethingUnchecked = unchecked.some((location) => sets.findIndex((set) => set.has(normalize(location))) > 0);
+    if (opensSomethingUnchecked) holders.forEach((holder) => required.add(holder.id));
+    await yieldToBrowser();
+  }
+
   return required;
 }
 
@@ -180,7 +226,7 @@ export async function computeHiddenPlacementIds({
   const visible = new Set(pathChainIds);
 
   if (filters.pathsAndRequired) {
-    (await getTransitivelyRequiredPlacementIds(placements, sphereLocations)).forEach((id) => visible.add(id));
+    (await getRequiredAndUnfinishedPlacementIds(placements, sphereLocations)).forEach((id) => visible.add(id));
   }
 
   const keyPlacements = placements.filter((placement) => isDungeonKeyItem(placement.item));

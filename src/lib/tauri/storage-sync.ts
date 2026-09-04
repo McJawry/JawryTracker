@@ -4,12 +4,12 @@
 // one writes to localStorage - so re-hydrating the matching reactive state
 // module from that event gives every window live updates for free, without
 // a custom cross-window IPC broadcast layer.
-import { STORAGE_KEY, CHECKED_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, ITEM_STORAGE_KEY, MARK_STARTING_KEY } from "$lib/constants";
+import { STORAGE_KEY, CHECKED_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, ITEM_STORAGE_KEY, MARK_STARTING_KEY, PENDING_LOCATION_KEY } from "$lib/constants";
 import { sphere, loadSphereState } from "$lib/state/sphere.svelte";
-import { reloadMarkStartingModeFromStorage } from "$lib/state/ui.svelte";
+import { reloadMarkStartingModeFromStorage, reloadPendingLocationFromStorage } from "$lib/state/ui.svelte";
 import { settings, readStoredSettings, mergeSettings } from "$lib/state/settings.svelte";
 import { checked, loadChecked } from "$lib/state/checked.svelte";
-import { hintNotes, updateHintsFromNotes } from "$lib/state/hints.svelte";
+import { applyRemoteHintNotes } from "$lib/state/hints.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { LAYOUT_KEY, reloadLayoutFromStorage } from "$lib/state/layout.svelte";
 import { UNDOCKED_KEY, reloadUndockedFromStorage } from "$lib/state/undocked.svelte";
@@ -31,6 +31,11 @@ export function initStorageSync(): void {
       // Tracker it applies to can be a different window.
       case MARK_STARTING_KEY:
         reloadMarkStartingModeFromStorage();
+        break;
+      // A location armed on the map is answered by clicking an item, and that
+      // item may be a card on a Sphere Board in another window.
+      case PENDING_LOCATION_KEY:
+        reloadPendingLocationFromStorage();
         break;
       case SPHERE_STORAGE_KEY:
         Object.assign(sphere, loadSphereState());
@@ -71,8 +76,9 @@ export function initStorageSync(): void {
         break;
       }
       case STORAGE_KEY:
-        hintNotes.value = event.newValue || "";
-        updateHintsFromNotes({ recordHistory: false });
+        // Re-parses without saving (saving would echo back to every window),
+        // and defers the update while this window's notes editor has focus.
+        applyRemoteHintNotes(event.newValue || "");
         break;
       // Both of these matter most for the Settings window, which lives in its
       // own runtime: without them it saved presets from whatever layout and

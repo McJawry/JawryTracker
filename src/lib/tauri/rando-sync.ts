@@ -10,7 +10,7 @@ import { readTextFile, exists } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { WWRSphereEngine } from "$lib/logic";
 import { settings, saveSettings } from "$lib/state/settings.svelte";
-import { data } from "$lib/state/data.svelte";
+import { data, randoConfig } from "$lib/state/data.svelte";
 import { sphere, saveSphereState } from "$lib/state/sphere.svelte";
 import { applySphereLogic, loadBundledSphereLogic, getRandomStartingItemCount } from "$lib/logic/sphere-logic-loading";
 import { getYamlBoolean, getYamlListSection } from "$lib/logic/yaml-helpers";
@@ -73,6 +73,37 @@ export interface RandoSyncResult {
 // and syncRandoFolder() (re-read from the already-remembered folder) so the
 // user doesn't have to re-pick the same folder every time they want to
 // re-sync after adjusting the seed's config.
+/**
+ * Whether config.yaml on disk has moved on since the last Sync.
+ *
+ * restoreRandoSync deliberately replays the *saved* config rather than
+ * re-reading the file, so a seed generated mid-run cannot silently swap the
+ * settings underneath you - picking up a change stays an explicit Sync click.
+ * The cost of that is not noticing there is anything to pick up, which is what
+ * this answers: the Sync button wears a warning until you press it.
+ *
+ * Read on demand rather than polled - the excluded live-tracking feature is
+ * exactly what this tracker replaces - so callers refresh it when the window
+ * is looked at again, which is when a new seed would have been generated.
+ */
+export async function refreshRandoConfigChanged(): Promise<void> {
+  const folder = isTauriRuntime() ? settings.randoFolderPath : null;
+  const synced = settings.randoConfigText;
+  // Nothing synced yet means nothing to have drifted from.
+  if (!folder || !synced) {
+    randoConfig.changedSinceSync = false;
+    return;
+  }
+  try {
+    const onDisk = await readTextFile(await join(folder, "config.yaml"));
+    randoConfig.changedSinceSync = onDisk.trim() !== synced.trim();
+  } catch {
+    // An unreachable folder is a different problem, and not one a warning on
+    // the Sync button would describe.
+    randoConfig.changedSinceSync = false;
+  }
+}
+
 export async function changeRandoFolder(): Promise<RandoSyncResult> {
   if (!isTauriRuntime()) {
     return { ok: false, message: "Rando folder sync requires the Tauri desktop app." };
@@ -162,8 +193,9 @@ async function syncFromFolder(folder: string): Promise<RandoSyncResult> {
     saveSphereState();
   }
 
-  settings.showHoHo = hoHoHints;
-  settings.showBlueChu = progressionSpoilsTrading && progressionLongSidequests && !potionShopExcluded;
+  // Whether these are trackable at all is read from the seed where it is
+  // needed (map-icons.ts), so syncing no longer overwrites the user's own
+  // show/hide choice with the config's.
   settings.startingGearShards = getStartingGearShards(configText);
   // data.svelte.ts is in-memory only and every window rebuilds it from the
   // bundled logic on mount, so without keeping the config text the sync only

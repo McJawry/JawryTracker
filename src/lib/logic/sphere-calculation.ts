@@ -9,6 +9,13 @@ import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } f
 import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getAvailableLocations } from "$lib/logic/locations";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+import { getTriforceShardNumber, TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
+import { getEffectiveEntranceMappings, getEntranceConnection, getEntrancesForArea } from "$lib/logic/entrances";
+// entrance-paths imports getSphereTraversableExitSet from here in turn. The
+// cycle is only ever walked at call time - neither module runs the other's
+// code while it is still loading - and the alternative was a second copy of
+// the walk that finds the boss behind a marked sector.
+import { getDefeatedBossEvents, getRequiredBossOptions } from "$lib/logic/entrance-paths";
 import { data } from "$lib/state/data.svelte";
 import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -24,11 +31,20 @@ export function getDungeonSmallKeyName(item: string, location = ""): string {
   return locationDungeon ? `${locationDungeon} Small Key` : "";
 }
 
+/**
+ * Names the logic uses for items the pool and the item grid call something
+ * else. Kept in step with the engine's own INVENTORY_COUNT_ALIASES: anything
+ * missing here reads as an item you do not own, which is how a held Bomb came
+ * out red in the requirement tooltip.
+ */
 const ITEM_KEY_ALIASES: Record<string, string> = {
   bomb: "bombs",
   sail: "progressive sail",
+  "boats sail": "progressive sail",
   "bomb bag": "progressive bomb bag",
   quiver: "progressive quiver",
+  "tingle tuner": "tingle bottle",
+  "magic meter": "progressive magic meter",
   "magic meter upgrade": "progressive magic meter"
 };
 
@@ -55,6 +71,30 @@ export function getSphereBlueChuJellyCount(): number {
 }
 
 /**
+ * Generic Triforce shards, given the numbers nothing else has taken.
+ *
+ * The logic only knows shards by number - All_8_Shards names all eight - while
+ * the item grid's generic mode counts them without saying which, so a run
+ * tracked that way held eight shards the logic could not see and never opened
+ * Hyrule. Which number a generic shard is standing in for does not matter,
+ * only how many there are, so they fill the gaps in order. Reserved names the
+ * shards recorded at locations, so a generic one never doubles up on a shard
+ * already accounted for; an odd ninth is left generic, being nothing the logic
+ * asks about.
+ */
+function nameGenericShards(items: string[]): string[] {
+  const taken = new Set(items.map(getTriforceShardNumber).filter(Boolean));
+  let next = 1;
+  return items.map((item) => {
+    if (normalize(item) !== "triforce shard") return item;
+    while (next <= TRIFORCE_SHARD_COUNT && taken.has(next)) next += 1;
+    if (next > TRIFORCE_SHARD_COUNT) return item;
+    taken.add(next);
+    return `Triforce Shard ${next}`;
+  });
+}
+
+/**
  * Everything the player is known to hold that isn't tied to a location: the
  * seed's starting gear, Blue Chu Jelly, and anything acquired on the Item
  * Tracker that hasn't been assigned to a location yet.
@@ -64,7 +104,7 @@ export function getSphereBlueChuJellyCount(): number {
  * unless you also told it *where* - and the map's accessible counts and
  * sphere numbers would never move as you check items off.
  */
-export function getSphereLogicStartingGear(): string[] {
+function getRawStartingGear(): string[] {
   return [
     ...data.sphereStartingGear,
     // logicItem where the rules name an item differently from the item pool
@@ -72,6 +112,32 @@ export function getSphereLogicStartingGear(): string[] {
     ...getUnplacedAcquiredItems().map((entry) => entry.logicItem ?? entry.item),
     ...Array(getSphereBlueChuJellyCount()).fill("Blue Chu Jelly")
   ];
+}
+
+/**
+ * Gear and placements together, with every generic Triforce shard given a
+ * number.
+ *
+ * One pass over both, because a shard recorded at a location is as generic as
+ * one still in hand - drop a generic shard on the chest it came from and the
+ * logic would otherwise never see it, which is the sphere calculation's whole
+ * account of that item. Numbering them in one go is also what keeps two of
+ * them from claiming the same number.
+ */
+function numberedShardInventory(placements: SpherePlacement[]): { gear: string[]; placements: SpherePlacement[] } {
+  const gear = getRawStartingGear();
+  const named = nameGenericShards([...gear, ...placements.map((placement) => placement.item)]);
+  return {
+    gear: named.slice(0, gear.length),
+    placements: placements.map((placement, index) => {
+      const item = named[gear.length + index];
+      return item === placement.item ? placement : { ...placement, item };
+    })
+  };
+}
+
+export function getSphereLogicStartingGear(): string[] {
+  return numberedShardInventory(sphere.placements).gear;
 }
 
 /**
@@ -88,32 +154,71 @@ export function getSphereLogicStartingGear(): string[] {
  * even though the item was in hand.
  */
 export function getOwnedInventory(): string[] {
+  const inventory = numberedShardInventory(sphere.placements);
   return [
-    ...getSphereLogicStartingGear(),
-    ...sphere.placements.map((placement) => getDungeonSmallKeyName(placement.item, placement.location) || placement.item)
+    ...inventory.gear,
+    ...inventory.placements.map((placement) => getDungeonSmallKeyName(placement.item, placement.location) || placement.item)
   ];
 }
 
 export function getSphereCalculationInput(placements: SpherePlacement[], includeDependencies = true): SphereCalculationInput {
+  const inventory = numberedShardInventory(placements);
   return {
     locations: getAvailableLocations(),
     rules: data.sphereRules,
     macros: data.sphereMacros,
     world: data.sphereWorld,
-    placements,
-    startingGear: getSphereLogicStartingGear(),
+    placements: inventory.placements,
+    startingGear: inventory.gear,
     options: data.sphereOptions,
-    entranceMappings: Object.fromEntries(Object.entries(sphere.entranceMappings).map(([name, sector]) => [normalize(name), sector])),
-    entranceConnections: {},
+    entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
+    entranceConnections: { ...sphere.entranceConnections },
     chartMappings: {},
     startingIsland: data.sphereStartingIsland,
     includeDependencies
   };
 }
 
+/**
+ * Which bosses this run has to beat and which are already down.
+ *
+ * Deliberately not folded into getSphereCalculationInput: working out which
+ * boss a marked sector hides walks the entrance graph, and that walk asks
+ * getSphereTraversableExitSet, which builds an input of its own - so deriving
+ * the boss state there would call itself forever. It is added at the outer
+ * questions instead, the ones it can actually change the answer to. Nothing
+ * inside the walk turns on it: the only exit the logic gates on required
+ * bosses is Ganon's Tower's final staircase, which is neither a shuffled door
+ * nor a dungeon a savewarp can reach.
+ */
+function getRequiredBossState(): { options: Record<string, unknown>; additionalEvents: string[] } {
+  return {
+    options: { ...data.sphereOptions, ...getRequiredBossOptions() },
+    additionalEvents: getDefeatedBossEvents()
+  };
+}
+
+/**
+ * The sphere calculation's input, savewarp included.
+ *
+ * Without it a dungeon you walked into through a shuffled door is sealed off as
+ * far as the spheres are concerned - you can savewarp to its entrance room, but
+ * the calculation cannot - so every check inside reads "?" (reachable, but no
+ * sphere the logic will commit to) while the map colours it perfectly
+ * available. Kept apart from getSphereCalculationInput because working out the
+ * savewarp destinations needs that input itself.
+ */
+export function getSphereProgressionInput(placements: SpherePlacement[]): SphereCalculationInput {
+  return {
+    ...getSphereCalculationInput(placements),
+    ...getRequiredBossState(),
+    additionalStartAreas: getSavewarpStartAreas(getOwnedInventory())
+  };
+}
+
 export function calculateSphereProgression(placements: SpherePlacement[]): SphereCalculationResult | null {
   if (!data.sphereLogicLoaded) return null;
-  return WWRSphereEngine.calculate(getSphereCalculationInput(placements));
+  return WWRSphereEngine.calculate(getSphereProgressionInput(placements));
 }
 
 // Module-level, non-reactive cache (not UI state) - cleared by
@@ -131,24 +236,97 @@ const BOSS_LOCATIONS_FOR_REACHABILITY = [
   "Ganon's Tower - Defeat Ganondorf"
 ];
 
-// Entrance mappings belong in the key: they change reachability and, unlike
-// the rules/macros/options, they change *without* a logic reload - so with
-// them missing the only safe thing was to wipe the cache on every tracker
-// change, which made every first hover pay a full cold recompute.
+// Entrance mappings and connections belong in the key: they change
+// reachability and, unlike the rules/macros/options, they change *without* a
+// logic reload - so with them missing the only safe thing was to wipe the
+// cache on every tracker change, which made every first hover pay a full cold
+// recompute.
+//
+// Connections were the half that got left out, and a recorded entrance is the
+// commonest way reachability moves. Writing one down changed what you can get
+// to while every cached answer stayed on the old world: a door you had just
+// opened the way to kept its red, disagreeing with its own tooltip, until some
+// unrelated item click happened to change the key.
 function reachabilityCacheKey(items: string[], options: { additionalStartAreas?: string[] }): string {
   return JSON.stringify({
     items: items.map(normalize).sort(),
     additionalStartAreas: (options.additionalStartAreas || []).map(normalize).sort(),
     startingIsland: normalize(data.sphereStartingIsland),
-    entranceMappings: Object.entries(sphere.entranceMappings)
+    entranceMappings: Object.entries(getEffectiveEntranceMappings())
       .map(([name, sector]) => [normalize(name), normalize(sector)])
-      .sort(([first], [second]) => first.localeCompare(second))
+      .sort(([first], [second]) => first.localeCompare(second)),
+    entranceConnections: Object.entries(sphere.entranceConnections)
+      .map(([name, target]) => [normalize(name), normalize(target)])
+      .sort(([first], [second]) => first.localeCompare(second)),
+    // Which bosses are required and which are down, by what decides them
+    // rather than by the answer: reading getRequiredBossOptions() here would
+    // walk every marked sector on each cache probe, while the marks and the
+    // six heart containers are a couple of lookups. The entrances that turn a
+    // mark into a named boss are already above.
+    highlightedSectors: sphere.highlightedSectors.map(normalize).sort(),
+    defeatedBosses: getDefeatedBossEvents().map(normalize)
   });
 }
 
+/**
+ * Dungeon starting rooms you can savewarp to.
+ *
+ * Reaching any room of a dungeon means you can reach its starting room: dying
+ * or saving and quitting puts you there. The randomizer's logic counts on it,
+ * which is why its tracker calls Earth Temple's front door usable by someone
+ * who has only ever entered at the boss door room - the way back through the
+ * temple does not exist, but the savewarp does.
+ *
+ * Worked to a fixpoint, since savewarping into one dungeon can open the way
+ * into another.
+ */
+const savewarpStartCache = new Map<string, string[]>();
+
+export function getSavewarpStartAreas(items: string[]): string[] {
+  const world = data.sphereWorld;
+  const starts = world?.dungeonStarts ?? {};
+  const dungeonCount = Object.keys(starts).length;
+  if (!dungeonCount) return [];
+
+  const cacheKey = reachabilityCacheKey(items, {});
+  const cached = savewarpStartCache.get(cacheKey);
+  if (cached) return cached;
+  savewarpStartCache.clear();
+
+  // Only the starts you could not otherwise walk to. Seeding one you can
+  // already reach changes no reachability at all, but it does hide the way in:
+  // the Forsaken Fortress courtyard is a bomb away from the sector, and seeding
+  // it made every check inside report only what the room costs, with no mention
+  // of the Bombs that got you there.
+  let baseline: Set<string> | null = null;
+  let seeded: string[] = [];
+  for (let pass = 0; pass <= dungeonCount; pass += 1) {
+    const areas = WWRSphereEngine.getAccessibleAreas({
+      ...getSphereCalculationInput([], false),
+      items,
+      additionalStartAreas: seeded
+    });
+    // Pass 0 runs unseeded, so it is the honest "where can I walk" answer.
+    if (!baseline) baseline = areas;
+    const found = new Set<string>();
+    areas.forEach((areaKey) => {
+      const dungeon = world?.areas?.[areaKey]?.dungeon;
+      const start = dungeon ? starts[normalize(dungeon)] : "";
+      if (start && !baseline!.has(normalize(start))) found.add(start);
+    });
+    if (found.size === seeded.length && seeded.every((area) => found.has(area))) break;
+    seeded = [...found];
+  }
+
+  savewarpStartCache.set(cacheKey, seeded);
+  return seeded;
+}
+
 export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
-  const additionalStartAreas = options.additionalStartAreas || [];
-  const cacheKey = reachabilityCacheKey(items, options);
+  // Savewarp destinations are part of "where can I get to", so they belong
+  // here rather than at each call site - and in the cache key with them.
+  const additionalStartAreas = [...new Set([...(options.additionalStartAreas || []), ...getSavewarpStartAreas(items)])];
+  const cacheKey = reachabilityCacheKey(items, { additionalStartAreas });
   const cached = sphereReachabilityCache.get(cacheKey);
   if (cached) return cached;
 
@@ -163,9 +341,9 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
       world: data.sphereWorld,
       placements: [],
       items,
-      options: data.sphereOptions,
-      entranceMappings: Object.fromEntries(Object.entries(sphere.entranceMappings).map(([name, sector]) => [normalize(name), sector])),
-      entranceConnections: {},
+      ...getRequiredBossState(),
+      entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
+      entranceConnections: { ...sphere.entranceConnections },
       chartMappings: {},
       startingIsland: data.sphereStartingIsland,
       additionalStartAreas
@@ -194,6 +372,67 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
  * reported "Impossible (please discover an entrance first)" for a chest with
  * no entrance randomisation anywhere near it.
  */
+/** Areas the current inventory can reach, for the entrance list's colouring. */
+const sphereAreaCache = new Map<string, Set<string>>();
+
+export function getSphereAccessibleAreaSet(): Set<string> {
+  const items = getOwnedInventory();
+  const key = reachabilityCacheKey(items, {});
+  const cached = sphereAreaCache.get(key);
+  if (cached) return cached;
+  // One entry: the inventory moves as a whole, so an older one is never
+  // wanted again, and areas are recomputed far less often than locations.
+  sphereAreaCache.clear();
+  const areas = WWRSphereEngine.getAccessibleAreas({
+    ...getSphereCalculationInput([], false),
+    items,
+    additionalStartAreas: getSavewarpStartAreas(items)
+  });
+  sphereAreaCache.set(key, areas);
+  return areas;
+}
+
+/**
+ * Whether you can currently get to an area. The entrance list colours a
+ * reachable entrance blue and an unreachable one red, the same way locations
+ * are coloured, and asks about the area the entrance is *in* - where it leads
+ * is unknown until you record it.
+ */
+export function isSphereAreaAccessible(areaName: string): boolean {
+  return getSphereAccessibleAreaSet().has(normalize(areaName));
+}
+
+const sphereExitCache = new Map<string, Set<string>>();
+
+/**
+ * Every door currently openable, as one set. Callers asking about a single
+ * door should use isSphereExitTraversable; this is for the ones that ask about
+ * hundreds at a time (entrance-paths.ts walks the whole world), where building
+ * the inventory and cache key per door dominated everything else. The set is
+ * rebuilt only when the inventory changes, so its identity doubles as a cheap
+ * "have the items moved?" signal.
+ */
+export function getSphereTraversableExitSet(): Set<string> {
+  const items = getOwnedInventory();
+  const key = reachabilityCacheKey(items, {});
+  let exits = sphereExitCache.get(key);
+  if (!exits) {
+    sphereExitCache.clear();
+    exits = WWRSphereEngine.getTraversableExits({
+      ...getSphereCalculationInput([], false),
+      items,
+      additionalStartAreas: getSavewarpStartAreas(items)
+    });
+    sphereExitCache.set(key, exits);
+  }
+  return exits;
+}
+
+/** Whether the door itself can be opened, not just the area it stands in. */
+export function isSphereExitTraversable(parent: string, connected: string): boolean {
+  return getSphereTraversableExitSet().has(normalize(`${parent} -> ${connected}`));
+}
+
 export function getMaximalSphereLogicInventory(): string[] {
   const items: string[] = [];
   data.items.forEach((item) => {
@@ -232,7 +471,7 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
 
   const cacheKey = JSON.stringify({
     locations: getAvailableLocations(),
-    manualEntrances: sphere.entranceMappings,
+    manualEntrances: getEffectiveEntranceMappings(),
     smallKeysOwnDungeon,
     bigKeysOwnDungeon
   });
@@ -342,4 +581,13 @@ export function isLogicRequiredItemForLocation(
   if (sets.skip || !sets.withItem || !sets.without) return false;
   const locationKey = normalize(location);
   return sets.withItem.has(locationKey) && !sets.without.has(locationKey);
+}
+
+/** Exits openable with a given inventory, for asking what a door depends on. */
+export function getTraversableExitsWith(items: string[]): Set<string> {
+  return WWRSphereEngine.getTraversableExits({
+    ...getSphereCalculationInput([], false),
+    items,
+    additionalStartAreas: getSavewarpStartAreas(items)
+  });
 }

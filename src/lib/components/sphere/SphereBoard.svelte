@@ -28,6 +28,7 @@
   import { computeHiddenPlacementIds, isSphereFilterActive } from "$lib/logic/sphere-usefulness";
   import {
     getPathBossProgressEntries,
+    pathHintAreaKey,
     getPathHintCandidates,
     getPathHintSourceIds,
     type PathProgressEntry
@@ -36,7 +37,6 @@
   import SphereAreaGroup from "./SphereAreaGroup.svelte";
   import SphereUnplacedItemNode from "./SphereUnplacedItemNode.svelte";
   import SpherePathPredictionNode from "./SpherePathPredictionNode.svelte";
-  import SphereAcquiredShardNode from "./SphereAcquiredShardNode.svelte";
   import SphereAreaHintNode from "./SphereAreaHintNode.svelte";
   import { shouldExpandSphereGroups, toggleAllSphereGroups } from "$lib/state/sphere-groups.svelte";
   import { drawSphereEdges, applySphereChainFocus } from "./sphere-edges";
@@ -212,7 +212,7 @@
     // asserting one item feeds both bosses.
     const byArea = new Map<string, PathProgressEntry[]>();
     pathProgress.forEach((entry) => {
-      const areaKey = entry.hint.left.name.trim().toLowerCase();
+      const areaKey = pathHintAreaKey(entry.hint);
       if (!byArea.has(areaKey)) byArea.set(areaKey, []);
       byArea.get(areaKey)!.push(entry);
     });
@@ -332,8 +332,10 @@
       );
       // A level that holds only a path card still needs its column.
       const hasPathCard = (pathsByLevel.get(level)?.length ?? 0) > 0;
-      const hasUnknownSphereCards =
-        level === 0 && (unplacedItems.length || knowledge.acquiredShardSources.length || knowledge.areaHints.length);
+      // Shards ticked in the column arrive through unplacedItems - they are
+      // acquired items with no location like any other - so they are not asked
+      // about separately here.
+      const hasUnknownSphereCards = level === 0 && (unplacedItems.length || knowledge.areaHints.length);
       if (!placements.length && !availableLocations.length && !hasPathCard && !hasUnknownSphereCards) continue;
 
       columns.push({
@@ -482,7 +484,7 @@
                  count towards showing it: a column whose only content was a
                  solved path card (Molgera in "After sphere ?", say) rendered
                  its heading with an empty body and the card disappeared. -->
-            {#if column.placements.length || (pathsByLevel.get(column.level)?.length ?? 0) > 0 || (column.level === 0 && (unplacedItems.length || knowledge.acquiredShardSources.length || knowledge.areaHints.length))}
+            {#if column.placements.length || (pathsByLevel.get(column.level)?.length ?? 0) > 0 || (column.level === 0 && (unplacedItems.length || knowledge.areaHints.length))}
               <div class="sphere-prediction-list">
                 {#each column.placements as placement (placement.id)}
                   <SpherePlacementNode
@@ -495,9 +497,6 @@
                 {#if column.level === 0}
                   {#each unplacedItems as entry (entry.id)}
                     <SphereUnplacedItemNode {entry} />
-                  {/each}
-                  {#each knowledge.acquiredShardSources as source (source.id)}
-                    <SphereAcquiredShardNode {source} />
                   {/each}
                   {#each knowledge.areaHints as hint (hint.lineNumber)}
                     <SphereAreaHintNode {hint} {calculation} {occupiedLocationKeys} />

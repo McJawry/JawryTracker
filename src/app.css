@@ -511,7 +511,32 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
 
 /* Pushed to the bottom of the item-tracker column, so its bottom edge lines
    up with the bottom of the map beside it. */
-.item-tracker-panel .tracking-summary-panel {
+.item-tracker-panel /* Counts on the left, the whole-world list button on the right. */
+.tracking-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracking-summary-action {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.tracking-summary-action:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.tracking-summary-panel {
   margin-top: auto;
 }
 
@@ -993,6 +1018,13 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   text-decoration: line-through;
 }
 
+/* A settled entrance - recorded or implied by its coupled partner - goes
+   black, so the red and blue ones left are exactly the ones still to find.
+   Two classes deep to outrank the .inaccessible colour above. */
+.location-drop-option.entrance-drop-option.entrance-known {
+  color: #000;
+}
+
 /* Armed for item assignment - matches the sector's pulse on the map. */
 .location-drop-option.pulsing {
   animation: tracker-area-pulse-text 1.1s ease-in-out infinite;
@@ -1197,6 +1229,13 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
 
 /* Transparent so the sea chart shows through; they keep their own
    hover/pulse/drop states. */
+/* Anchors the marking prompt, which floats over the map rather than taking a
+   cell. Scoped here rather than on .sea-grid so nothing else that uses the
+   grid picks up a containing block it did not have. */
+.tracking-location-grid {
+  position: relative;
+}
+
 .tracking-location-grid .tracker-area-cell {
   background-color: transparent;
   border-color: rgba(32, 51, 59, 0.28);
@@ -1275,21 +1314,25 @@ body.sphere-assignment-mode .sector {
   transform: translateX(-50%);
 }
 
+/* Along the top edge of the sector, clear of the accessible/remaining
+   fraction that sits at the bottom. */
 .sector-marker-icons {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 5%;
+  top: 3%;
   height: 30%;
   pointer-events: none;
 }
 
+/* 70% of the icon size used elsewhere: on the sector these are labels
+   rather than controls, and full size crowded the artwork. */
 .sector-marker-icons .map-icon {
   position: absolute;
-  bottom: 0;
-  width: var(--map-icon-size);
-  height: var(--map-icon-size);
-  pointer-events: auto;
+  top: 0;
+  width: calc(var(--map-icon-size) * 0.7);
+  height: calc(var(--map-icon-size) * 0.7);
+  pointer-events: none;
   transform: translateX(-50%);
 }
 
@@ -3626,6 +3669,13 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: var(--ink);
 }
 
+/* Same reasoning as the buttons beside it: the panel name paints its own
+   var(--panel) fill, so it has to follow the ink rather than the top bar's
+   fixed dark text - on a dark panel colour it was dark on dark. */
+.top-bar .restore-section-name {
+  color: var(--ink);
+}
+
 /* "Auto" button beside a popout's scale slider (PopoutZoomSlider.svelte). */
 .popout-zoom-auto {
   padding: 1px 6px;
@@ -3724,8 +3774,824 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   cursor: pointer;
 }
 
+/* Same empty 7th row as the Done button above. Fixed grid columns mean a long
+   entrance name wraps inside the grid rather than widening the item column and
+   pushing the map across. */
+.tracking-item-grid .hovered-row-name {
+  grid-column: 1 / span 8;
+  grid-row: 7;
+  /* Above the chart button, which shares this row and is itself lifted over
+     the chart menu - without this the name ran underneath it. */
+  position: relative;
+  z-index: 6;
+  align-self: center;
+  min-width: 0;
+  max-height: 100%;
+  margin: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+/* The backdrop hugs the text rather than filling the row, and carries its own
+   dark ground so the name stays readable whatever colour sits behind the grid
+   - stream mode can put anything back there. */
+.tracking-item-grid .hovered-row-name span {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(10, 16, 22, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
 /* Matching cue on the grid itself, so the mode reads from either end. */
 .tracking-item-grid.marking-starting {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* A marker rather than a control: same artwork, no hover or click affordance. */
+.map-icon.static {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Ho Ho and Blue Chu controls, level with Close in the area's list header. */
+.location-drop-markers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.location-drop-markers .map-icon {
+  position: static;
+  width: 22px;
+  height: 22px;
+  transform: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.location-drop-markers .map-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Reads like the Tingle Statue beside it, whose count is part of its artwork. */
+.tracking-item-grid .blue-chu-counter {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.tracking-item-grid .blue-chu-counter[hidden] {
+  display: none;
+}
+
+.tracking-item-grid .blue-chu-counter img {
+  max-width: calc(var(--tracker-slot) * 0.91);
+  max-height: calc(var(--tracker-slot) * 0.91);
+}
+
+.tracking-item-grid .chu-number {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+/* Marker visibility. Shares the toolbar row so the map keeps its height,
+   but sits behind a rule as its own group - these change what the map
+   shows rather than performing an action like the buttons do. */
+.map-marker-toggles {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 0 0 auto;
+  gap: 8px;
+  /* Pinned to the far end so the rule reads as the boundary between the two
+     groups, and so the status text in between is what gives up space when
+     the panel is narrow rather than these. Kept tight - the row is close to
+     full at the default map width. */
+  margin-left: auto;
+  padding-left: 8px;
+  border-left: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.map-marker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.map-marker-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.map-marker-toggle img {
+  width: calc(var(--map-icon-size) * 0.85);
+  height: calc(var(--map-icon-size) * 0.85);
+  object-fit: contain;
+}
+
+/* The game's own important-location marker (static/assets/tracker/Important
+   Location.png). The art is white on transparent, so it is used as an alpha
+   mask and the colour comes from the element behind it - that way the two
+   shades are the exact RGB values the game cycles between rather than an
+   approximation reached with filters. */
+.important-location-mark {
+  display: block;
+  -webkit-mask-image: url("/assets/tracker/Important Location.png");
+  mask-image: url("/assets/tracker/Important Location.png");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  background-color: var(--important-location-color, rgb(248, 246, 239));
+}
+
+/* One 2.5s loop: pale to periwinkle and back. The animation runs on a shared
+   ancestor and drives an inherited custom property rather than sitting on each
+   marker, because a CSS animation starts when its element does - markers
+   placed at different times would each cycle on their own phase. Driving them
+   all from one clock keeps them in step, the way the game does. */
+@property --important-location-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgb(248, 246, 239);
+}
+
+.main-tracker-section {
+  animation:
+    important-location-cycle 2.5s ease-in-out infinite,
+    important-location-spin 2s linear infinite,
+    important-location-found-fade 2s ease-in-out infinite;
+}
+
+@keyframes important-location-cycle {
+  0%,
+  100% {
+    --important-location-color: rgb(248, 246, 239);
+  }
+  50% {
+    --important-location-color: rgb(132, 128, 239);
+  }
+}
+
+/* Centred on the sector and turned 45 degrees, the way the game draws it. */
+.sector-important-highlight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Turning the art 45 degrees swings its arms out onto the diagonals, which
+     makes it span 1.118x the element box - so the box is sized back down to
+     leave the swirl just inside the sector's borders. No z-index: it comes
+     first in the cell, so the fraction and the Ho Ho / Chu markers that
+     follow it paint on top. */
+  width: 80%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(45deg);
+  pointer-events: none;
+}
+
+.map-marker-highlight-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map-marker-highlight-button .important-location-mark {
+  /* Turned to match the marker it places. The 45 degrees swings the art wider
+     than its box, so the box shrinks to keep the icon the size of the Ho Ho
+     and Chu icons beside it. */
+  width: calc(var(--map-icon-size) * 0.85);
+  height: calc(var(--map-icon-size) * 0.85);
+  transform: rotate(45deg);
+}
+
+.map-marker-highlight-button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Same 0.5s flash as "Mark starting" - the two modes read as the same kind of
+   thing, so they should catch the eye at the same rate. */
+.sector-highlight-prompt {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  z-index: 3;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 94%;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  /* Sized to keep the sentence on one line at the map's usual width - wrapped
+     onto two it covered noticeably more of the top row. It still wraps rather
+     than overflowing if the map is made very narrow. */
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: center;
+  pointer-events: none;
+  /* Held slightly transparent throughout - it sits over the top row of
+     sectors, and at full strength it hid them while the mode was on. */
+  opacity: 0.78;
+  animation: mark-starting-flash 0.5s ease-in-out infinite;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* An open panel's button is crossed out - the cross is the affordance for
+   "click to close", matching the X on each panel's own title bar. */
+.section-toggle {
+  position: relative;
+}
+
+.section-toggle.open::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  opacity: 0.75;
+  background:
+    linear-gradient(
+      to top right,
+      transparent calc(50% - 0.8px),
+      currentColor calc(50% - 0.8px),
+      currentColor calc(50% + 0.8px),
+      transparent calc(50% + 0.8px)
+    ),
+    linear-gradient(
+      to bottom right,
+      transparent calc(50% - 0.8px),
+      currentColor calc(50% - 0.8px),
+      currentColor calc(50% + 0.8px),
+      transparent calc(50% + 0.8px)
+    );
+}
+
+/* Title, version and Start New Tracker as one left-hand group, so the row's
+   space-between still pushes the Settings actions to the right edge. */
+.top-bar-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Turns once every 2 seconds when the dungeon door on that sector can be
+   opened with what the player is carrying. The angle comes from the same
+   shared clock as the colour, for the same reason: an animation on each marker
+   would start when that marker did, so two of them would spin out of step. */
+@property --important-location-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 45deg;
+}
+
+@keyframes important-location-spin {
+  from {
+    --important-location-angle: 45deg;
+  }
+  to {
+    --important-location-angle: 405deg;
+  }
+}
+
+.sector-important-highlight.ready {
+  transform: translate(-50%, -50%) rotate(var(--important-location-angle, 45deg));
+}
+
+/* The sector's entrance has been found. The marker stays put as the answer
+   rather than disappearing: it stops turning, goes green, and fades in and out
+   between invisible and half strength. Driven from the shared clock like the
+   colour and the angle, so several found markers pulse together. */
+@property --important-location-fade {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.5;
+}
+
+@keyframes important-location-found-fade {
+  0%,
+  100% {
+    --important-location-fade: 0;
+  }
+  50% {
+    --important-location-fade: 0.5;
+  }
+}
+
+.sector-important-highlight.found {
+  background-color: rgb(76, 200, 110);
+  opacity: var(--important-location-fade, 0.5);
+  animation: none;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* ---- Charts ------------------------------------------------------------ */
+
+/* Stays above the menu it opens, so the same icon closes it again - the menu
+   is laid over the whole grid and would otherwise bury its own button. */
+.chart-menu-button {
+  position: relative;
+  z-index: 5;
+}
+
+.chart-menu-button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Laid over the item grid rather than beside it: the grid is the biggest thing
+   on screen, and the charts are read in the same place the items are. */
+.chart-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 3px;
+  /* One slot's worth of room on the right, so the bottom-right cell never
+     lands under the button that opens this menu. */
+  padding-right: calc(var(--tracker-slot, 44px) + 12px);
+  border-radius: 8px;
+  background: var(--panel);
+  /* Sized to fit rather than scrolled: the grid is exactly seven rows, and a
+     scrollbar over a 7x7 map would hide part of the map. */
+  overflow: hidden;
+}
+
+/* Stands in the strip kept clear on the right, turned to run along it - the
+   row above belongs to the toolbar buttons, and anything placed there was
+   easy to hit while reaching for the charts. */
+.chart-menu-sort {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  width: var(--tracker-slot, 44px);
+  color: var(--ink);
+  font-size: 0.5rem;
+  line-height: 1.05;
+  text-align: center;
+  cursor: pointer;
+}
+
+.chart-menu-sort span {
+  min-width: 0;
+}
+
+.chart-menu-sort input {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* The sea chart again - one cell per sector, so where a chart sits is itself
+   the island it maps. */
+.chart-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* Explicit rows, so the seven share the height exactly instead of each
+     growing to its content and pushing the last row out of view. */
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chart-cell {
+  /* Icon takes what is left after the name, so a long sector name shortens the
+     icon rather than overflowing the row. */
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  align-content: center;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chart-cell:hover {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.chart-cell-icon {
+  position: relative;
+  display: block;
+  height: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+}
+
+.chart-cell-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The number the chart carries, which is not the island's own number - so it
+   sits on the chart itself rather than under the sector name. */
+.chart-cell-number {
+  position: absolute;
+  right: -1px;
+  bottom: -2px;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 3px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+}
+
+.chart-cell-sector {
+  width: 100%;
+  max-height: 2.2em;
+  font-size: 0.4rem;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  opacity: 0.85;
+}
+
+.chart-cell.acquired .chart-cell-sector {
+  opacity: 1;
+  font-weight: 700;
+}
+
+/* Same purple glow the item grid uses while a location is armed. */
+.chart-cell.glow {
+  border-color: #a45cff;
+  box-shadow: 0 0 8px rgba(164, 92, 255, 0.85);
+}
+
+/* Asks which copy of a staged item to give up, over the grid the click came
+   from so the answer appears where the question was asked. */
+.item-card-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.item-card-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.item-card-picker-close {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.item-card-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: auto;
+}
+
+.item-card-picker-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: inherit;
+  font-size: 0.62rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item-card-picker-card:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.item-card-picker-icon {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+}
+
+.item-card-picker-icon img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.item-card-picker-location {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A copy with no location reads as a state, not a place. */
+.item-card-picker-loose {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* ---- Coloured hint notes ---------------------------------------------- */
+
+/* The notes are drawn twice: this layer paints the coloured text, and the
+   textarea sits on top with transparent glyphs so the caret, the selection and
+   every editing behaviour still belong to it. Both have to agree on every
+   property that decides where a glyph lands. */
+.notes-editor {
+  position: relative;
+  width: 100%;
+  /* The fill moves here, since the textarea above it is now clear. */
+  background: #fffefa;
+  border-radius: 6px;
+}
+
+.notes-editor[hidden] {
+  display: none;
+}
+
+.notes-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  padding: 12px;
+  /* Transparent rather than absent: the textarea's own border pushes its text
+     inward by a pixel, and the layer has to be pushed by the same amount. */
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  color: #172027;
+  pointer-events: none;
+}
+
+.notes-editor .notes-input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  /* The caret is the one part of the textarea's own text left visible. */
+  caret-color: #172027;
+}
+
+/* Fixed colours rather than theme tokens: this box keeps its near-white fill
+   in every mode, so the ink is chosen against that. */
+.notes-highlight .hint-line.item {
+  color: #0b7285;
+}
+
+.notes-highlight .hint-line.required {
+  color: #1b7a32;
+}
+
+.notes-highlight .hint-line.possible {
+  color: #8a6100;
+}
+
+.notes-highlight .hint-line.not-required {
+  color: #7b8794;
+}
+
+.notes-highlight .hint-line.location {
+  color: #c2410c;
+}
+
+.notes-highlight .hint-line.path {
+  color: #6b21a8;
+}
+
+/* The Sync button's warning: config.yaml has moved on since the last sync.
+   Sits inside the button so the row keeps its width - the message itself is
+   the button's tooltip. */
+.map-toolbar-button .sync-warning {
+  margin-left: 4px;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+/* Tracker Settings - the toolbar's own small settings panel, positioned like
+   the sphere board's Filters menu. */
+.tracker-settings-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Painted with the panel colour, so it follows the auto-contrast ink rather
+   than pinning its own fill the way the sphere board's Filters menu does -
+   see the fixed-contrast note further down. */
+.tracker-settings-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  /* Above the map (.item-palette is 40 too, and being later in the document it
+     won the tie) and above an open sector list (.location-drop-list, 55), but
+     still under the drag ghost (60), the starting-items prompt (80) and the
+     requirement tooltip (200). */
+  z-index: 56;
+  min-width: 240px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 6px 18px rgba(10, 16, 22, 0.28);
+}
+
+.tracker-settings-option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.tracker-settings-option input {
+  margin: 2px 0 0;
+  cursor: pointer;
+}
+
+.tracker-settings-option,
+.tracker-settings-option strong {
+  color: var(--ink);
+}
+
+.tracker-settings-option em {
+  display: block;
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* The shard count on the finished Triforce, when shards are counted
+   generically rather than by number. */
+.triforce-stack .triforce-count {
+  position: absolute;
+  left: 50%;
+  /* Below the middle: the artwork is centred in its box, but a triangle's
+     visual mass sits low, so the middle of the *Triforce* is further down. */
+  top: 58%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #101418;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  /* No plate behind it - a light outline keeps it legible on the gold. */
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+.tracker-settings-button {
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* A sphere card you can answer an armed location with - an acquired item or a
+   ticked shard, both of which are copies already held. */
+.sphere-placement.pending-target {
+  outline: 2px solid rgba(126, 87, 194, 0.75);
+  outline-offset: 1px;
+  cursor: pointer;
+}
+
+/* The randomizer folder row in Tracker Settings. */
+.tracker-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.tracker-settings-label {
+  font-weight: 700;
+}
+
+.tracker-settings-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.tracker-settings-row .tool-button {
+  align-self: flex-start;
+}
+
+.tracker-settings-status {
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* "GO MODE" over the item grid: everything needed to beat Ganondorf is held.
+   Pulses so it catches the eye without a colour change anywhere else, and is
+   transparent to the pointer so the items under it stay clickable. */
+.tracking-item-grid .go-mode-banner {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: "Reggae One", "RocknRoll One", "Segoe UI", Arial, sans-serif;
+  /* The grid is eight 44px columns wide, so this fills it without wrapping. */
+  font-size: 42px;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.85),
+    0 0 18px rgba(0, 0, 0, 0.6);
+  animation: go-mode-flash 1.4s ease-in-out infinite;
+}
+
+@keyframes go-mode-flash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracking-item-grid .go-mode-banner {
+    animation: none;
+    opacity: 1;
+  }
 }

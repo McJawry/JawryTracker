@@ -10,6 +10,10 @@ export const SPHERE_STORAGE_KEY = "ww-rando-hint-tracker-spheres";
 export const SPHERE_NOTES_STORAGE_KEY = "ww-rando-hint-tracker-sphere-notes";
 export const ITEM_STORAGE_KEY = "ww-rando-hint-tracker-items";
 export const MARK_STARTING_KEY = "ww-rando-hint-tracker-mark-starting";
+// Also cross-window: a location armed in one window is answered by clicking
+// an item in another - the Item Tracker and the Sphere Board are often not the
+// same window.
+export const PENDING_LOCATION_KEY = "ww-rando-hint-tracker-pending-location";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
@@ -77,6 +81,13 @@ export interface Settings {
   streamBackdrop: string;
   showHoHo: boolean;
   showBlueChu: boolean;
+  /**
+   * Count Triforce shards without caring which is which: the Triforce cell
+   * becomes a 0-8 counter instead of a mirror of the numbered shard column.
+   */
+  genericTriforceShards: boolean;
+  /** Chart menu ordering: by chart number rather than by island position. */
+  chartSortByNumber: boolean;
   streamMode: boolean;
   parsedHintsFilters: boolean;
   automaticMode: boolean;
@@ -163,6 +174,8 @@ export const DEFAULT_SETTINGS: Settings = {
   streamBackdrop: "#00ff00",
   showHoHo: true,
   showBlueChu: true,
+  genericTriforceShards: false,
+  chartSortByNumber: true,
   streamMode: false,
   parsedHintsFilters: true,
   automaticMode: false,

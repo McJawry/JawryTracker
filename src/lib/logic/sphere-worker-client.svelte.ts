@@ -26,8 +26,7 @@ import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
 import { getSphereTrackingKnowledge, type SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import {
   getSphereBlueChuJellyCount,
-  getSphereCalculationInput,
-  getSphereLogicStartingGear,
+  getSphereProgressionInput,
   getSphereReachableLocationSet,
   getOwnedInventory,
   sphereReachabilityCache,
@@ -36,6 +35,7 @@ import {
 import { getAvailableLocations } from "$lib/logic/locations";
 import { inferRelativeUnknownSpheres } from "$lib/logic/sphere-inference";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+import { isTriforceShardItem } from "$lib/logic/shard-tracking";
 import { clearHardBossRequirementCache } from "$lib/logic/sphere-boss-icons";
 import { clearRequirementCache } from "$lib/logic/requirement-text";
 
@@ -65,13 +65,22 @@ function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
     entranceMappings: Object.entries(sphere.entranceMappings)
       .map(([name, sector]) => [normalize(name), normalize(sector)])
       .sort(([first], [second]) => first.localeCompare(second)),
+    // Same reasoning for the general entrance model: discovering a cave or
+    // door rewires reachability without touching any placement or check.
+    entranceConnections: Object.entries(sphere.entranceConnections)
+      .map(([source, target]) => [normalize(source), normalize(target)])
+      .sort(([first], [second]) => first.localeCompare(second)),
     // Without this the cache never invalidates when an item is acquired on
     // the Item Tracker, so the map's counts would stay frozen.
     unplacedItems: getUnplacedAcquiredItems().map((entry) => entry.item),
     blueChuJellyCount: getSphereBlueChuJellyCount(),
     markedLocations: Object.keys(checked)
       .filter((key) => key.startsWith("sphere-location-checked:") && checked[key])
-      .sort()
+      .sort(),
+    // Marking a sector says a required boss is behind a door there, which
+    // decides which bosses the run has to beat at all - so it moves the
+    // spheres without touching a placement, a check or an entrance.
+    highlightedSectors: [...sphere.highlightedSectors].map(normalize).sort()
   });
 }
 
@@ -100,6 +109,7 @@ function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculat
   sphereAnalysisCache.relativeUnknown = relativeUnknown;
   sphereAnalysisCache.certainLocationKeys = computeCertainLocationKeys();
   sphereAnalysisCache.inventoryReachableKeys = computeInventoryReachableKeys();
+  sphereAnalysisCache.goMode = computeGoMode();
   sphereAnalysisCache.pending = false;
   sphereAnalysisCache.dependenciesReady = true;
 }
@@ -112,10 +122,25 @@ function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculat
  * is unknown), so the location list shows "?" rather than a number.
  */
 function computeCertainLocationKeys(): Set<string> {
-  const unplaced = new Set(getUnplacedAcquiredItems().map((entry) => normalize(entry.item)));
+  // Shards are the exception: the shard column and the generic tally are
+  // themselves the record of having one, and neither says where it came from -
+  // the generic one never can. Counting them as sources unknown put every
+  // check behind the Triforce of Courage at "?", the endgame included, for a
+  // set the player has complete in front of them.
+  const unplaced = new Set(
+    getUnplacedAcquiredItems()
+      .map((entry) => normalize(entry.item))
+      .filter((item) => !isTriforceShardItem(item))
+  );
   if (!unplaced.size) return new Set(getAvailableLocations().map(normalize));
 
-  const certainItems = getSphereLogicStartingGear().filter((item) => !unplaced.has(normalize(item)));
+  // Everything held whose source is known: the seed's gear *and* every item
+  // recorded at a location. Starting from the gear alone dropped the
+  // placements too, so holding a single unassigned item - one generic Triforce
+  // shard is enough, and it never gets a location by design - collapsed the
+  // whole column to what the seed's gear reaches and turned a hundred sphere
+  // numbers into "?".
+  const certainItems = getOwnedInventory().filter((item) => !unplaced.has(normalize(item)));
   return getSphereReachableLocationSet(certainItems);
 }
 
@@ -130,6 +155,28 @@ function computeInventoryReachableKeys(): Set<string> {
   return getSphereReachableLocationSet(getOwnedInventory());
 }
 
+/** Beating the game - the location the requirement walk aims at. */
+const GOAL_LOCATION = "Ganon's Tower - Defeat Ganondorf";
+
+/**
+ * Progress items the logic asks for that the tracker has no cell for, so no
+ * amount of playing will ever put them in the inventory. Light Arrows gate the
+ * Puppet Ganon fight, and every route to Ganondorf runs through it - left
+ * ungranted, "can I finish?" would answer no forever.
+ */
+const UNTRACKED_PROGRESS_ITEMS = ["Light Arrows"];
+
+/**
+ * Whether everything needed to finish the run is in hand: Ganondorf reachable
+ * with what you hold. Ganon's Tower itself is never shuffled, so this is about
+ * items and about getting into the dungeons the required bosses live in - both
+ * of which the tracker does know.
+ */
+function computeGoMode(): boolean {
+  const items = [...getOwnedInventory(), ...UNTRACKED_PROGRESS_ITEMS];
+  return getSphereReachableLocationSet(items).has(normalize(GOAL_LOCATION));
+}
+
 let sphereAnalysisWorker: Worker | null = null;
 let sphereAnalysisJobId = 0;
 let sphereAnalysisPendingKey = "";
@@ -139,7 +186,7 @@ let sphereAnalysisDispatchStart = 0;
 
 function calculateSphereProgressionSync(placements: SpherePlacement[]): SphereCalculationResult | null {
   if (!data.sphereLogicLoaded) return null;
-  return WWRSphereEngine.calculate(getSphereCalculationInput(placements));
+  return WWRSphereEngine.calculate(getSphereProgressionInput(placements));
 }
 
 function getSphereAnalysisWorker(): Worker | null {
@@ -207,7 +254,7 @@ function dispatchSphereAnalysisJob(): void {
     // (throws DataCloneError) - $state.snapshot() converts them to plain,
     // cloneable data first. This has no equivalent in the original vanilla-JS
     // app since its objects were never reactive proxies to begin with.
-    const input = $state.snapshot(getSphereCalculationInput(placements));
+    const input = $state.snapshot(getSphereProgressionInput(placements));
     worker.postMessage({ jobId, input });
   } catch (error) {
     sphereAnalysisWorkerBusy = false;

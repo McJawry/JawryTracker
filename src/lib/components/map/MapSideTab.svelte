@@ -11,7 +11,8 @@
   import { getShardTrackingState, setShardTrackingChecked } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { checked } from "$lib/state/checked.svelte";
-  import { sphere, clearDungeonEntranceMapping } from "$lib/state/sphere.svelte";
+  import { sphere } from "$lib/state/sphere.svelte";
+  import { canBadgeDungeonToSector, clearDungeonAssignment, getEffectiveEntranceMappings } from "$lib/logic/entrances";
   import { ui, armEntranceAssignment, clearPendingEntranceAssignment } from "$lib/state/ui.svelte";
   import { DUNGEON_ENTRANCE_TRACKERS } from "$lib/gameData";
   import { DUNGEON_DRAG_MIME } from "./dungeon-drag";
@@ -19,7 +20,6 @@
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { assignPaletteEntryToLocation } from "$lib/logic/assignment";
 
-  const blueChuCount = $derived(Object.keys(checked).filter((id) => id.startsWith("blue-chu-jelly:")).length);
 
   const shards = $derived(
     Array.from({ length: 8 }, (_, index) => {
@@ -56,15 +56,18 @@
   }
 
   let previewShard: string | null = $state(null);
+
+  // Same source as the map badges: a dungeon placed from the entrance page
+  // must light its button here too.
+  const dungeonSectors = $derived(getEffectiveEntranceMappings());
+  // Only the dungeons whose sector still decides where they are - see
+  // canBadgeDungeonToSector. With the pools mixed, or with the way to a
+  // dungeon door shuffled ahead of it, the badge would record something the
+  // seed does not mean.
+  const badgeableDungeons = $derived(DUNGEON_ENTRANCE_TRACKERS.filter((dungeon) => canBadgeDungeonToSector(dungeon.name)));
 </script>
 
 <aside class="map-side-tab" aria-label="Jelly and Triforce shard tracker">
-  <div class="jelly-counter" hidden={!settings.showBlueChu}>
-    <img src={itemImage("Blue Chu Jelly")} alt="" />
-    <span>x</span>
-    <strong>{blueChuCount}</strong>
-  </div>
-
   {#if previewShard && !ui.itemDrag}
     <div class="shard-preview">
       <img src={miscImage(`${previewShard} Highlight`)} alt={previewShard} />
@@ -93,9 +96,13 @@
     {/each}
   </div>
 
+  <!-- With vanilla dungeon entrances there is nothing to record: every
+       dungeon is where it has always been. Nor is there anything to record
+       once the sector stops deciding which dungeon is behind the door. -->
+  {#if badgeableDungeons.length}
   <div class="dungeon-entrance-list" aria-label="Dungeon entrance mappings">
-    {#each DUNGEON_ENTRANCE_TRACKERS as dungeon (dungeon.name)}
-      {@const mappedSector = sphere.entranceMappings[dungeon.name]}
+    {#each badgeableDungeons as dungeon (dungeon.name)}
+      {@const mappedSector = dungeonSectors[dungeon.name]}
       {@const armed = ui.pendingEntranceAssignment === dungeon.name}
       <button
         type="button"
@@ -109,7 +116,7 @@
             ? `${dungeon.name} at ${mappedSector} - drag or click to move, right-click to clear`
             : `${dungeon.name} - drag onto its sector, or click then click the sector`}
         onclick={() => armEntranceAssignment(dungeon.name)}
-        oncontextmenu={(event) => { event.preventDefault(); clearDungeonEntranceMapping(dungeon.name); }}
+        oncontextmenu={(event) => { event.preventDefault(); clearDungeonAssignment(dungeon.name); }}
         ondragstart={(event) => {
           clearPendingEntranceAssignment();
           event.dataTransfer?.setData(DUNGEON_DRAG_MIME, dungeon.name);
@@ -120,4 +127,5 @@
       </button>
     {/each}
   </div>
+  {/if}
 </aside>

@@ -291,7 +291,7 @@
       class:active={activeTab === "preference-presets"}
       aria-selected={activeTab === "preference-presets"}
       onclick={() => (activeTab = "preference-presets")}
-    >Preference presets</button>
+    >Layout presets</button>
   </div>
 
   {#if activeTab === "appearance"}
@@ -449,20 +449,12 @@
   {#if activeTab === "tracker"}
   <fieldset class="settings-group">
     <legend>Tracker</legend>
-    <label class="setting-toggle">
-      <input type="checkbox" bind:checked={settings.showHoHo} onchange={update} />
-      <span>Show Old Man Ho Ho</span>
-    </label>
-    <label class="setting-toggle">
-      <input type="checkbox" bind:checked={settings.showBlueChu} onchange={update} />
-      <span>Show Blue Chu Jelly</span>
-    </label>
   </fieldset>
   {/if}
 
   {#if activeTab === "preference-presets"}
   <fieldset class="settings-group preset-group">
-    <legend>Preference presets</legend>
+    <legend>Layout presets</legend>
 
     <label class="setting-control">
       <span>Folder</span>
@@ -511,7 +503,7 @@
         bind:value={presetName}
         onkeydown={(event) => event.key === "Enter" && savePreset()}
       />
-      <button class="tool-button" type="button" disabled={!presetName.trim()} onclick={savePreset}>Save preference preset</button>
+      <button class="tool-button" type="button" disabled={!presetName.trim()} onclick={savePreset}>Save layout preset</button>
     </div>
 
     <div class="setting-row">
