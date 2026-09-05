@@ -1,0 +1,4597 @@
+@font-face {
+  font-family: "Reggae One";
+  src: url("/assets/fonts/ReggaeOne-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RocknRoll One";
+  src: url("/assets/fonts/RocknRollOne-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f4f1e8;
+  --panel: #fffdf7;
+  --ink: #172027;
+  --muted: #66727d;
+  --line: #d7d0bd;
+  --sea: #08746d;
+  --sea-dark: #175a69;
+  --accent: #c24632;
+  --accent-dark: #8e2f22;
+  --gold: #d39c32;
+  --ok: #2f7b57;
+  --warn: #a86316;
+  --path: #7651b7;
+  --path-bg: #f0eafb;
+  --required-bg: #e7f6ed;
+  --required-border: #42a36c;
+  --possible-bg: #fff7db;
+  --possible-border: #d5a51f;
+  --neutral-bg: #f0f1f2;
+  --neutral-border: #9ba3aa;
+  /* Fixed rather than viewport-derived: sections now scale uniformly via
+     their own zoom, so a 100vh-dependent map just made the Main Tracker's
+     content narrower than its fixed logical width in short windows - which
+     is what left a large gap between the shard column and the panel's right
+     edge. 385px is the shard column's own natural height (jelly counter +
+     8 shards + dungeon entrances), so the map ends up exactly as tall as
+     that column. */
+  --auto-map-size: 385px;
+  --map-size: var(--user-map-size, var(--auto-map-size));
+  --map-icon-size: 22px;
+  --item-map-icon-size: 30px;
+  --map-side-tab-width: 46px;
+  --hint-panel-width: 360px;
+  --hint-arrow-position: 50%;
+  --hidden-chrome-map-size: clamp(360px, calc(100vh - 285px), 620px);
+  --shadow: 0 12px 30px rgba(27, 35, 40, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 15px;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* Flat colour, no white overlay gradient: the old
+     linear-gradient(rgba(255,255,255,0.72) -> transparent) sat on top of
+     --bg and washed it out to near-white across the visible area, which made
+     the page-background setting look like it did nothing. */
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "RocknRoll One", "Segoe UI", Arial, sans-serif;
+}
+
+/* Stream mode no longer repaints the page - the chosen page background still
+   shows. The keyable colour is applied to specific panels instead, via
+   --stream-backdrop (see the stream backdrop block further down). */
+
+/* A popout window never scrolls sideways: its content is already scaled to
+   the window's width, so a horizontal bar only ever showed up as a knock-on
+   effect of the vertical scrollbar narrowing the client area by ~15px and
+   pushing a full-width child over the edge. */
+body.popout-window {
+  overflow-x: hidden;
+}
+
+body.chrome-hidden {
+  --auto-map-size: var(--hidden-chrome-map-size);
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+/* Dockable-section layout: a plain vertical stack of rows (.dockable-row),
+   each row a horizontal flex of whichever sections live in it - replaces
+   the old fixed two-column (tracker-panel + floating hint-panel) grid, since
+   every section (including Hint Panel) is now a normal-flow DockableSection
+   the user can drag anywhere. Compact/stream-mode's finer reflow rules
+   (below) predate this rework and may need a follow-up pass to fully match -
+   flagged rather than silently left broken. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100vh;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+body.chrome-hidden .section-control-panel {
+  display: none;
+}
+
+.top-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.top-bar-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Second control-panel row: restores sections hidden from their own title
+   bars - without it a hidden section has no way back, since hiding removes
+   its title bar (and therefore its unhide control) from the layout. */
+.hidden-sections-row {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.hidden-sections-label {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-family: "Reggae One", "RocknRoll One", "Segoe UI", Arial, sans-serif;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1rem;
+}
+
+.top-bar p,
+.top-actions span,
+.section-heading span,
+.hint-meta,
+.empty-state {
+  color: var(--muted);
+}
+
+.danger-button,
+.tool-button,
+.tab,
+.map-icon {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.danger-button,
+.tool-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 6px;
+}
+
+.tool-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.danger-button:hover {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+.show-chrome-button {
+  display: none;
+  justify-self: start;
+}
+
+body.chrome-hidden .show-chrome-button {
+  display: inline-flex;
+}
+
+/* Fixed single-column layout. This used to be
+   `grid-template-columns: repeat(auto-fit, minmax(128px, max-content))`, which
+   re-flowed the controls into a different number of columns every time the
+   settings window was resized - the groups appeared to rearrange themselves.
+   A static width means resizing only ever reveals more empty space or a
+   scrollbar. */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  gap: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* Superseded: stream mode no longer replaces the page background, so the
+   page-background picker stays relevant in every mode. */
+body.never-hide-page-background .setting-control:has(#pageBackgroundInput) {
+  display: none;
+}
+
+body.never-hide-stream-backdrop .stream-backdrop-setting {
+  display: none;
+}
+
+.setting-toggle:has(#showHoHoInput),
+.setting-toggle:has(#showBlueChuInput) {
+  grid-row: 2;
+}
+
+.setting-control,
+.setting-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.setting-control input[type="color"] {
+  width: 40px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.setting-control input[type="range"] {
+  width: 116px;
+  accent-color: var(--accent);
+}
+
+.mini-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+}
+
+.setting-status {
+  max-width: 130px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automatic-mode-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(100%, calc(var(--map-size) + var(--map-side-tab-width) + 5px));
+  min-height: 42px;
+  padding: 5px 7px;
+  border: 1px solid #5d8596;
+  border-radius: 6px;
+  background: #e9f4f7;
+  color: #203943;
+}
+
+.automatic-mode-prompt[hidden] {
+  display: none;
+}
+
+.automatic-mode-prompt > img {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.42));
+}
+
+.automatic-mode-prompt-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+  font-size: 0.78rem;
+}
+
+.automatic-mode-prompt-copy strong {
+  color: #14262d;
+}
+
+.automatic-mode-location-choices {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.automatic-mode-location-choices[hidden] {
+  display: none;
+}
+
+.automatic-mode-location-choices button {
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 6px;
+  overflow: hidden;
+  border: 1px solid #8ba9b4;
+  border-radius: 4px;
+  background: #fff;
+  color: #203943;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.map-wrap {
+  display: grid;
+  align-items: center;
+  justify-items: start;
+  gap: 5px;
+  justify-self: start;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* Dockable-section framework: every top-level section (control panel, main
+   tracker, summary, sphere board, notes, hint panel) is wrapped by
+   DockableSection.svelte with a visible border, a title bar (drag handle +
+   name + dock/undock + hide), one right-edge resize handle, and its content
+   uniformly zoom-scaled to the section's own width - see that component. */
+.dockable-panel {
+  position: relative;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.dockable-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* A column stacks sections vertically inside one row, so a pair of panels can
+   share the width beside a wide neighbour instead of each claiming a
+   full-width row of their own. */
+.dockable-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.dockable-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 5px 5px 0 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.dockable-titlebar:active {
+  cursor: grabbing;
+}
+
+.dockable-titlebar-name {
+  font-size: 0.68rem;
+  font-weight: 800;
+  /* --ink, not --muted: muted is a mid-grey that only ever flips between two
+     values, so on a mid-tone panel (#808080, #6b7a8f) it landed within 1.1:1
+     of its own background and vanished. The ink is always full contrast. */
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dockable-titlebar-actions {
+  display: flex;
+  gap: 3px;
+}
+
+.dockable-titlebar-button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel);
+  /* --ink, not --muted: the same mid-grey problem as the panel name - it
+     disappeared against mid-tone panel colours. */
+  color: var(--ink);
+  font-size: 0.68rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dockable-titlebar-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dockable-section-content {
+  box-sizing: border-box;
+  padding: 8px;
+  zoom: 1;
+}
+
+/* Sphere Board: fills the section instead of a fixed design width. */
+.dockable-section.fill-content {
+  flex: 1 1 auto;
+  min-width: 420px;
+}
+
+.dockable-section.fill-content .dockable-section-content {
+  width: 100%;
+  height: 520px;
+}
+
+.sphere-zoom-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.sphere-zoom-slider input[type="range"] {
+  width: 110px;
+}
+
+.sphere-zoom-value {
+  min-width: 34px;
+  text-align: right;
+}
+
+/* flex-start, not stretch: the item column must keep its *natural* height,
+   because that height is what --map-size is derived from. Stretching it
+   would make it depend on the map, which depends on it - circular. */
+.tracker-section-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.item-tracker-panel {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: fit-content;
+}
+
+/* Pushed to the bottom of the item-tracker column, so its bottom edge lines
+   up with the bottom of the map beside it. */
+.item-tracker-panel /* Counts on the left, the whole-world list button on the right. */
+.tracking-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tracking-summary-action {
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.tracking-summary-action:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.tracking-summary-panel {
+  margin-top: auto;
+}
+
+/* Shard column matches the map exactly, both driven by --map-size. */
+.map-side-tab-panel {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.map-side-tab-panel .map-side-tab {
+  height: var(--map-size);
+  /* Containing block for .shard-preview, which anchors to this column's left
+     edge (right: 100%). */
+  position: relative;
+}
+
+/* --map-size is set at runtime from the item column's natural height
+   (MainTrackerSection.svelte), so the map comes out exactly as tall as the
+   item grid + summary beside it. It has to be a real width here rather than
+   letting aspect-ratio derive one from the height: a height-driven
+   aspect-ratio width doesn't participate in intrinsic sizing, so the panel
+   collapsed and the map overflowed onto the shard column. */
+.location-grid-panel {
+  position: relative; /* containing block for the fullscreen location list */
+  width: var(--map-size);
+  flex: 0 0 auto;
+}
+
+/* Right edge stretches horizontally on Hint Panel/Notes and scales
+   uniformly elsewhere; left/bottom/corner always scale uniformly. */
+.dockable-resize-handle {
+  position: absolute;
+  z-index: 5;
+}
+
+.dockable-resize-handle.right {
+  top: 0;
+  right: -4px;
+  bottom: 12px;
+  width: 8px;
+  cursor: nwse-resize;
+}
+
+.dockable-resize-handle.right.horizontal {
+  cursor: ew-resize;
+}
+
+.dockable-resize-handle.left {
+  top: 0;
+  left: -4px;
+  bottom: 12px;
+  width: 8px;
+  cursor: nesw-resize;
+}
+
+.dockable-resize-handle.bottom {
+  left: 12px;
+  right: 12px;
+  bottom: -4px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.dockable-resize-handle.corner {
+  right: -4px;
+  bottom: -4px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.dockable-panel.resizing {
+  outline: 2px solid rgba(194, 70, 50, 0.55);
+  outline-offset: -1px;
+}
+
+/* Drop-zone highlight shown while dragging a section's title bar over
+   another section - which edge lights up is which direction it'll be
+   inserted (moveSectionToPosition, $lib/state/layout.svelte.ts). */
+.dockable-drop-zone {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(155, 61, 219, 0.35);
+  border: 2px solid rgba(155, 61, 219, 0.85);
+}
+
+.dockable-drop-zone.left {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 25%;
+}
+
+.dockable-drop-zone.right {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 25%;
+}
+
+.dockable-drop-zone.top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+}
+
+.dockable-drop-zone.bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+}
+
+.shard-preview {
+  position: absolute;
+  z-index: 12;
+  /* Anchored to the side tab (right: 100% = immediately left of it) rather
+     than to a percentage of the tracker, which drifted upward over the
+     toolbar buttons at some panel sizes. */
+  top: 0;
+  right: calc(100% + 8px);
+  display: grid;
+  place-items: center;
+  width: 129px;
+  height: 129px;
+  border: 3px solid #df1f1f;
+  background: #000;
+  pointer-events: none;
+}
+
+.shard-preview[hidden] {
+  display: none;
+}
+
+.shard-preview img {
+  width: 84%;
+  height: 84%;
+  object-fit: contain;
+  filter: none;
+}
+
+.item-palette {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(8, 44px);
+  grid-template-rows: repeat(8, 44px);
+  gap: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  background: rgba(16, 24, 30, 0.82);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+
+.item-palette[hidden] {
+  display: none;
+}
+
+.item-palette-slot {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.52));
+}
+
+.item-palette-slot:active {
+  cursor: grabbing;
+}
+
+.item-palette-slot.blank,
+.item-palette-slot.missing {
+  cursor: default;
+  filter: none;
+}
+
+.item-palette-slot.blank img,
+.item-palette-slot.missing img {
+  display: none;
+}
+
+.item-palette-slot img {
+  max-width: 40px;
+  max-height: 40px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.item-palette-slot.large img {
+  max-width: 82px;
+  max-height: 82px;
+}
+
+.item-palette-cluster {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.item-palette-cluster .item-palette-slot {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+}
+
+/* Superseded by the real-tracker-parity Item Tracker rules further down
+   (.tracking-item-slot { cursor: pointer } + real color/gray assets instead
+   of a CSS filter) - kept as a single definition there instead of here. */
+
+.tracking-boss-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px;
+}
+
+.tracking-boss-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 84px;
+  text-align: center;
+}
+
+.tracking-boss-entry img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.tracking-boss-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.tracking-boss-required {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+}
+
+.tracking-misc-trackers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px;
+}
+
+.tracking-misc-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 84px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.tracking-misc-entry img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.tracking-misc-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.tracking-misc-fraction {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.tracking-misc-fraction.complete {
+  color: var(--ok);
+}
+
+.tracking-summary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  /* Neutral grey rather than the panel colour: the text is fixed white (see
+     below), so this needs a background dark enough to read against no matter
+     what panel colour is chosen. In stream mode the backdrop replaces it. */
+  background: #54595f;
+  border-color: rgba(255, 255, 255, 0.18);
+  /* Fixed white rather than the auto-contrast --ink: this panel sits over the
+     stream backdrop, whose colour says nothing about what is readable here. */
+  color: #ffffff;
+}
+
+.tracking-summary-panel .tracking-summary-counts,
+.tracking-summary-panel span,
+.tracking-summary-panel strong,
+.tracking-summary-panel h3 {
+  color: #ffffff;
+}
+
+.tracking-summary-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+}
+
+.tracking-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracking-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 12px;
+}
+
+.tracking-section-main {
+  display: grid;
+  gap: 12px;
+}
+
+.tracking-extra-panels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.tracking-extra-panels .tracking-item-grid {
+  flex: 1 1 320px;
+}
+
+.tracking-extra-panels .tracking-boss-checklist {
+  flex: 1 1 260px;
+}
+
+.tracking-extra-panels .tracking-misc-trackers {
+  flex: 1 1 260px;
+}
+
+.tracking-extra-panels .tracking-summary-panel {
+  flex: 0 0 220px;
+}
+
+.pearl-cluster .pearl-top {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.pearl-cluster .pearl-left {
+  bottom: 0;
+  left: 0;
+}
+
+.pearl-cluster .pearl-right {
+  right: 0;
+  bottom: 0;
+}
+
+
+
+/* Fills the map area rather than floating over the page - it's rendered
+   inside .location-grid-panel (MainTrackerSection.svelte). */
+.location-drop-list {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding: 8px;
+  /* Solid parchment tone *under* the semi-transparent island art, so the
+     island reads as faded into the page rather than just darkened. */
+  background: #dbbf6b;
+}
+
+/* The sector's own artwork at half strength behind the list. */
+.location-drop-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-position: center;
+  background-size: cover;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.location-drop-title,
+.location-drop-columns {
+  position: relative;
+  z-index: 1;
+}
+
+.location-drop-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.location-drop-action {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: #2e00ff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.location-drop-action:hover,
+.location-drop-action:focus-visible {
+  color: #101c46;
+  outline: none;
+  text-decoration: underline;
+}
+
+.location-drop-columns {
+  display: grid;
+  grid-template-columns: repeat(var(--location-column-count), minmax(0, 1fr));
+  gap: 4px;
+  align-items: start;
+}
+
+.location-drop-column {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
+/* Plain coloured text on the dark panel: blue = reachable in logic,
+   red = not currently reachable, struck through once checked. */
+.location-drop-option {
+  padding: 1px 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #2e00ff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.location-drop-option.inaccessible {
+  color: #ff0016;
+}
+
+.location-drop-option:hover,
+.location-drop-option:focus-visible {
+  background: rgba(0, 0, 0, 0.12);
+  outline: none;
+}
+
+.location-drop-option.rando-marked {
+  color: rgba(40, 30, 10, 0.45);
+  text-decoration: line-through;
+}
+
+/* A settled entrance - recorded or implied by its coupled partner - goes
+   black, so the red and blue ones left are exactly the ones still to find.
+   Two classes deep to outrank the .inaccessible colour above. */
+.location-drop-option.entrance-drop-option.entrance-known {
+  color: #000;
+}
+
+/* Armed for item assignment - matches the sector's pulse on the map. */
+.location-drop-option.pulsing {
+  animation: tracker-area-pulse-text 1.1s ease-in-out infinite;
+}
+
+@keyframes tracker-area-pulse-text {
+  0%, 100% { background: rgba(155, 61, 219, 0.35); color: #fff; }
+  50% { background: rgba(155, 61, 219, 0.95); color: #fff; }
+}
+.manual-drag-ghost {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.55));
+}
+
+.manual-drag-ghost img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.map-side-tab {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: start;
+  justify-items: center;
+  gap: 8px;
+  width: var(--map-side-tab-width);
+  min-width: var(--map-side-tab-width);
+  padding: 5px 4px;
+  border: 1px solid rgba(32, 51, 59, 0.45);
+  border-radius: 6px;
+  background: rgba(255, 253, 247, 0.86);
+}
+
+.jelly-counter {
+  display: grid;
+  grid-template-columns: 18px auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.jelly-counter[hidden] {
+  display: none;
+}
+
+.jelly-counter img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+
+.shard-status-list {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 3px;
+}
+
+.shard-status {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 25px;
+  filter: grayscale(1);
+  opacity: 0.36;
+}
+
+.shard-status.hinted {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  opacity: 1;
+}
+
+.shard-status.checked {
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  opacity: 1;
+}
+
+.shard-status.checked::after {
+  content: "";
+  grid-area: 1 / 1;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(55, 190, 95, 0.55);
+  mix-blend-mode: color;
+  pointer-events: none;
+}
+
+.shard-status-list.automatic-shard-choice .shard-status {
+  border-radius: 3px;
+  outline: 2px solid rgba(139, 82, 190, 0.82);
+  outline-offset: 1px;
+  background: rgba(218, 195, 239, 0.7);
+  opacity: 1;
+}
+
+.shard-status .item-number {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25em;
+  height: 1em;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #101418;
+  font-size: 54%;
+  font-weight: 900;
+  line-height: 1;
+  justify-self: end;
+  text-shadow: none;
+  transform: translateX(58%);
+}
+
+.shard-status .starting-cross {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 3;
+  width: 130%;
+  height: 130%;
+  pointer-events: none;
+}
+
+.shard-status .starting-cross::before,
+.shard-status .starting-cross::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 118%;
+  height: 4px;
+  border-radius: 999px;
+  background: #d01818;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+  transform-origin: center;
+}
+
+.shard-status .starting-cross::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.shard-status .starting-cross::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.shard-status img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.sea-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  /* Square, sized from --map-size, which is set at runtime to the item
+     column's natural height - so the map, the item column and the shard
+     column all end up the same height without any hard-coded value. */
+  width: var(--map-size);
+  height: var(--map-size);
+  border: 2px solid #20333b;
+  /* One sea chart behind the whole 7x7 rather than per-sector artwork in
+     every cell - the flatter, lighter backdrop is what makes the location
+     counts readable.
+
+     The art is 364x346 with its printed 7x7 grid occupying x 6..359,
+     y 6..341 - i.e. a ~6px painted margin all round. Stretching the whole
+     file edge-to-edge (background-size: 100% 100%) therefore lands the
+     printed lines ~3% inside our own cell borders, drifting further out of
+     step towards the right/bottom edges. These numbers scale the printed
+     grid box up to exactly the cell box instead:
+       size = 364/353 and 346/335 (bleed the margin off the edges)
+       position = 6/11 on both axes (the margin's share of the overage)
+     The 353x335 printed box is stretched to square, but its own cells are
+     ~5% wider than tall, so that stretch squares them up rather than
+     distorting them. */
+  background:
+    url("/assets/tracker/sea_chart.png") 54.5455% 54.5455% / 103.116% 103.284% no-repeat,
+    var(--sea);
+}
+
+/* Transparent so the sea chart shows through; they keep their own
+   hover/pulse/drop states. */
+/* Anchors the marking prompt, which floats over the map rather than taking a
+   cell. Scoped here rather than on .sea-grid so nothing else that uses the
+   grid picks up a containing block it did not have. */
+.tracking-location-grid {
+  position: relative;
+}
+
+.tracking-location-grid .tracker-area-cell {
+  background-color: transparent;
+  border-color: rgba(32, 51, 59, 0.28);
+}
+
+body.sphere-assignment-mode .sea-grid {
+  background:
+    linear-gradient(rgba(55, 32, 205, 0.52), rgba(55, 32, 205, 0.52)),
+    url("/assets/images/Great_Sea_Chart.jpg") center / cover,
+    #3720cd;
+}
+
+body.sphere-assignment-mode .sector {
+  background: rgba(55, 32, 205, 0.05);
+}
+
+.sector {
+  position: relative;
+  min-width: 0;
+  border: 1px solid rgba(32, 51, 59, 0.55);
+  background: rgba(8, 116, 109, 0.05);
+}
+
+.sector.drag-target,
+.area-cell.drag-target {
+  outline: 2px solid rgba(47, 123, 87, 0.9);
+  outline-offset: -3px;
+  background: rgba(47, 123, 87, 0.18);
+}
+
+.sector-label {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  right: 5px;
+  overflow: hidden;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sector-fraction {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.72);
+  font-size: 0.9rem;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.sector-fraction.complete {
+  color: var(--ok);
+}
+
+.sector-hint-icons {
+  position: absolute;
+  top: 26%;
+  left: 50%;
+  right: auto;
+  bottom: 34%;
+  display: grid;
+  grid-template-columns: repeat(3, var(--item-map-icon-size));
+  grid-auto-rows: var(--item-map-icon-size);
+  justify-content: center;
+  align-content: center;
+  justify-items: center;
+  align-items: center;
+  gap: clamp(1px, 4%, 4px);
+  width: 94%;
+  transform: translateX(-50%);
+}
+
+/* Along the top edge of the sector, clear of the accessible/remaining
+   fraction that sits at the bottom. */
+.sector-marker-icons {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 3%;
+  height: 30%;
+  pointer-events: none;
+}
+
+/* 70% of the icon size used elsewhere: on the sector these are labels
+   rather than controls, and full size crowded the artwork. */
+.sector-marker-icons .map-icon {
+  position: absolute;
+  top: 0;
+  width: calc(var(--map-icon-size) * 0.7);
+  height: calc(var(--map-icon-size) * 0.7);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.sector-marker-icons .map-icon img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.sector-marker-icons .hoho {
+  left: 33%;
+}
+
+.sector-marker-icons .blue-chu {
+  left: 67%;
+}
+
+.map-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--map-icon-size);
+  height: var(--map-icon-size);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: var(--map-icon-size);
+  font-weight: 800;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.48));
+}
+
+.sector-hint-icons .map-icon {
+  width: var(--item-map-icon-size);
+  height: var(--item-map-icon-size);
+  font-size: var(--item-map-icon-size);
+}
+
+.sector-hint-icons .map-icon img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.map-icon.checked {
+  opacity: 0.34;
+  filter: grayscale(1);
+}
+
+.map-icon img {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.map-icon .item-number,
+.stream-item-box .item-number {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  min-width: 1.25em;
+  justify-content: center;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  height: 1em;
+  color: #101418;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.map-icon .shard-number {
+  font-size: 54%;
+  justify-self: end;
+  transform: translateX(58%);
+}
+
+.map-icon .chart-number,
+.stream-item-box .chart-number {
+  align-self: start;
+  justify-self: start;
+  margin: -0.16em 0 0 -0.16em;
+  font-size: 54%;
+}
+
+.area-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: auto;
+  gap: 5px;
+  width: min(100%, var(--map-size));
+  height: auto;
+  padding: 5px;
+  border-radius: 7px;
+  background: #2f3337;
+}
+
+.area-cell {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  align-items: start;
+  justify-items: center;
+  min-height: 0;
+  padding: 4px 4px 0;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  background: #42474c;
+}
+
+.area-image {
+  align-self: start;
+  width: 67%;
+  max-width: 67%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28));
+}
+
+.area-hint-icons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.area-hint-icons .map-icon {
+  width: var(--item-map-icon-size);
+  height: var(--item-map-icon-size);
+  font-size: var(--item-map-icon-size);
+}
+
+.area-hint-icons .map-icon img {
+  max-width: none;
+  max-height: none;
+}
+
+.map-icon.path {
+  border-color: var(--path);
+  color: var(--path);
+}
+
+.map-icon.item {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.map-icon.location {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+/* Always normal-flow now - Hint Panel is a DockableSection like every other
+   section (drag/resize/dock/hide via its own title bar), not an
+   independently floating fixed-position overlay like it used to be. Its own
+   internal hintPanelResizeHandle is gone too, superseded by
+   DockableSection's generic right-edge resize handle. */
+.hint-panel {
+  position: relative;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.notes-section,
+.parsed-section {
+  display: grid;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.notes-section {
+  grid-template-rows: auto auto auto;
+  /* minmax(0, 1fr) rather than the default auto track: an auto column is
+     sized by its widest content, so a nowrap control anywhere inside pushed
+     the panel wider and left the textarea's width:100% resolving against
+     that instead of the panel's own width. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.notes-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.segmented-control.notes-tabs button {
+  min-height: 28px;
+  padding-inline: 10px;
+  font-size: 0.76rem;
+}
+
+.notes-input[hidden] {
+  display: none;
+}
+
+/* No card chrome of its own: the section's title bar already frames the
+   panel, so the bordered white box just boxed in the controls and spent 14px
+   of padding on every edge. The hint cards inside carry their own
+   backgrounds, so nothing below needs a fill either. */
+.parsed-section {
+  grid-template-rows: auto auto auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Only the tabs collapse. */
+body.hide-parsed-filters .parsed-section > .tabs {
+  display: none;
+}
+
+/* The negative margins that used to bleed the list out to the old box's
+   edges are gone with the box. */
+.parsed-section .hint-list {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+body.stream-mode .parsed-section {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* The heading/filters strip keeps a solid backing in stream mode so it stays
+   readable over a keyed background - but it takes the panel colour, not a
+   hardcoded cream. That fixed fill ignored the panel colour entirely, and
+   with light auto-contrast ink it left white text on a near-white box. */
+body.stream-mode .parsed-section .parsed-actions,
+body.stream-mode .parsed-section .tabs {
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+body.stream-mode .parsed-section .hint-list {
+  background: transparent;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.parsed-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.parsed-actions .tool-button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+}
+
+/* Pushed to the end of the row so the counter reads as a status, not another
+   control crowding the buttons. */
+.parsed-count {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+textarea {
+  width: 100%;
+  min-height: 135px;
+  resize: none;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: none;
+  background: #fffefa;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+textarea:focus {
+  border-color: var(--sea-dark);
+  box-shadow: 0 0 0 3px rgba(54, 123, 148, 0.16);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tab {
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.tab.active {
+  border-color: var(--sea-dark);
+  background: #e7f3f6;
+  color: #164252;
+  font-weight: 700;
+}
+
+.hint-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.hint-card {
+  position: relative;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #fffefa;
+  box-shadow: 0 2px 8px rgba(20, 30, 36, 0.12);
+}
+
+body.stream-mode .hint-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hint-flow {
+  display: grid;
+  grid-template-columns:
+    minmax(0, max(48px, calc(var(--hint-arrow-position) - 17px)))
+    34px
+    minmax(0, max(48px, calc(100% - var(--hint-arrow-position) - 17px)));
+  align-items: center;
+  gap: 6px;
+}
+
+body.stream-mode .hint-flow {
+  grid-template-columns:
+    minmax(0, max(78px, calc(var(--hint-arrow-position) - 17px)))
+    34px
+    minmax(0, max(90px, calc(100% - var(--hint-arrow-position) - 17px)));
+  gap: 7px;
+}
+
+body.stream-mode .hint-card.path .hint-flow {
+  grid-template-columns:
+    minmax(0, max(150px, calc(var(--hint-arrow-position) - 17px)))
+    34px
+    minmax(70px, calc(100% - var(--hint-arrow-position) - 17px));
+}
+
+.hint-side {
+  display: flex;
+  position: relative;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.hint-side.right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+body.stream-mode .hint-side.left {
+  justify-content: flex-end;
+}
+
+body.stream-mode .hint-side.right {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.hint-image {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.48));
+}
+
+.boss-image {
+  width: 58px;
+  height: 58px;
+}
+
+body.stream-mode .hint-image {
+  width: 48px;
+  height: 48px;
+}
+
+body.stream-mode .boss-image {
+  width: 62px;
+  height: 62px;
+}
+
+.hint-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.hint-side.item .hint-name {
+  display: none;
+}
+
+body.stream-mode .hint-name {
+  font-size: 0.82rem;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.7);
+}
+
+body.stream-mode .hint-side.text .hint-name,
+body.stream-mode .hint-side.right.text .hint-name {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 7px;
+  border-radius: 5px;
+  background: #fff;
+}
+
+body.stream-mode .hint-card.path .hint-side.text .hint-name {
+  max-width: none;
+}
+
+.stream-item-box {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  font-size: 22px;
+}
+
+.stream-item-box > img,
+.stream-item-box > .item-number {
+  grid-area: 1 / 1;
+}
+
+.stream-item-box .shard-number {
+  font-size: 54%;
+  justify-self: end;
+  transform: translateX(58%);
+}
+
+.stream-item-box .chart-number {
+  font-size: 54%;
+}
+
+.requirement-cycle-target {
+  cursor: pointer;
+}
+
+.requirement-cycle-target:focus-visible {
+  outline: 2px solid rgba(28, 118, 152, 0.8);
+  outline-offset: 2px;
+}
+
+body.stream-mode .stream-item-box {
+  display: grid;
+  position: relative;
+  grid-template-columns: max-content max-content;
+  justify-items: center;
+  align-items: center;
+  gap: 3px;
+  min-width: 72px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 26px;
+}
+
+body.stream-mode .requirement-required .stream-item-box {
+  background: #bde7ce;
+}
+
+body.stream-mode .requirement-possibly-required .stream-item-box {
+  background: #ffe28a;
+}
+
+body.stream-mode .requirement-not-required .stream-item-box {
+  background: #d4d8db;
+}
+
+body.stream-mode .needs-review .stream-item-box {
+  background: #f4c88f;
+}
+
+.hint-arrow {
+  display: block;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+}
+
+.hint-card.path {
+  border-left-color: var(--path);
+  background: var(--path-bg);
+}
+
+.hint-card.item {
+  border-left-color: var(--ok);
+}
+
+.hint-card.location {
+  border-left-color: var(--accent);
+}
+
+.hint-card.requirement-required {
+  border-left-color: var(--required-border);
+  background: var(--required-bg);
+}
+
+.hint-card.requirement-possibly-required {
+  border-left-color: var(--possible-border);
+  background: var(--possible-bg);
+}
+
+.hint-card.requirement-not-required {
+  border-left-color: var(--neutral-border);
+  background: var(--neutral-bg);
+}
+
+.hint-card.needs-review {
+  background: #fff6e7;
+  border-left-color: var(--warn);
+}
+
+body.stream-mode .hint-card.path,
+body.stream-mode .hint-card.requirement-required,
+body.stream-mode .hint-card.requirement-possibly-required,
+body.stream-mode .hint-card.requirement-not-required,
+body.stream-mode .hint-card.needs-review {
+  background: transparent;
+}
+
+.hint-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-weight: 800;
+}
+
+.hint-pill {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef1f1;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.hint-card.needs-review .hint-pill {
+  background: #f9dfb9;
+  color: var(--warn);
+}
+
+.hint-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+
+body.stream-mode .hint-meta {
+  display: none;
+}
+
+body.stream-mode .hint-line-text {
+  display: none;
+}
+
+.hint-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.stream-item-box .hint-status {
+  display: none;
+}
+
+body.stream-mode .hint-meta > .hint-status {
+  display: none;
+}
+
+body.stream-mode .stream-item-box .hint-status {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  min-height: 18px;
+  padding: 1px 5px;
+  font-size: 0.62rem;
+}
+
+body.stream-mode .stream-item-box .shard-number {
+  font-size: 54%;
+}
+
+body.stream-mode .stream-item-box .chart-number {
+  font-size: 54%;
+}
+
+.hint-status.path {
+  border-color: var(--path);
+  background: #e7dcfb;
+  color: #56358c;
+}
+
+.hint-status.required {
+  border-color: var(--required-border);
+  background: #d9f0e2;
+  color: #216841;
+}
+
+.hint-status.possibly-required {
+  border-color: var(--possible-border);
+  background: #ffedb0;
+  color: #72500a;
+}
+
+.hint-status.not-required,
+.hint-status.neutral {
+  border-color: var(--neutral-border);
+  background: #e3e5e7;
+  color: #4e5962;
+}
+
+.hint-status.review {
+  border-color: var(--warn);
+  background: #f9dfb9;
+  color: var(--warn);
+}
+
+body.stream-mode .empty-state {
+  display: none;
+}
+
+.empty-state {
+  padding: 24px 12px;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding: 10px calc(var(--hint-panel-width) + 28px) 10px 10px;
+  }
+
+  .top-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sector-label {
+    font-size: 0;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Sphere tracking and randomized dungeon entrance controls */
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: min(100%, calc(var(--map-size) + var(--map-side-tab-width) + 5px));
+  min-width: 0;
+}
+
+.segmented-control {
+  display: inline-grid;
+  grid-auto-flow: column;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.segmented-control button {
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.69rem;
+  font-weight: 800;
+}
+
+.segmented-control button:last-child {
+  border-right: 0;
+}
+
+.segmented-control button.active {
+  background: var(--sea-dark);
+  color: #fff;
+}
+
+.assignment-mode button.active {
+  background: var(--ok);
+}
+
+.map-toolbar-button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+
+.sphere-logic-status {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Full height of the row (i.e. the map's height) rather than a min-height
+   that could exceed it. */
+.map-side-tab {
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.shard-status-list {
+  align-self: start;
+  grid-template-rows: none;
+  min-height: initial;
+  gap: 3px;
+}
+
+.shard-status {
+  width: 25px;
+  height: 25px;
+  font-size: 25px;
+}
+
+.dungeon-entrance-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+  padding-top: 4px;
+  border-top: 1px solid rgba(32, 51, 59, 0.23);
+}
+
+.dungeon-entrance {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 21px;
+  padding: 0 1px;
+  border: 1px solid rgba(32, 51, 59, 0.3);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.66);
+  color: #36444b;
+  cursor: grab;
+  font-size: 0.51rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.dungeon-entrance:active {
+  cursor: grabbing;
+}
+
+.dungeon-entrance.mapped {
+  border-color: var(--ok);
+  background: #d9f0e2;
+  color: #216841;
+}
+
+.dungeon-entrance.armed {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.sector-entrance-icons {
+  position: absolute;
+  z-index: 3;
+  top: 21%;
+  right: 3%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  max-width: 46%;
+}
+
+.sector-entrance-badge {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 3px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 3px;
+  background: rgba(22, 41, 49, 0.84);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.48rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* Fills its container both docked and undocked - it used to be clamped to
+   var(--map-size) with a forced 1:1 aspect ratio, which made the docked
+   board far slimmer than the popout. Content scale comes from the title-bar
+   slider (SphereZoomSlider.svelte) instead. */
+.sphere-board {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 420px;
+  overflow: auto;
+  border: 2px solid #20333b;
+  background:
+    linear-gradient(rgba(28, 48, 57, 0.91), rgba(28, 48, 57, 0.91)),
+    url("/assets/images/Great_Sea_Chart.jpg") center / cover;
+  color: #fff;
+  scrollbar-color: #70818a #24343c;
+  scrollbar-width: thin;
+  cursor: grab;
+  user-select: none;
+}
+
+.sphere-board.sphere-panning,
+.sphere-board.sphere-panning * {
+  cursor: grabbing !important;
+}
+
+.sphere-board[hidden],
+.sphere-canvas[hidden],
+.sea-grid[hidden] {
+  display: none;
+}
+
+.sphere-board-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.sphere-board-empty[hidden] {
+  display: none;
+}
+
+.sphere-canvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+  width: max-content;
+  padding: 10px;
+}
+
+.sphere-columns {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  gap: 34px;
+  width: max-content;
+  min-width: 100%;
+  min-height: calc(var(--map-size) - 24px);
+}
+
+.sphere-column {
+  display: flex;
+  flex: 0 0 150px;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: rgba(8, 17, 22, 0.42);
+}
+
+.sphere-column.start-column {
+  flex-basis: 92px;
+}
+
+.sphere-column h3 {
+  margin: 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.19);
+  color: #fff;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.sphere-start-node {
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.62rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.sphere-groups-toggle {
+  width: 100%;
+  min-height: 25px;
+  padding: 4px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  font-size: 0.58rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sphere-groups-toggle:hover,
+.sphere-groups-toggle:focus-visible {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.sphere-placement-list,
+.sphere-area-groups {
+  display: grid;
+  gap: 5px;
+}
+
+.sphere-placement {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 42px;
+  padding: 3px 5px 3px 3px;
+  border: 1px solid rgba(115, 203, 153, 0.72);
+  border-radius: 4px;
+  background: rgba(231, 246, 237, 0.94);
+  color: #172027;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sphere-placement:hover {
+  outline: 2px solid rgba(255, 222, 104, 0.82);
+}
+
+.sphere-item-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 34px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.42));
+}
+
+.sphere-item-icon img {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.sphere-item-icon .item-number {
+  grid-area: 1 / 1;
+  align-self: start;
+  justify-self: start;
+  min-width: 1.25em;
+  height: 1em;
+  margin: -0.12em 0 0 -0.12em;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #101418;
+  font-size: 54%;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.sphere-item-icon .shard-number {
+  align-self: center;
+  justify-self: end;
+  margin: 0;
+  transform: translateX(55%);
+}
+
+.sphere-placement-label {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 1px 0;
+  overflow: hidden;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.sphere-placement-area {
+  overflow: hidden;
+  color: currentColor;
+  font-size: 0.53rem;
+  font-weight: 800;
+  line-height: 1.05;
+  opacity: 0.86;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sphere-placement-location {
+  margin-top: auto;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.sphere-placement.unknown-sphere-placement {
+  border-style: dashed;
+  background: rgba(240, 243, 244, 0.92);
+}
+
+.sphere-placement.out-of-logic-placement {
+  border-color: rgba(196, 68, 61, 0.92);
+  background: rgba(246, 205, 201, 0.96);
+  color: #421815;
+}
+
+.sphere-placement.optional-placement {
+  border-color: rgba(131, 139, 143, 0.78);
+  background: rgba(225, 228, 229, 0.9);
+  color: #3d464b;
+  box-shadow: inset 3px 0 0 rgba(112, 120, 124, 0.68);
+}
+
+.sphere-placement.optional-placement .sphere-item-icon {
+  filter: grayscale(0.72) opacity(0.72) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.32));
+}
+
+.sphere-optional-label {
+  grid-column: 2;
+  margin-top: -3px;
+  color: #687277;
+  font-size: 0.49rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sphere-placement.path-chain-location:not(.suppress-path-tint),
+.sphere-hint-prediction.path-chain-location:not(.suppress-path-tint) {
+  border-color: rgba(143, 82, 199, 0.92);
+  background: rgba(226, 207, 244, 0.96);
+  color: #34203f;
+  box-shadow: inset 3px 0 0 rgba(117, 61, 169, 0.86);
+}
+
+.sphere-placement.hint-derived,
+.sphere-hint-prediction.hint-derived {
+  border-color: rgba(52, 163, 91, 0.9);
+  background: rgba(202, 241, 215, 0.96);
+  color: #173d25;
+  box-shadow: inset 3px 0 0 rgba(43, 139, 76, 0.78);
+}
+
+.sphere-column.sphere-prediction-column {
+  flex-basis: 165px;
+  border-style: dashed;
+  border-color: rgba(105, 190, 209, 0.55);
+  background: rgba(13, 32, 39, 0.62);
+}
+
+.sphere-column.sphere-path-column {
+  flex-basis: 185px;
+  border-color: rgba(178, 128, 224, 0.68);
+  background: rgba(38, 20, 50, 0.58);
+}
+
+.sphere-prediction-list {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.sphere-hint-prediction,
+.sphere-path-prediction {
+  width: 100%;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sphere-hint-prediction {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-height: 42px;
+  padding: 3px 5px 3px 3px;
+  border: 1px dashed rgba(105, 190, 209, 0.8);
+  background: rgba(229, 246, 250, 0.94);
+  color: #172027;
+}
+
+.sphere-prediction-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sphere-prediction-body strong {
+  font-size: 0.61rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.sphere-prediction-body small,
+.sphere-path-candidates small {
+  color: #596970;
+  font-size: 0.53rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.sphere-path-prediction {
+  display: grid;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid rgba(188, 139, 232, 0.82);
+  background: rgba(246, 237, 252, 0.96);
+  color: #25192c;
+}
+
+.sphere-hint-prediction:hover,
+.sphere-path-prediction:hover {
+  outline: 2px solid rgba(255, 222, 104, 0.82);
+}
+
+.sphere-path-header {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.sphere-boss-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.38));
+}
+
+.sphere-path-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sphere-path-text strong {
+  font-size: 0.62rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.sphere-path-text small {
+  width: max-content;
+  padding: 2px 4px;
+  border: 1px solid rgba(106, 67, 139, 0.42);
+  border-radius: 3px;
+  background: rgba(106, 67, 139, 0.1);
+  color: #5b386f;
+  font-size: 0.53rem;
+  font-weight: 900;
+}
+
+.sphere-path-candidates {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 28px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(91, 56, 111, 0.18);
+}
+
+.sphere-path-candidate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 28px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.38));
+}
+
+.sphere-path-candidate img {
+  grid-area: 1 / 1;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.sphere-path-candidate .item-number {
+  grid-area: 1 / 1;
+  align-self: start;
+  justify-self: start;
+  min-width: 1.2em;
+  height: 1em;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #101418;
+  font-size: 52%;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.sphere-candidate-sphere {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  min-width: 18px;
+  padding: 1px 3px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 3px;
+  background: #50326b;
+  color: #fff;
+  font-size: 0.48rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  filter: none;
+}
+
+.sphere-available-heading {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.58rem;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.sphere-area-group {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sphere-area-group[open] {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.sphere-area-group summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  cursor: pointer;
+  font-size: 0.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+  list-style-position: inside;
+}
+
+.sphere-area-group summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sphere-area-group summary strong {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.sphere-location-list {
+  display: grid;
+  gap: 1px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 0 4px 4px;
+}
+
+.sphere-location-list div {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.55rem;
+  line-height: 1.25;
+}
+
+.sphere-location-list div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sphere-area-group summary .sphere-location-path-bosses {
+  overflow: visible;
+}
+
+.sphere-location-path-bosses {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.sphere-location-path-boss {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.52));
+}
+
+.sphere-location-list div.rando-marked {
+  border-color: rgba(255, 190, 204, 0.2);
+  background: rgba(190, 96, 116, 0.46);
+  color: rgba(255, 240, 244, 0.86);
+}
+
+.sphere-edges {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sphere-edges path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 2;
+  opacity: 0;
+  transition: opacity 120ms ease, stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.sphere-edges path.highlighted {
+  stroke: #ffda54;
+  stroke-width: 3;
+  opacity: 1;
+}
+
+.sphere-edges path.path-hint-edge {
+  stroke: #ad72ee;
+  stroke-width: 2.5;
+  opacity: 0.95;
+}
+
+.sphere-edges path.path-hint-edge.highlighted {
+  stroke: #d4adff;
+  stroke-width: 3.25;
+}
+
+/* An area hinted at several bosses holds a separate path item for each, but
+   which one belongs to which is decided by shuffle order in the randomizer and
+   cannot be recovered. Dashed and dimmer reads as "one of these" rather than
+   asserting every candidate feeds every boss. Hovering a card still isolates
+   its own chain at full strength. */
+.sphere-edges path.path-hint-edge.path-hint-tentative {
+  stroke-dasharray: 6 5;
+  opacity: 0.6;
+}
+
+.sphere-edges path.path-hint-edge.path-hint-tentative.highlighted {
+  opacity: 1;
+}
+
+.sphere-canvas [data-node-id] {
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+
+.sphere-canvas.sphere-chain-focus [data-node-id].sphere-chain-dimmed {
+  opacity: 0.22 !important;
+  filter: brightness(0.32) saturate(0.28) !important;
+}
+
+.sphere-canvas.sphere-chain-focus .sphere-edges path.sphere-chain-dimmed {
+  opacity: 0;
+}
+
+.sphere-canvas.sphere-chain-focus .sphere-edges path.path-hint-edge.sphere-chain-dimmed {
+  opacity: 0.95;
+}
+
+/* The toolbar deliberately gets no stream background. It used to be painted
+   with --stream-key, which is no longer a setting - leaving a stray green bar
+   under the tracker's top buttons. */
+
+.starting-items-prompt {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(8, 14, 18, 0.72);
+}
+
+.starting-items-prompt[hidden] {
+  display: none;
+}
+
+.starting-items-dialog {
+  width: 400px;
+  max-width: calc(100vw - 24px);
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+}
+
+.starting-items-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 9px;
+}
+
+.starting-items-heading p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.starting-items-heading strong {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.starting-items-palette.item-palette {
+  position: relative;
+  z-index: auto;
+  grid-template-rows: repeat(7, 44px);
+  margin: 0 auto;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(16, 24, 30, 0.9);
+  box-shadow: none;
+}
+
+.starting-items-palette .item-palette-slot {
+  cursor: pointer;
+  isolation: isolate;
+}
+
+.starting-items-palette .item-palette-slot.blank,
+.starting-items-palette .item-palette-slot.missing {
+  cursor: default;
+}
+
+.starting-items-palette .item-palette-slot.selected {
+  background: rgba(71, 175, 112, 0.38);
+  box-shadow: inset 0 0 0 2px rgba(145, 235, 180, 0.92);
+}
+
+.starting-item-count {
+  position: absolute;
+  z-index: 3;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 9px;
+  background: #2f7b57;
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  filter: none;
+}
+
+.starting-items-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 9px;
+}
+
+.starting-items-actions > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.starting-items-actions .tool-button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 0.7rem;
+}
+
+.starting-items-actions .tool-button.primary {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #fff;
+}
+
+/* Real-tracker-parity rework: TrackerAreaCell, Item Tracker, section layout */
+
+.tracker-area-cell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(32, 51, 59, 0.55);
+  background-color: rgba(8, 116, 109, 0.05);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
+
+.tracker-area-cell.drag-target {
+  outline: 2px solid rgba(47, 123, 87, 0.9);
+  outline-offset: -3px;
+}
+
+@keyframes tracker-area-pulse {
+  0%, 100% { outline-color: rgba(155, 61, 219, 0.35); }
+  50% { outline-color: rgba(155, 61, 219, 0.95); }
+}
+
+.tracker-area-cell.pulsing {
+  outline: 3px solid rgba(155, 61, 219, 0.7);
+  outline-offset: -3px;
+  animation: tracker-area-pulse 1.1s ease-in-out infinite;
+}
+
+.tracker-area-label {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  right: 3px;
+  overflow: hidden;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracker-area-fraction {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #2f4fe0;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55), 0 1px 4px rgba(0, 0, 0, 0.35);
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tracker-area-fraction.done {
+  color: #111;
+}
+
+.tracker-area-fraction.stuck {
+  color: #d43a3a;
+}
+
+.tracker-area-entrance-badges {
+  position: absolute;
+  z-index: 3;
+  top: 21%;
+  right: 3%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  max-width: 46%;
+}
+
+/* Dungeons + misc areas on one line: no wrapping, no container padding, and
+   bottom-aligned so the misc cells (which have no dungeon-item row above
+   them) still line up with the dungeon cells. */
+.tracking-area-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  /* Clears the map above: without it the dungeon-item icons (which hang off
+     the top of each entry) butt right up against the map's bottom edge. */
+  margin-top: 8px;
+  /* Always applied, not only in stream mode: the stream backdrop uses this
+     padding to frame the dungeon-item icons, and toggling padding on/off
+     would resize the Main Tracker every time stream mode changed. */
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.tracking-boss-checklist,
+.tracking-misc-trackers {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0;
+}
+
+.tracking-boss-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Small key / big key / map / compass above each dungeon. The bottom margin
+   lifts them clear of the boss cell's border below. */
+/* Icons hang from the top of the row (and of their own box) rather than
+   sitting centred, so they read as sitting above the boss cell instead of
+   straddling its top edge. */
+.dungeon-item-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  height: 20px;
+  margin-bottom: 3px;
+}
+
+.dungeon-item {
+  position: relative;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dungeon-item img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: top;
+}
+
+.dungeon-item-count {
+  position: absolute;
+  right: -1px;
+  bottom: 0;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  font-size: 0.58rem;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+/* Marked shards layer over a grey triforce in the item grid. */
+.triforce-stack {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.triforce-stack img,
+.triforce-shard-tint {
+  grid-area: 1 / 1;
+  width: calc(var(--tracker-slot) * 1.86);
+  height: calc(var(--tracker-slot) * 1.86);
+  object-fit: contain;
+}
+
+/* Half brightness on starting-gear shards only - the ones the red tint marks
+   - so they read as "came with the seed" rather than competing with the
+   pieces you actually found. Shards you found, the grey base and the
+   completed triforce8 image all keep their own values. */
+.triforce-shard-layer.starting {
+  filter: brightness(0.5);
+}
+
+/* Shards that came from the seed's starting gear (crossed out in the shard
+   column). mix-blend-mode: color takes the red's hue/saturation but keeps
+   the shard's own luminance, so it reads as a tint rather than a flat
+   repaint; the mask confines it to that shard's shape. */
+.triforce-shard-tint {
+  background-color: #ff0016;
+  mix-blend-mode: color;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+  pointer-events: none;
+}
+
+/* Plain CSS - :global() here is Svelte-only syntax and silently voided the
+   rule, which is why these cells collapsed to a few pixels. Sized so all
+   ten (6 dungeons + 4 misc) fit across the tracker's width. */
+.tracking-boss-entry .tracker-area-cell,
+.tracking-misc-trackers .tracker-area-cell {
+  width: 76px;
+  height: 76px;
+  /* Artwork sits slightly inside the cell. The box itself keeps its full
+     76px so the click target and the row's spacing are unchanged - only the
+     drawn image shrinks. */
+  background-size: 84%;
+  background-repeat: no-repeat;
+}
+
+/* The dungeon/misc icon fills its whole cell, so the location count sits
+   below the cell instead of on top of the artwork. The margin reserves the
+   room it now occupies outside the border. */
+.tracking-area-row .tracker-area-cell {
+  overflow: visible;
+  margin-bottom: 17px;
+}
+
+.tracking-area-row .tracker-area-fraction {
+  bottom: -16px;
+  color: #2f4fe0;
+  text-shadow: none;
+}
+
+.tracking-area-row .tracker-area-fraction.stuck {
+  color: #d43a3a;
+}
+
+.tracking-area-row .tracker-area-fraction.done {
+  color: #111;
+}
+
+.tracking-boss-required {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+}
+
+.tracking-summary-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+}
+
+.tracking-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* .item-palette defaults to position:fixed/z-index:40 for the old floating
+   assignment popup (now removed) - the Item Tracker is a permanently docked
+   panel, not a popup, so it needs to participate in normal layout flow
+   instead of overlaying everything (same override pattern already used by
+   .starting-items-palette.item-palette below). */
+.tracking-item-grid.item-palette {
+  position: relative;
+  z-index: auto;
+  margin: 0;
+  box-shadow: none;
+  /* The real tracker's inventory backdrop (gui/desktop/tracker/data/
+     trackerbg.png upstream). Stretched to the grid rather than tiled - it's
+     a single 456x346 panel image, and the grid's own size is driven by the
+     map height, so it can't be pinned to the artwork's native dimensions. */
+  background-image: url("/assets/tracker/trackerbg.png");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  border: 0;
+  /* 7 rows, not the palette's 8: row 8 is boss entries, which the Item
+     Tracker doesn't render (bosses have their own checklist row), so the
+     8th row was just reserving 44px of dead space under the grid. */
+  /* Natural slot size - the item grid is the thing everything else sizes
+     against now, rather than being squeezed to fit a pre-set panel width. */
+  --tracker-slot: 44px;
+  grid-template-columns: repeat(8, var(--tracker-slot));
+  grid-template-rows: repeat(7, var(--tracker-slot));
+}
+
+/* Slots are larger here than in the old floating palette so the grid is
+   close to the map's width and grid + summary together fill the map's
+   height, leaving only a small gap between them. Ratios match the original
+   44px slot (40/44 icon, 82/44 for the large Triforce cluster). */
+.tracking-item-grid .item-palette-slot img {
+  max-width: calc(var(--tracker-slot) * 0.91);
+  max-height: calc(var(--tracker-slot) * 0.91);
+}
+
+.tracking-item-grid .item-palette-slot.large img {
+  max-width: calc(var(--tracker-slot) * 1.86);
+  max-height: calc(var(--tracker-slot) * 1.86);
+}
+
+.tracking-item-grid .item-palette-cluster .item-palette-slot {
+  width: var(--tracker-slot);
+  height: var(--tracker-slot);
+}
+
+.tracking-item-slot {
+  cursor: pointer;
+}
+
+@keyframes tracker-item-glow {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(155, 61, 219, 0.55)); }
+  50% { filter: drop-shadow(0 0 9px rgba(155, 61, 219, 0.95)); }
+}
+
+.tracking-item-slot.glow {
+  animation: tracker-item-glow 0.9s ease-in-out infinite;
+}
+
+
+
+/* Update banner in the Control Panel (UpdateNotice.svelte). Sits below the
+   section rows so it never shifts the layout when absent. */
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid #3a6ea5;
+  border-radius: 4px;
+  background: rgba(58, 110, 165, 0.12);
+  font-size: 13px;
+}
+
+.update-notice-text strong {
+  font-weight: 600;
+}
+
+.update-notice-progress {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.update-notice-error {
+  width: 100%;
+  color: #b00020;
+}
+
+/* Sphere number column in the location list. Fixed width so the names stay
+   left-aligned with each other regardless of one- or two-digit spheres. */
+.location-drop-option {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.location-drop-sphere {
+  flex: 0 0 auto;
+  min-width: 1.1em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+.location-drop-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Acquired items with no location assigned (SphereUnplacedItemNode). */
+.sphere-placement.unplaced-item {
+  cursor: default;
+}
+
+.sphere-placement.unplaced-item .sphere-placement-area {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* Location requirement tooltip. Fixed-positioned so it escapes the location
+   list's own scroll/overflow context. */
+.requirement-tooltip {
+  position: fixed;
+  z-index: 200;
+  padding: 8px 10px;
+  border: 1px solid #6f6f6f;
+  border-radius: 3px;
+  background: #2b2b2b;
+  color: #e8e8e8;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.requirement-tooltip.flip-x {
+  transform: translateX(-100%) translateX(-32px);
+}
+
+.requirement-tooltip.flip-y {
+  transform: translateY(-100%) translateY(-32px);
+}
+
+.requirement-tooltip.flip-x.flip-y {
+  transform: translate(-100%, -100%) translate(-32px, -32px);
+}
+
+.requirement-section-title {
+  margin-bottom: 3px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #575757;
+  font-weight: 600;
+}
+
+.requirement-section-title:not(:first-child) {
+  margin-top: 8px;
+}
+
+.requirement-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.requirement-term {
+  margin: 1px 0;
+}
+
+/* Blue = held, red = missing, plain = context-dependent (options, area
+   access) which the tooltip deliberately doesn't guess at. */
+.requirement-atom.have {
+  color: #6ea8ff;
+}
+
+.requirement-atom.missing {
+  color: #ff6b6b;
+}
+
+.requirement-atom.unknown {
+  color: #d9d9d9;
+}
+
+.requirement-operator {
+  color: #b9b9b9;
+  font-style: italic;
+}
+
+.requirement-punctuation {
+  color: #9a9a9a;
+}
+
+.requirement-empty {
+  opacity: 0.8;
+  font-style: italic;
+}
+
+
+/* Settings, grouped into labelled blocks. */
+/* One row of category tabs across the top of the panel. Wraps rather than
+   scrolls: the Settings popout can be narrowed to 320px, and a row of six
+   labels does not fit on one line there. */
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-tab {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.settings-tab:hover {
+  opacity: 1;
+}
+
+.settings-tab.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--panel);
+  opacity: 1;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* No margin, border or legend any more: exactly one group is on screen at a
+     time and the active tab already names it, so the framing was a box drawn
+     around the panel's entire contents. */
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-group legend {
+  display: none;
+}
+
+/* Appearance holds two groups (the colour controls and the colour presets).
+   With the legends gone they would otherwise run straight into each other,
+   and "Folder" arriving under "Hint arrow position" reads as a non-sequitur. */
+.settings-group + .settings-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-group .setting-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+}
+
+.settings-group .setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.setting-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.setting-row .tool-button {
+  flex: 0 0 auto;
+}
+
+.preset-select,
+.preset-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.preset-path {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}
+
+.preset-path em {
+  display: block;
+  color: #b26a00;
+  font-style: normal;
+}
+
+.setting-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  opacity: 0.7;
+}
+
+.setting-hint code {
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 10px;
+}
+
+.setting-status {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Hidden-section restore control: shows the section name, and swaps to
+   Dock / Undock on hover or keyboard focus. Sized so the swap doesn't shift
+   the surrounding row.
+
+   Hidden with opacity rather than visibility/display: a visibility:hidden
+   button can't take focus, so :focus-within would never fire and the control
+   would be mouse-only. pointer-events keeps the invisible half unclickable. */
+.restore-section {
+  position: relative;
+  display: inline-grid;
+  align-items: center;
+  vertical-align: middle;
+}
+
+/* Both states share one grid cell, so the control keeps the width of
+   whichever is wider and nothing jumps when they swap. */
+.restore-section-name,
+.restore-section-options {
+  grid-area: 1 / 1;
+}
+
+.restore-section-name {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.restore-section-options {
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.restore-section:hover .restore-section-name,
+.restore-section:focus-within .restore-section-name {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.restore-section:hover .restore-section-options,
+.restore-section:focus-within .restore-section-options {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.restore-section-options .tool-button {
+  white-space: nowrap;
+}
+
+/* Notes panel height mode (NotesSection.svelte). Grow mode is the default and
+   keeps the old behaviour: the textarea is sized to its content by JS, so it
+   never needs its own scrollbar. */
+.notes-grow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.notes-grow-toggle input {
+  margin: 0;
+}
+
+/* Fixed mode: stays at the stored height, scrolls inside, and gets the native
+   grip so the height can be dragged. */
+.notes-input.fixed-height {
+  overflow-y: auto;
+  resize: vertical;
+}
+
+/* ---- Stream mode backdrop -------------------------------------------------
+   Stream mode leaves the page background alone and instead paints one solid,
+   keyable colour behind the regions a stream overlay actually shows: the Hint
+   Panel, the item grid, and the dungeon/misc row. --stream-backdrop is set
+   from settings.streamBackdrop.
+   -------------------------------------------------------------------------- */
+body.stream-mode .hint-panel,
+body.stream-mode .tracking-item-grid.item-palette,
+body.stream-mode .tracking-area-row,
+body.stream-mode .tracking-summary-panel {
+  background-color: var(--stream-backdrop);
+}
+
+/* The item grid normally carries the tracker's own artwork; the solid colour
+   has to replace it, not sit under it. */
+body.stream-mode .tracking-item-grid.item-palette {
+  background-image: none;
+}
+
+/* Stream mode changes colour only - never geometry. The padding that frames
+   the dungeon-item icons is applied in BOTH modes (see .tracking-area-row
+   above); putting it here made the Main Tracker resize on every toggle, which
+   would shift an OBS layout. */
+
+/* No boxes around the dungeon/misc icons in stream mode - just the artwork on
+   the flat colour. */
+body.stream-mode .tracking-boss-entry .tracker-area-cell,
+body.stream-mode .tracking-misc-trackers .tracker-area-cell {
+  border: 0;
+  background-color: transparent;
+}
+
+/* An undocked Hint Panel is meant to be a keyed-out overlay source, so in
+   stream mode its whole window takes the backdrop colour - not just the panel
+   within it. Scoped by data-popout so the other popouts keep their normal
+   surface. */
+body.popout-window.stream-mode[data-popout="hint-panel"],
+body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-shell,
+body.popout-window.stream-mode[data-popout="hint-panel"] .popout-header,
+body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content {
+  background: var(--stream-backdrop);
+}
+
+/* Filter visibility toggle in the Hint Panel header (moved out of Settings). */
+.filters-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filters-toggle input {
+  margin: 0;
+}
+
+
+/* ---- Fixed-contrast surfaces -------------------------------------------
+   --ink flips to white on a dark panel colour. Only elements with their OWN
+   hardcoded light fill keep fixed dark text; anything sitting directly on the
+   panel colour must follow --ink instead.
+
+   Getting this wrong is what made the Hint Panel's headings unreadable: the
+   whole panel was pinned dark, but .parsed-section is painted with
+   var(--panel), so its chrome went dark-on-dark. */
+
+/* Own fill: #fffefa */
+.notes-input,
+.notes-input::placeholder {
+  color: #172027;
+}
+
+/* Own fill: rgba(255, 253, 247, 0.9) */
+.top-bar,
+.top-bar h1,
+.top-bar p,
+.top-bar span,
+.top-bar strong,
+.top-bar label {
+  color: #172027;
+}
+
+/* Own fill: #fffefa - the card, not the section around it. */
+.hint-panel .hint-card,
+.hint-panel .hint-card span,
+.hint-panel .hint-card small,
+.hint-panel .hint-card strong,
+.hint-panel .hint-name,
+.hint-panel .hint-meta {
+  color: #172027;
+}
+
+/* Section chrome sits on var(--panel), so it tracks the contrast ink. */
+.hint-panel,
+.hint-panel h2,
+.hint-panel .parsed-actions,
+.hint-panel .parsed-actions span,
+.hint-panel .filters-toggle,
+.hint-panel .empty-state {
+  color: var(--ink);
+}
+
+/* Buttons carry their own var(--panel) background wherever they sit, so they
+   always follow the ink rather than the surface behind them. */
+.top-bar button,
+.hint-panel button {
+  color: var(--ink);
+}
+
+/* Same reasoning as the buttons beside it: the panel name paints its own
+   var(--panel) fill, so it has to follow the ink rather than the top bar's
+   fixed dark text - on a dark panel colour it was dark on dark. */
+.top-bar .restore-section-name {
+  color: var(--ink);
+}
+
+/* "Auto" button beside a popout's scale slider (PopoutZoomSlider.svelte). */
+.popout-zoom-auto {
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* The popout header holds the title and the scale control side by side. */
+.popout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+
+/* Draggable tracker icons: the artwork must not start the browser's own image
+   drag, and must not swallow the pointerdown the drag controller listens for
+   (logic/item-drag.ts). */
+.item-palette-slot img,
+.tracking-item-slot img,
+.shard-status img,
+.dungeon-item img {
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+
+/* The shard column has its own fixed dark background, so it redefines the
+   contrast tokens locally - its contents (entrance buttons, jelly count)
+   inherit those rather than the panel's, and stay readable whatever panel
+   colour is chosen. */
+.map-side-tab {
+  background: #262626;
+  --ink: #f5f7f8;
+  --muted: #b9c2c9;
+  --line: rgba(255, 255, 255, 0.22);
+  color: var(--ink);
+}
+
+
+/* Notes tab strip: the unselected tab reads as a plain white chip so the
+   selected one is unmistakable. Fixed colours because the chip paints its own
+   background rather than sitting on the panel. */
+.segmented-control.notes-tabs {
+  background: #ffffff;
+}
+
+.segmented-control.notes-tabs button {
+  background: #ffffff;
+  color: #172027;
+}
+
+.segmented-control.notes-tabs button.active {
+  background: var(--sea-dark);
+  color: #fff;
+}
+
+/* "Mark starting" toggle. While armed it flashes so it is obvious the Item
+   Tracker is in a different mode - clicks record starting items rather than
+   acquiring them. The fill flashes, not the outline: an opacity pulse on the
+   whole button read as the button going faint rather than as an alarm. */
+@keyframes mark-starting-flash {
+  0%, 100% {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    color: #fff;
+  }
+  50% {
+    border-color: var(--line);
+    background-color: var(--panel);
+    color: var(--ink);
+  }
+}
+
+.mark-starting-button.active,
+.done-marking-button {
+  animation: mark-starting-flash 0.5s ease-in-out infinite;
+}
+
+/* Sits in the item grid's own empty bottom row (the grid is 7 rows tall and
+   the items only fill 6), so showing and hiding it never changes the item
+   column's height - and that height is what drives --map-size. */
+.tracking-item-grid .done-marking-button {
+  grid-column: 1 / span 8;
+  grid-row: 7;
+  align-self: center;
+  height: 30px;
+  margin: 0 3px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+/* Same empty 7th row as the Done button above. Fixed grid columns mean a long
+   entrance name wraps inside the grid rather than widening the item column and
+   pushing the map across. */
+.tracking-item-grid .hovered-row-name {
+  grid-column: 1 / span 8;
+  grid-row: 7;
+  /* Above the chart button, which shares this row and is itself lifted over
+     the chart menu - without this the name ran underneath it. */
+  position: relative;
+  z-index: 6;
+  align-self: center;
+  min-width: 0;
+  max-height: 100%;
+  margin: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+/* The backdrop hugs the text rather than filling the row, and carries its own
+   dark ground so the name stays readable whatever colour sits behind the grid
+   - stream mode can put anything back there. */
+.tracking-item-grid .hovered-row-name span {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(10, 16, 22, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+/* Matching cue on the grid itself, so the mode reads from either end. */
+.tracking-item-grid.marking-starting {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A marker rather than a control: same artwork, no hover or click affordance. */
+.map-icon.static {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Ho Ho and Blue Chu controls, level with Close in the area's list header. */
+.location-drop-markers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.location-drop-markers .map-icon {
+  position: static;
+  width: 22px;
+  height: 22px;
+  transform: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.location-drop-markers .map-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Reads like the Tingle Statue beside it, whose count is part of its artwork. */
+.tracking-item-grid .blue-chu-counter {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.tracking-item-grid .blue-chu-counter[hidden] {
+  display: none;
+}
+
+.tracking-item-grid .blue-chu-counter img {
+  max-width: calc(var(--tracker-slot) * 0.91);
+  max-height: calc(var(--tracker-slot) * 0.91);
+}
+
+.tracking-item-grid .chu-number {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+/* Marker visibility. Shares the toolbar row so the map keeps its height,
+   but sits behind a rule as its own group - these change what the map
+   shows rather than performing an action like the buttons do. */
+.map-marker-toggles {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 0 0 auto;
+  gap: 8px;
+  /* Pinned to the far end so the rule reads as the boundary between the two
+     groups, and so the status text in between is what gives up space when
+     the panel is narrow rather than these. Kept tight - the row is close to
+     full at the default map width. */
+  margin-left: auto;
+  padding-left: 8px;
+  border-left: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.map-marker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.map-marker-toggle input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.map-marker-toggle img {
+  width: calc(var(--map-icon-size) * 0.85);
+  height: calc(var(--map-icon-size) * 0.85);
+  object-fit: contain;
+}
+
+/* The game's own important-location marker (static/assets/tracker/Important
+   Location.png). The art is white on transparent, so it is used as an alpha
+   mask and the colour comes from the element behind it - that way the two
+   shades are the exact RGB values the game cycles between rather than an
+   approximation reached with filters. */
+.important-location-mark {
+  display: block;
+  -webkit-mask-image: url("/assets/tracker/Important Location.png");
+  mask-image: url("/assets/tracker/Important Location.png");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  background-color: var(--important-location-color, rgb(248, 246, 239));
+}
+
+/* One 2.5s loop: pale to periwinkle and back. The animation runs on a shared
+   ancestor and drives an inherited custom property rather than sitting on each
+   marker, because a CSS animation starts when its element does - markers
+   placed at different times would each cycle on their own phase. Driving them
+   all from one clock keeps them in step, the way the game does. */
+@property --important-location-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgb(248, 246, 239);
+}
+
+.main-tracker-section {
+  animation:
+    important-location-cycle 2.5s ease-in-out infinite,
+    important-location-spin 2s linear infinite,
+    important-location-found-fade 2s ease-in-out infinite;
+}
+
+@keyframes important-location-cycle {
+  0%,
+  100% {
+    --important-location-color: rgb(248, 246, 239);
+  }
+  50% {
+    --important-location-color: rgb(132, 128, 239);
+  }
+}
+
+/* Centred on the sector and turned 45 degrees, the way the game draws it. */
+.sector-important-highlight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Turning the art 45 degrees swings its arms out onto the diagonals, which
+     makes it span 1.118x the element box - so the box is sized back down to
+     leave the swirl just inside the sector's borders. No z-index: it comes
+     first in the cell, so the fraction and the Ho Ho / Chu markers that
+     follow it paint on top. */
+  width: 80%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) rotate(45deg);
+  pointer-events: none;
+}
+
+.map-marker-highlight-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.map-marker-highlight-button .important-location-mark {
+  /* Turned to match the marker it places. The 45 degrees swings the art wider
+     than its box, so the box shrinks to keep the icon the size of the Ho Ho
+     and Chu icons beside it. */
+  width: calc(var(--map-icon-size) * 0.85);
+  height: calc(var(--map-icon-size) * 0.85);
+  transform: rotate(45deg);
+}
+
+.map-marker-highlight-button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Same 0.5s flash as "Mark starting" - the two modes read as the same kind of
+   thing, so they should catch the eye at the same rate. */
+.sector-highlight-prompt {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  z-index: 3;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 94%;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  /* Sized to keep the sentence on one line at the map's usual width - wrapped
+     onto two it covered noticeably more of the top row. It still wraps rather
+     than overflowing if the map is made very narrow. */
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: center;
+  pointer-events: none;
+  /* Held slightly transparent throughout - it sits over the top row of
+     sectors, and at full strength it hid them while the mode was on. */
+  opacity: 0.78;
+  animation: mark-starting-flash 0.5s ease-in-out infinite;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* An open panel's button is crossed out - the cross is the affordance for
+   "click to close", matching the X on each panel's own title bar. */
+.section-toggle {
+  position: relative;
+}
+
+.section-toggle.open::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  pointer-events: none;
+  opacity: 0.75;
+  background:
+    linear-gradient(
+      to top right,
+      transparent calc(50% - 0.8px),
+      currentColor calc(50% - 0.8px),
+      currentColor calc(50% + 0.8px),
+      transparent calc(50% + 0.8px)
+    ),
+    linear-gradient(
+      to bottom right,
+      transparent calc(50% - 0.8px),
+      currentColor calc(50% - 0.8px),
+      currentColor calc(50% + 0.8px),
+      transparent calc(50% + 0.8px)
+    );
+}
+
+/* Title, version and Start New Tracker as one left-hand group, so the row's
+   space-between still pushes the Settings actions to the right edge. */
+.top-bar-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Turns once every 2 seconds when the dungeon door on that sector can be
+   opened with what the player is carrying. The angle comes from the same
+   shared clock as the colour, for the same reason: an animation on each marker
+   would start when that marker did, so two of them would spin out of step. */
+@property --important-location-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 45deg;
+}
+
+@keyframes important-location-spin {
+  from {
+    --important-location-angle: 45deg;
+  }
+  to {
+    --important-location-angle: 405deg;
+  }
+}
+
+.sector-important-highlight.ready {
+  transform: translate(-50%, -50%) rotate(var(--important-location-angle, 45deg));
+}
+
+/* The sector's entrance has been found. The marker stays put as the answer
+   rather than disappearing: it stops turning, goes green, and fades in and out
+   between invisible and half strength. Driven from the shared clock like the
+   colour and the angle, so several found markers pulse together. */
+@property --important-location-fade {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.5;
+}
+
+@keyframes important-location-found-fade {
+  0%,
+  100% {
+    --important-location-fade: 0;
+  }
+  50% {
+    --important-location-fade: 0.5;
+  }
+}
+
+.sector-important-highlight.found {
+  background-color: rgb(76, 200, 110);
+  opacity: var(--important-location-fade, 0.5);
+  animation: none;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+/* ---- Charts ------------------------------------------------------------ */
+
+/* Stays above the menu it opens, so the same icon closes it again - the menu
+   is laid over the whole grid and would otherwise bury its own button. */
+.chart-menu-button {
+  position: relative;
+  z-index: 5;
+}
+
+.chart-menu-button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Laid over the item grid rather than beside it: the grid is the biggest thing
+   on screen, and the charts are read in the same place the items are. */
+.chart-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 3px;
+  /* One slot's worth of room on the right, so the bottom-right cell never
+     lands under the button that opens this menu. */
+  padding-right: calc(var(--tracker-slot, 44px) + 12px);
+  border-radius: 8px;
+  background: var(--panel);
+  /* Sized to fit rather than scrolled: the grid is exactly seven rows, and a
+     scrollbar over a 7x7 map would hide part of the map. */
+  overflow: hidden;
+}
+
+/* Stands in the strip kept clear on the right, turned to run along it - the
+   row above belongs to the toolbar buttons, and anything placed there was
+   easy to hit while reaching for the charts. */
+.chart-menu-sort {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  width: var(--tracker-slot, 44px);
+  color: var(--ink);
+  font-size: 0.5rem;
+  line-height: 1.05;
+  text-align: center;
+  cursor: pointer;
+}
+
+.chart-menu-sort span {
+  min-width: 0;
+}
+
+.chart-menu-sort input {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* The sea chart again - one cell per sector, so where a chart sits is itself
+   the island it maps. */
+.chart-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* Explicit rows, so the seven share the height exactly instead of each
+     growing to its content and pushing the last row out of view. */
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chart-cell {
+  /* Icon takes what is left after the name, so a long sector name shortens the
+     icon rather than overflowing the row. */
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  align-content: center;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chart-cell:hover {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.chart-cell-icon {
+  position: relative;
+  display: block;
+  height: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+}
+
+.chart-cell-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The number the chart carries, which is not the island's own number - so it
+   sits on the chart itself rather than under the sector name. */
+.chart-cell-number {
+  position: absolute;
+  right: -1px;
+  bottom: -2px;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 3px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
+}
+
+.chart-cell-sector {
+  width: 100%;
+  max-height: 2.2em;
+  font-size: 0.4rem;
+  line-height: 1.1;
+  text-align: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  opacity: 0.85;
+}
+
+.chart-cell.acquired .chart-cell-sector {
+  opacity: 1;
+  font-weight: 700;
+}
+
+/* Same purple glow the item grid uses while a location is armed. */
+.chart-cell.glow {
+  border-color: #a45cff;
+  box-shadow: 0 0 8px rgba(164, 92, 255, 0.85);
+}
+
+/* Asks which copy of a staged item to give up, over the grid the click came
+   from so the answer appears where the question was asked. */
+.item-card-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.item-card-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.item-card-picker-close {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.item-card-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: auto;
+}
+
+.item-card-picker-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: inherit;
+  font-size: 0.62rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item-card-picker-card:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.item-card-picker-icon {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+}
+
+.item-card-picker-icon img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.item-card-picker-location {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A copy with no location reads as a state, not a place. */
+.item-card-picker-loose {
+  font-style: italic;
+  opacity: 0.75;
+}
+
+/* ---- Coloured hint notes ---------------------------------------------- */
+
+/* The notes are drawn twice: this layer paints the coloured text, and the
+   textarea sits on top with transparent glyphs so the caret, the selection and
+   every editing behaviour still belong to it. Both have to agree on every
+   property that decides where a glyph lands. */
+.notes-editor {
+  position: relative;
+  width: 100%;
+  /* The fill moves here, since the textarea above it is now clear. */
+  background: #fffefa;
+  border-radius: 6px;
+}
+
+.notes-editor[hidden] {
+  display: none;
+}
+
+.notes-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  padding: 12px;
+  /* Transparent rather than absent: the textarea's own border pushes its text
+     inward by a pixel, and the layer has to be pushed by the same amount. */
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font: inherit;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  color: #172027;
+  pointer-events: none;
+}
+
+.notes-editor .notes-input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  /* The caret is the one part of the textarea's own text left visible. */
+  caret-color: #172027;
+}
+
+/* Fixed colours rather than theme tokens: this box keeps its near-white fill
+   in every mode, so the ink is chosen against that. */
+.notes-highlight .hint-line.item {
+  color: #0b7285;
+}
+
+.notes-highlight .hint-line.required {
+  color: #1b7a32;
+}
+
+.notes-highlight .hint-line.possible {
+  color: #8a6100;
+}
+
+.notes-highlight .hint-line.not-required {
+  color: #7b8794;
+}
+
+.notes-highlight .hint-line.location {
+  color: #c2410c;
+}
+
+.notes-highlight .hint-line.path {
+  color: #6b21a8;
+}
+
+/* The Sync button's warning: config.yaml has moved on since the last sync.
+   Sits inside the button so the row keeps its width - the message itself is
+   the button's tooltip. */
+.map-toolbar-button .sync-warning {
+  margin-left: 4px;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+/* Tracker Settings - the toolbar's own small settings panel, positioned like
+   the sphere board's Filters menu. */
+.tracker-settings-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Painted with the panel colour, so it follows the auto-contrast ink rather
+   than pinning its own fill the way the sphere board's Filters menu does -
+   see the fixed-contrast note further down. */
+.tracker-settings-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  /* Above the map (.item-palette is 40 too, and being later in the document it
+     won the tie) and above an open sector list (.location-drop-list, 55), but
+     still under the drag ghost (60), the starting-items prompt (80) and the
+     requirement tooltip (200). */
+  z-index: 56;
+  min-width: 240px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 6px 18px rgba(10, 16, 22, 0.28);
+}
+
+.tracker-settings-option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.tracker-settings-option input {
+  margin: 2px 0 0;
+  cursor: pointer;
+}
+
+.tracker-settings-option,
+.tracker-settings-option strong {
+  color: var(--ink);
+}
+
+.tracker-settings-option em {
+  display: block;
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* The shard count on the finished Triforce, when shards are counted
+   generically rather than by number. */
+.triforce-stack .triforce-count {
+  position: absolute;
+  left: 50%;
+  /* Below the middle: the artwork is centred in its box, but a triangle's
+     visual mass sits low, so the middle of the *Triforce* is further down. */
+  top: 58%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #101418;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  /* No plate behind it - a light outline keeps it legible on the gold. */
+  text-shadow:
+    0 0 3px rgba(255, 255, 255, 0.95),
+    0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+.tracker-settings-button {
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* A sphere card you can answer an armed location with - an acquired item or a
+   ticked shard, both of which are copies already held. */
+.sphere-placement.pending-target {
+  outline: 2px solid rgba(126, 87, 194, 0.75);
+  outline-offset: 1px;
+  cursor: pointer;
+}
+
+/* The randomizer folder row in Tracker Settings. */
+.tracker-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.tracker-settings-label {
+  font-weight: 700;
+}
+
+.tracker-settings-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.tracker-settings-row .tool-button {
+  align-self: flex-start;
+}
+
+.tracker-settings-status {
+  font-style: normal;
+  color: var(--muted);
+}
+
+/* "GO MODE" over the item grid: everything needed to beat Ganondorf is held.
+   Pulses so it catches the eye without a colour change anywhere else, and is
+   transparent to the pointer so the items under it stay clickable. */
+.tracking-item-grid .go-mode-banner {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: "Reggae One", "RocknRoll One", "Segoe UI", Arial, sans-serif;
+  /* The grid is eight 44px columns wide, so this fills it without wrapping. */
+  font-size: 42px;
+  letter-spacing: 0.06em;
+  color: #fff;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.85),
+    0 0 18px rgba(0, 0, 0, 0.6);
+  animation: go-mode-flash 1.4s ease-in-out infinite;
+}
+
+@keyframes go-mode-flash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tracking-item-grid .go-mode-banner {
+    animation: none;
+    opacity: 1;
+  }
+}

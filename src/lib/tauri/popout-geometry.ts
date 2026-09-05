@@ -1,0 +1,208 @@
+// Size and position of each undocked (popped-out) section's native window, so
+// a preference preset can restore not just *which* panels are popped out but
+// where they sat on screen.
+//
+// Everything here is in physical pixels: outerPosition()/innerSize() report
+// physical, and setPosition()/setSize() accept it, so round-tripping in that
+// unit avoids needing the scale-factor permission to convert.
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
+import { SECTION_META } from "$lib/section-meta";
+import { setUndockedIds } from "$lib/state/undocked.svelte";
+import { openPopoutWindow } from "./popout-window";
+import { isTauriRuntime } from "./is-tauri";
+
+export interface PopoutGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type PopoutGeometryMap = Record<string, PopoutGeometry>;
+
+// Geometry read from the preferences file at startup, before the popout
+// windows exist. initPopoutSession() picks it up when it reopens them.
+let storedGeometry: PopoutGeometryMap = {};
+
+export function setStoredPopoutGeometry(geometry: PopoutGeometryMap | undefined | null): void {
+  storedGeometry = geometry && typeof geometry === "object" ? { ...geometry } : {};
+}
+
+export function getStoredPopoutGeometry(): PopoutGeometryMap {
+  return storedGeometry;
+}
+
+/** Current on-screen geometry of every open popout, keyed by section id. */
+export async function readPopoutGeometry(): Promise<PopoutGeometryMap> {
+  if (!isTauriRuntime()) return {};
+
+  const geometry: PopoutGeometryMap = {};
+  await Promise.all(
+    Object.entries(SECTION_META).map(async ([id, meta]) => {
+      if (!meta.popout) return;
+      try {
+        const found = await WebviewWindow.getByLabel(meta.popout.label);
+        if (!found) return;
+        const [position, size] = await Promise.all([found.outerPosition(), found.innerSize()]);
+        geometry[id] = {
+          x: Math.round(position.x),
+          y: Math.round(position.y),
+          width: Math.round(size.width),
+          height: Math.round(size.height)
+        };
+      } catch {
+        // A window that closed mid-read simply contributes nothing.
+      }
+    })
+  );
+
+  // Keep any remembered geometry for popouts that aren't open right now, so
+  // closing a panel doesn't erase where it used to live.
+  return { ...storedGeometry, ...geometry };
+}
+
+/**
+ * Opens a section's popout at its remembered size and position when there is
+ * one; otherwise openPopoutWindow's default placement puts it beside the main
+ * window rather than wherever the OS fancies.
+ */
+/**
+ * Opens one section's window, holding the sync guard for the whole attempt.
+ *
+ * Without it, undocking by hand was a race against reconcileUndockedWindows:
+ * that runs on every window focus, and opening a popout moves focus to it and
+ * back. Two of those before the new window is registered and the section was
+ * "no window, so not undocked" - it snapped back into the layout while its
+ * window sat there open. A preset load was already guarded this way; a manual
+ * undock never was.
+ */
+export async function openPopoutForSection(sectionId: string): Promise<void> {
+  if (!isTauriRuntime()) return;
+  const meta = SECTION_META[sectionId];
+  if (!meta?.popout) return;
+
+  await withSyncGuard(async () => {
+    const alreadyOpen = await WebviewWindow.getByLabel(meta.popout!.label);
+    const remembered = storedGeometry[sectionId];
+
+    // Skip the default placement when geometry is about to be applied - it
+    // would show as a visible jump.
+    await openPopoutWindow(meta.popout!, { place: !alreadyOpen && !remembered });
+
+    // Re-focusing an already-open window must not move it.
+    if (alreadyOpen) return;
+    if (remembered) await applyPopoutGeometry(sectionId, remembered);
+  });
+}
+
+// A freshly created window can ignore the first size it is given, so geometry
+// is re-applied a couple of times before giving up.
+const GEOMETRY_ATTEMPTS = 3;
+const GEOMETRY_RETRY_MS = 120;
+const GEOMETRY_TOLERANCE = 48;
+
+export async function applyPopoutGeometry(sectionId: string, geometry: PopoutGeometry | undefined): Promise<void> {
+  if (!isTauriRuntime() || !geometry) return;
+  const meta = SECTION_META[sectionId];
+  if (!meta?.popout) return;
+
+  try {
+    const found = await WebviewWindow.getByLabel(meta.popout.label);
+    if (!found) return;
+
+    // Applied, checked, and applied again if it didn't take.
+    //
+    // getByLabel resolves as soon as the label is registered, which is before
+    // the window has finished being created - and a size set in that gap is
+    // overwritten by the window's own initial sizing. That is why loading a
+    // layout preset into a fresh build left every popout at its default size
+    // while a second click, when the windows already existed, worked.
+    for (let attempt = 0; attempt < GEOMETRY_ATTEMPTS; attempt += 1) {
+      if (geometry.width > 0 && geometry.height > 0) {
+        await found.setSize(new PhysicalSize(geometry.width, geometry.height));
+      }
+      await found.setPosition(new PhysicalPosition(geometry.x, geometry.y));
+
+      if (geometry.width <= 0 || geometry.height <= 0) return;
+      const size = await found.innerSize();
+      // Inner vs outer: the window frame means these never match exactly, so
+      // this only asks whether the size landed anywhere near what was asked.
+      if (Math.abs(size.width - geometry.width) <= GEOMETRY_TOLERANCE
+        && Math.abs(size.height - geometry.height) <= GEOMETRY_TOLERANCE) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, GEOMETRY_RETRY_MS));
+    }
+  } catch (error) {
+    console.error(`Could not position the ${sectionId} popout`, error);
+  }
+}
+
+/**
+ * Makes the open popout windows match `wantedIds` exactly - opening what's
+ * missing, closing what shouldn't be open - then moves each to its remembered
+ * spot. This is what makes loading a preset restore a whole multi-window
+ * arrangement rather than only the docked half of it.
+ */
+// While a sync is running, sections are marked undocked before their windows
+// exist. The main window's periodic reconcile would see that mismatch and
+// "helpfully" strip them, undoing the restore mid-flight.
+// Depth rather than a flag: opening one popout can happen inside a wider
+// sync, and the inner finish must not drop the guard the outer still needs.
+let syncDepth = 0;
+
+async function withSyncGuard<T>(run: () => Promise<T>): Promise<T> {
+  syncDepth += 1;
+  try {
+    return await run();
+  } finally {
+    syncDepth -= 1;
+  }
+}
+
+export function isPopoutSyncInProgress(): boolean {
+  return syncDepth > 0;
+}
+
+export async function syncPopoutWindows(wantedIds: string[], geometry: PopoutGeometryMap): Promise<void> {
+  if (!isTauriRuntime()) return;
+
+  await withSyncGuard(() => runPopoutSync(wantedIds, geometry));
+}
+
+async function runPopoutSync(wantedIds: string[], geometry: PopoutGeometryMap): Promise<void> {
+  setStoredPopoutGeometry(geometry);
+  const wanted = wantedIds.filter((id) => SECTION_META[id]);
+  const wantedSet = new Set(wanted);
+
+  // Close popouts the preset doesn't want.
+  await Promise.all(
+    Object.entries(SECTION_META).map(async ([id, meta]) => {
+      if (wantedSet.has(id)) return;
+      if (!meta.popout) return;
+      try {
+        const found = await WebviewWindow.getByLabel(meta.popout.label);
+        await found?.close();
+      } catch (error) {
+        console.error(`Could not close the ${id} popout`, error);
+      }
+    })
+  );
+
+  // Open the ones it does, then place them.
+  for (const id of wanted) {
+    const meta = SECTION_META[id];
+    if (!meta?.popout) continue;
+    try {
+      // Geometry follows immediately, so skip the default placement rather
+      // than moving the window twice.
+      await openPopoutWindow(meta.popout, { place: !geometry[id] });
+      await applyPopoutGeometry(id, geometry[id]);
+    } catch (error) {
+      console.error(`Could not open the ${id} popout`, error);
+    }
+  }
+
+  setUndockedIds(wanted);
+}
