@@ -12,7 +12,7 @@
   import { layoutState } from "$lib/state/layout.svelte";
   import { undockedState } from "$lib/state/undocked.svelte";
   import RootOverlays from "$lib/components/shared/RootOverlays.svelte";
-  import { saveTrackerAutosave, restoreAutosaveIfProfileEmpty } from "$lib/tauri/tracker-autosave";
+  import { saveTrackerAutosave, restoreAutosaveIfProfileEmpty, claimAutosaveWrite } from "$lib/tauri/tracker-autosave";
   import { checked } from "$lib/state/checked.svelte";
   import { sphere } from "$lib/state/sphere.svelte";
   import { hintNotes } from "$lib/state/hints.svelte";
@@ -36,7 +36,12 @@
   onMount(() => {
     initStorageSync();
     void initWindowGroupSync();
-    if (isPopout) return;
+    if (isPopout) {
+      // A popout owns no preferences, but it does stand in for the main window
+      // on the autosave - see the effect below.
+      autosaveArmed = true;
+      return;
+    }
 
     // Failsafe: the main window is created hidden so its saved position can
     // be applied before it paints, so it must be shown even if restoring
@@ -76,14 +81,38 @@
 
   // Tracker state (not preferences) mirrors to data/autosave.json so a run can
   // be copied between builds as one readable file - see tauri/tracker-autosave.
+  const AUTOSAVE_DELAY = 600;
+  // Long enough that the main window has certainly written first, so a popout
+  // only acts when that window is not there to.
+  const POPOUT_AUTOSAVE_DELAY = 2500;
+
   let autosaveArmed = $state(false);
   let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    JSON.stringify([checked, sphere.placements, sphere.entranceMappings, hintNotes.value, itemTrackerState, dungeonItemsState]);
-    if (!autosaveArmed || isPopout) return;
+    // The whole sphere object, not a few of its properties: Svelte subscribes
+    // to what is actually read, and naming them by hand left
+    // entranceConnections and highlightedSectors out - so recording entrances
+    // and marking sectors scheduled no write at all, and the file stayed as
+    // old as the last location check. Reading it whole covers whatever the
+    // sphere state grows next, too.
+    JSON.stringify([checked, sphere, hintNotes.value, itemTrackerState, dungeonItemsState]);
+    if (!autosaveArmed) return;
 
+    // Popouts are a backstop rather than a second writer: they wait for the
+    // main window to have done it and stand down when it did. With every panel
+    // popped out, that window can be closed or hang while tracking carries on
+    // in the popouts - and nothing was written for as long as that lasted.
+    const changedAt = Date.now();
     clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(() => void saveTrackerAutosave(), 600);
+    autosaveTimer = setTimeout(
+      () => {
+        if (isPopout && !claimAutosaveWrite(changedAt)) return;
+        void saveTrackerAutosave();
+      },
+      // Jittered so several popouts falling back together don't all fire on
+      // the same millisecond and race for the claim.
+      isPopout ? POPOUT_AUTOSAVE_DELAY + Math.random() * 500 : AUTOSAVE_DELAY
+    );
     return () => clearTimeout(autosaveTimer);
   });
 

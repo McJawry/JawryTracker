@@ -14,7 +14,7 @@
 // them passes through a leg you cannot presently take.
 import { WWRSphereEngine } from "$lib/logic";
 import type { SphereWorld } from "$lib/logic";
-import { BOSS_LOCATIONS, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
+import { BOSS_LOCATIONS, DUNGEON_REQUIRED_BOSSES, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
 import { isLocationMarked } from "$lib/logic/locations";
 import {
   getEntranceDestinationForEdge,
@@ -23,7 +23,7 @@ import {
   getShuffledEntrances,
   type TrackerEntrance
 } from "$lib/logic/entrances";
-import { getSphereTraversableExitSet } from "$lib/logic/sphere-calculation";
+import { getSphereTraversableExitSet, isSphereAreaAccessible } from "$lib/logic/sphere-calculation";
 import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
@@ -432,16 +432,90 @@ export function getBossBehindSector(sector: string): string {
   const world = data.sphereWorld;
   if (!world || !sector) return "";
   const arenas = bossArenaAreas();
-  if (!arenas.size) return "";
 
   for (const areaKey of walkBehindSector(sector).keys()) {
     if (arenas.has(areaKey)) return world.areas[areaKey]?.name ?? "";
   }
-  return "";
+  return vanillaBossOnSector(sector);
 }
 
-/** Whether a marked sector has given up its boss yet. */
+/** Sector names differ by a trailing "Sector" in places - the logic's own do. */
+function sectorKey(name: string): string {
+  return normalize(name).replace(/\s+sector$/, "");
+}
+
+/**
+ * Where each boss lives when nothing has been shuffled: the dungeons at their
+ * own islands, and Helmaroc King in the fortress, which has no dungeon
+ * entrance of its own to shuffle.
+ */
+function vanillaBossSectors(): Map<string, string> {
+  const bossFor = (dungeon: string) =>
+    Object.entries(DUNGEON_REQUIRED_BOSSES).find(([name]) => normalize(name) === normalize(dungeon))?.[1] ?? "";
+  const sectors = new Map<string, string>();
+  Object.entries(WWRSphereEngine.VANILLA_DUNGEON_SECTORS).forEach(([dungeon, sector]) => {
+    const boss = bossFor(dungeon);
+    if (boss) sectors.set(sectorKey(sector), boss);
+  });
+  sectors.set(sectorKey("Forsaken Fortress"), "Helmaroc King");
+  return sectors;
+}
+
+/**
+ * The boss a marked sector hides when the doors say nothing.
+ *
+ * A sector's entrance list only holds doors this seed shuffles, so with
+ * entrance randomizer off there is nothing to walk and no mark would ever name
+ * its boss - the tracker would hold out for all six when the marks already say
+ * which three. Standing still, the island a dungeon sits on is the answer, and
+ * it is known the moment the mark goes down.
+ *
+ * Only when neither pool is shuffled: a shuffled dungeon door means the
+ * dungeon on this island is not the vanilla one, and a shuffled boss door
+ * means the dungeon here need not hold its own boss.
+ */
+function vanillaBossOnSector(sector: string): string {
+  const options = data.sphereOptions;
+  if (WWRSphereEngine.isShuffleTypeEnabled("DUNGEON", options)) return "";
+  if (WWRSphereEngine.isShuffleTypeEnabled("BOSS", options)) return "";
+
+  const boss = vanillaBossSectors().get(sectorKey(sector));
+  return boss ? `${boss} Battle Arena` : "";
+}
+
+/**
+ * The room a marked sector's dungeon starts in, when nothing is shuffled.
+ *
+ * The way in, in other words: the Tower of the Gods' entrance room is behind
+ * the three pearls, and it is what the marker on that sector is really about.
+ */
+function vanillaWayInFromSector(sector: string): string {
+  const boss = vanillaBossOnSector(sector);
+  if (!boss) return "";
+  const dungeon = Object.entries(DUNGEON_REQUIRED_BOSSES).find(
+    ([, name]) => normalize(`${name} Battle Arena`) === normalize(boss)
+  )?.[0];
+  return dungeon ? (data.sphereWorld?.dungeonStarts?.[normalize(dungeon)] ?? "") : "";
+}
+
+/**
+ * Whether a marked sector is settled.
+ *
+ * With entrances shuffled that means the boss has been found: the doors were
+ * walked and an arena turned up, and until then the marker turns to say a door
+ * here will open, so the sector is worth visiting.
+ *
+ * With nothing shuffled there is no door to hunt for and nothing to discover -
+ * the boss was never hidden - so the only question the mark can answer is
+ * whether you can get in yet. It settles when you can, and goes back to
+ * waiting when you cannot: hold the three pearls and the Tower of the Gods'
+ * marker is green, drop one and it stops. It never turns, because turning
+ * means "come here, the way is open", which is the one thing that is not true
+ * while an item to enter is missing.
+ */
 export function isBossFoundOnSector(sector: string): boolean {
+  const wayIn = vanillaWayInFromSector(sector);
+  if (wayIn) return isSphereAreaAccessible(wayIn);
   return Boolean(getBossBehindSector(sector));
 }
 
@@ -460,6 +534,12 @@ export function isBossFoundOnSector(sector: string): boolean {
  * marker that keeps spinning would be promising a way in that does not exist.
  */
 export function canOpenSectorDoor(sector: string): boolean {
+  // Nothing shuffled here: turning would promise a door worth finding, and
+  // there is none - which dungeon sits on this island was never in question.
+  // isBossFoundOnSector answers the one thing that is, so this sector is
+  // either settled or quiet, never turning.
+  if (vanillaWayInFromSector(sector)) return false;
+
   const traversable = getSphereTraversableExitSet();
   const candidates = getSectorDoors(sector).filter((door) => !getEntranceDestinationForEdge(door.name));
   return candidates.length > 0 && candidates.every((door) => traversable.has(normalize(door.name)));
