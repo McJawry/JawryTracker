@@ -91,6 +91,13 @@ export interface Settings {
   genericTriforceShards: boolean;
   /** Chart menu ordering: by chart number rather than by island position. */
   chartSortByNumber: boolean;
+  /**
+   * Work out which sphere each location falls in. Turned off, the sphere
+   * numbers and the Sphere Board go away and the heavy calculation behind them
+   * is never run - but nothing is forgotten, so items already assigned to
+   * locations are all still there when it is turned back on.
+   */
+  sphereCalculation: boolean;
   streamMode: boolean;
   parsedHintsFilters: boolean;
   automaticMode: boolean;
@@ -179,6 +186,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showBlueChu: true,
   genericTriforceShards: false,
   chartSortByNumber: true,
+  sphereCalculation: true,
   streamMode: false,
   parsedHintsFilters: true,
   automaticMode: false,

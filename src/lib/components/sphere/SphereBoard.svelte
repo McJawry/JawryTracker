@@ -403,7 +403,13 @@
 </script>
 
 <section class="sphere-board" aria-label="Sphere progression graph" bind:this={boardElement} onpointerdown={startPan}>
-  {#if !calculation}
+  {#if !settings.sphereCalculation}
+    <!-- Says where the switch is, since the board is otherwise indistinguishable
+         from one that has nothing to show yet. -->
+    <div class="sphere-board-empty">
+      Sphere calculation is turned off. Enable it in the main tracker settings &#x2699;&#xfe0f;.
+    </div>
+  {:else if !calculation}
     <div class="sphere-board-empty">
       {sphereAnalysisCache.pending ? "Analyzing sphere logic..." : !data.sphereLogicLoaded ? "Sphere logic not loaded yet." : "No placements yet - assign an item to an exact location in Sphere mode."}
     </div>
