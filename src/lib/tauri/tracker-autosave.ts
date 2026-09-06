@@ -21,7 +21,7 @@ import {
   type PresetResult
 } from "./preference-presets";
 import { isTauriRuntime } from "./is-tauri";
-import { CHECKED_KEY, ITEM_STORAGE_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
+import { AUTOSAVE_STAMP_KEY, CHECKED_KEY, ITEM_STORAGE_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 
 const AUTOSAVE_FILE = "autosave.json";
 const DUNGEON_ITEMS_KEY = "ww-rando-hint-tracker-dungeon-items";
@@ -91,9 +91,30 @@ export async function saveTrackerAutosave(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
     await writeTextFile(await autosavePath(), JSON.stringify(currentAutosave(), null, 2));
+    localStorage.setItem(AUTOSAVE_STAMP_KEY, String(Date.now()));
   } catch (error) {
     console.error("Could not write the tracker autosave", error);
   }
+}
+
+/** When any window last wrote the autosave, or 0 if none has. */
+export function lastAutosaveWriteAt(): number {
+  return Number(localStorage.getItem(AUTOSAVE_STAMP_KEY)) || 0;
+}
+
+/**
+ * Take the write for a change made at `changedAt`, or decline because another
+ * window has already covered it.
+ *
+ * The stamp is claimed *before* the file is written rather than after, so that
+ * several popouts reaching this at the same moment - which is what happens
+ * when the main window is gone and they all fall back together - settle on one
+ * writer instead of interleaving their bytes into the same file.
+ */
+export function claimAutosaveWrite(changedAt: number): boolean {
+  if (lastAutosaveWriteAt() >= changedAt) return false;
+  localStorage.setItem(AUTOSAVE_STAMP_KEY, String(Date.now()));
+  return true;
 }
 
 export interface AutosaveLoadResult {

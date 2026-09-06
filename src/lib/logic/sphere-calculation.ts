@@ -9,13 +9,14 @@ import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } f
 import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getAvailableLocations } from "$lib/logic/locations";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-import { getTriforceShardNumber, TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
+import { TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
 import { getEffectiveEntranceMappings, getEntranceConnection, getEntrancesForArea } from "$lib/logic/entrances";
 // entrance-paths imports getSphereTraversableExitSet from here in turn. The
 // cycle is only ever walked at call time - neither module runs the other's
 // code while it is still loading - and the alternative was a second copy of
 // the walk that finds the boss behind a marked sector.
 import { getDefeatedBossEvents, getRequiredBossOptions } from "$lib/logic/entrance-paths";
+import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -55,7 +56,9 @@ export function getSphereInventoryItemKey(item: string, location = ""): string {
   if (/^small key$/i.test(itemName) && locationDungeon) itemName = `${locationDungeon} Small Key`;
   if (/^(?:boss|big) key$/i.test(itemName) && locationDungeon) itemName = `${locationDungeon} Big Key`;
 
-  const key = normalize(itemName);
+  // Same as the engine's canonicalInventoryName: the pool's "Boss Key" is the
+  // logic's "Big Key", and a key recorded at a location carries the pool name.
+  const key = normalize(itemName).replace(/\bboss key$/, "big key");
   return ITEM_KEY_ALIASES[key] || key;
 }
 
@@ -66,32 +69,78 @@ export function isOwnDungeonKeyForPath(item: string): boolean {
   return false;
 }
 
-export function getSphereBlueChuJellyCount(): number {
-  return 15;
+/** What the seed hands you, from config.yaml's starting_blue_chu_jellys. */
+function getStartingBlueChuJellies(): number {
+  const value = Number(data.sphereOptions.starting_blue_chu_jellys);
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** The ones marked on the map, one marker per bird that drops them. */
+function getMarkedBlueChuJellies(): number {
+  return Object.keys(checked).filter((id) => id.startsWith("blue-chu-jelly:") && checked[id]).length;
 }
 
 /**
- * Generic Triforce shards, given the numbers nothing else has taken.
+ * How many Blue Chu Jellies you have: the seed's own plus the ones marked.
  *
- * The logic only knows shards by number - All_8_Shards names all eight - while
- * the item grid's generic mode counts them without saying which, so a run
- * tracked that way held eight shards the logic could not see and never opened
- * Hyrule. Which number a generic shard is standing in for does not matter,
- * only how many there are, so they fill the gaps in order. Reserved names the
- * shards recorded at locations, so a generic one never doubles up on a shard
- * already accounted for; an odd ninth is left generic, being nothing the logic
- * asks about.
+ * Windfall's potion shop wants fifteen, and this used to answer fifteen
+ * whatever was tracked, so that check read available from the first minute of
+ * a run. Counting them for real is also what the number beside the item grid
+ * shows, so the two cannot disagree.
  */
-function nameGenericShards(items: string[]): string[] {
-  const taken = new Set(items.map(getTriforceShardNumber).filter(Boolean));
-  let next = 1;
-  return items.map((item) => {
-    if (normalize(item) !== "triforce shard") return item;
-    while (next <= TRIFORCE_SHARD_COUNT && taken.has(next)) next += 1;
-    if (next > TRIFORCE_SHARD_COUNT) return item;
-    taken.add(next);
-    return `Triforce Shard ${next}`;
+export function getSphereBlueChuJellyCount(): number {
+  return getStartingBlueChuJellies() + getMarkedBlueChuJellies();
+}
+
+/**
+ * Items the pool ships under one name that the logic asks for under several.
+ *
+ * The item grid has one cell for all eight Triforce shards and one for all
+ * five Tingle Statues, because which one a pickup was does not matter - only
+ * how many you have. The logic names them individually (All_8_Shards, and the
+ * Ankle reward's five statues), so a copy held under the shared name would
+ * satisfy none of them.
+ */
+const SPLIT_ITEM_FAMILIES: Array<{ generic: string; names: string[] }> = [
+  {
+    generic: "Triforce Shard",
+    names: Array.from({ length: TRIFORCE_SHARD_COUNT }, (_, index) => `Triforce Shard ${index + 1}`)
+  },
+  {
+    generic: "Tingle Statue",
+    names: [
+      "Dragon Tingle Statue",
+      "Forbidden Tingle Statue",
+      "Goddess Tingle Statue",
+      "Earth Tingle Statue",
+      "Wind Tingle Statue"
+    ]
+  }
+];
+
+/**
+ * Copies held under a family's shared name, given the individual names
+ * nothing else has taken.
+ *
+ * Which name a copy stands in for does not matter, only how many there are, so
+ * they fill the gaps in order - five statues answer the five the Ankle reward
+ * asks for however they were tracked. Names already in the list are left
+ * alone, so a statue the seed granted by name is never claimed twice, and a
+ * copy past the end of a family stays generic, being nothing the logic asks
+ * about.
+ */
+function nameGenericCopies(items: string[]): string[] {
+  let named = items;
+  SPLIT_ITEM_FAMILIES.forEach((family) => {
+    const genericKey = normalize(family.generic);
+    if (!named.some((item) => normalize(item) === genericKey)) return;
+
+    const taken = new Set(named.map(normalize));
+    const free = family.names.filter((name) => !taken.has(normalize(name)));
+    let next = 0;
+    named = named.map((item) => (normalize(item) === genericKey && next < free.length ? free[next++] : item));
   });
+  return named;
 }
 
 /**
@@ -115,18 +164,18 @@ function getRawStartingGear(): string[] {
 }
 
 /**
- * Gear and placements together, with every generic Triforce shard given a
- * number.
+ * Gear and placements together, with every shared-name copy given one of the
+ * individual names its family is asked for by.
  *
- * One pass over both, because a shard recorded at a location is as generic as
- * one still in hand - drop a generic shard on the chest it came from and the
- * logic would otherwise never see it, which is the sphere calculation's whole
- * account of that item. Numbering them in one go is also what keeps two of
- * them from claiming the same number.
+ * One pass over both, because an item recorded at a location is as generic as
+ * one still in hand - drop a shard on the chest it came from and the logic
+ * would otherwise never see it, which is the sphere calculation's whole
+ * account of that item. Doing it in one go is also what keeps two copies from
+ * claiming the same name.
  */
-function numberedShardInventory(placements: SpherePlacement[]): { gear: string[]; placements: SpherePlacement[] } {
+function namedItemInventory(placements: SpherePlacement[]): { gear: string[]; placements: SpherePlacement[] } {
   const gear = getRawStartingGear();
-  const named = nameGenericShards([...gear, ...placements.map((placement) => placement.item)]);
+  const named = nameGenericCopies([...gear, ...placements.map((placement) => placement.item)]);
   return {
     gear: named.slice(0, gear.length),
     placements: placements.map((placement, index) => {
@@ -137,7 +186,7 @@ function numberedShardInventory(placements: SpherePlacement[]): { gear: string[]
 }
 
 export function getSphereLogicStartingGear(): string[] {
-  return numberedShardInventory(sphere.placements).gear;
+  return namedItemInventory(sphere.placements).gear;
 }
 
 /**
@@ -154,7 +203,7 @@ export function getSphereLogicStartingGear(): string[] {
  * even though the item was in hand.
  */
 export function getOwnedInventory(): string[] {
-  const inventory = numberedShardInventory(sphere.placements);
+  const inventory = namedItemInventory(sphere.placements);
   return [
     ...inventory.gear,
     ...inventory.placements.map((placement) => getDungeonSmallKeyName(placement.item, placement.location) || placement.item)
@@ -162,7 +211,7 @@ export function getOwnedInventory(): string[] {
 }
 
 export function getSphereCalculationInput(placements: SpherePlacement[], includeDependencies = true): SphereCalculationInput {
-  const inventory = numberedShardInventory(placements);
+  const inventory = namedItemInventory(placements);
   return {
     locations: getAvailableLocations(),
     rules: data.sphereRules,
@@ -180,7 +229,7 @@ export function getSphereCalculationInput(placements: SpherePlacement[], include
 }
 
 /**
- * Which bosses this run has to beat and which are already down.
+ * The seed's options with the required bosses the marks name folded in.
  *
  * Deliberately not folded into getSphereCalculationInput: working out which
  * boss a marked sector hides walks the entrance graph, and that walk asks
@@ -191,11 +240,8 @@ export function getSphereCalculationInput(placements: SpherePlacement[], include
  * bosses is Ganon's Tower's final staircase, which is neither a shuffled door
  * nor a dungeon a savewarp can reach.
  */
-function getRequiredBossState(): { options: Record<string, unknown>; additionalEvents: string[] } {
-  return {
-    options: { ...data.sphereOptions, ...getRequiredBossOptions() },
-    additionalEvents: getDefeatedBossEvents()
-  };
+function getSeedOptions(): Record<string, unknown> {
+  return { ...data.sphereOptions, ...getRequiredBossOptions() };
 }
 
 /**
@@ -211,7 +257,7 @@ function getRequiredBossState(): { options: Record<string, unknown>; additionalE
 export function getSphereProgressionInput(placements: SpherePlacement[]): SphereCalculationInput {
   return {
     ...getSphereCalculationInput(placements),
-    ...getRequiredBossState(),
+    options: getSeedOptions(),
     additionalStartAreas: getSavewarpStartAreas(getOwnedInventory())
   };
 }
@@ -341,7 +387,13 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
       world: data.sphereWorld,
       placements: [],
       items,
-      ...getRequiredBossState(),
+      options: getSeedOptions(),
+      // Only here, never in the sphere calculation: this answers "can I get
+      // there with what I hold", and a boss already beaten is not standing in
+      // the way any more. The spheres answer a different question - what the
+      // run needed to get this far - and there the pearls that raised the
+      // Tower of the Gods were needed, whether or not Gohdan is still alive.
+      additionalEvents: getDefeatedBossEvents(),
       entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
       entranceConnections: { ...sphere.entranceConnections },
       chartMappings: {},

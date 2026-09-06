@@ -21,6 +21,7 @@ import { WWRSphereEngine } from "$lib/logic";
 import type { SphereCalculationResult } from "$lib/logic";
 import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
+import { settings } from "$lib/state/settings.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
 import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
 import { getSphereTrackingKnowledge, type SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
@@ -49,6 +50,9 @@ export function bumpSphereLogicRevision(): void {
 function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
   return JSON.stringify({
     revision: sphereLogicRevision,
+    // Turning the calculation off changes what is computed, so it has to move
+    // the key or the cache from before the switch would simply stand.
+    sphereCalculation: settings.sphereCalculation,
     placements: knowledge.placements.map(({ id, item, location }) => [id, item, location]),
     areaHints: knowledge.areaHints.map((hint) => [hint.lineNumber, hint.left.name, hint.right.name]),
     pathHints: knowledge.pathHints.map((hint) => [hint.lineNumber, hint.left.name, hint.right.name]),
@@ -274,6 +278,25 @@ function queueSphereDependencyAnalysis(key: string, placements: SpherePlacement[
 export function getSphereBoardAnalysis(knowledge: SphereTrackingKnowledge) {
   const key = getSphereAnalysisKey(knowledge);
   if (sphereAnalysisCache.key === key) return sphereAnalysisCache;
+
+  // With the calculation off, the expensive half never runs: no spheres, no
+  // dependency pruning, no worker job. What the map is coloured from is not
+  // the spheres but plain "can I reach this with what I hold", so that much is
+  // still worked out here - otherwise every location would read unreachable.
+  if (!settings.sphereCalculation) {
+    sphereAnalysisJobId += 1;
+    Object.assign(sphereAnalysisCache, {
+      key,
+      calculation: null,
+      relativeUnknown: null,
+      certainLocationKeys: null,
+      inventoryReachableKeys: data.sphereLogicLoaded ? computeInventoryReachableKeys() : null,
+      goMode: data.sphereLogicLoaded ? computeGoMode() : false,
+      pending: false,
+      dependenciesReady: false
+    });
+    return sphereAnalysisCache;
+  }
 
   // No longer cleared here: the reachability cache keys on the inventory and
   // the entrance mappings, so a tracker change can't collide with a stale

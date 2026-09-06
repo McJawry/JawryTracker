@@ -284,8 +284,11 @@
                 }}
               >
                 <!-- Sphere number sits left of the name; "?" when it depends on an
-                     unassigned item, "-" when the logic can't reach it. -->
-                <span class="location-drop-sphere">{getLocationSphereLabel(location)}</span>
+                     unassigned item, "-" when the logic can't reach it. Empty
+                     when sphere calculation is off, and then it takes no room. -->
+                {#if getLocationSphereLabel(location)}
+                  <span class="location-drop-sphere">{getLocationSphereLabel(location)}</span>
+                {/if}
                 <span class="location-drop-name">
                   {showingEverything ? location : location.replace(`${getAreaFromLocation(location)} - `, "")}
                 </span>

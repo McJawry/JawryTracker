@@ -187,7 +187,9 @@ export const MAX_LOGIC_ITEM_COPIES: Record<string, number> = {
   "Progressive Sail": 2,
   "Progressive Shield": 2,
   "Progressive Sword": 4,
-  "Progressive Wallet": 2
+  "Progressive Wallet": 2,
+  // One grid cell, five statues - and the Ankle reward wants all five.
+  "Tingle Statue": 5
 };
 
 // Manual mapping between this app's location-pool naming

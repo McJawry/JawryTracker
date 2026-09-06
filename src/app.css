@@ -2781,8 +2781,12 @@ body.stream-mode .empty-state {
   opacity: 0;
 }
 
+/* Path lines fade with everything else while a card is focused. They used to
+   be exempted and stayed at full strength, so hovering one boss card lit every
+   purple line on the board - the opposite of what focusing is for. Unhovered,
+   they are all drawn as before. */
 .sphere-canvas.sphere-chain-focus .sphere-edges path.path-hint-edge.sphere-chain-dimmed {
-  opacity: 0.95;
+  opacity: 0;
 }
 
 /* The toolbar deliberately gets no stream background. It used to be painted

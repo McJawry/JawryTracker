@@ -14,6 +14,9 @@ export const MARK_STARTING_KEY = "ww-rando-hint-tracker-mark-starting";
 // an item in another - the Item Tracker and the Sphere Board are often not the
 // same window.
 export const PENDING_LOCATION_KEY = "ww-rando-hint-tracker-pending-location";
+// When autosave.json was last written. Shared so a popout can tell whether the
+// main window is still doing it - see the autosave effect in +layout.svelte.
+export const AUTOSAVE_STAMP_KEY = "ww-rando-hint-tracker-autosave-stamp";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
@@ -88,6 +91,13 @@ export interface Settings {
   genericTriforceShards: boolean;
   /** Chart menu ordering: by chart number rather than by island position. */
   chartSortByNumber: boolean;
+  /**
+   * Work out which sphere each location falls in. Turned off, the sphere
+   * numbers and the Sphere Board go away and the heavy calculation behind them
+   * is never run - but nothing is forgotten, so items already assigned to
+   * locations are all still there when it is turned back on.
+   */
+  sphereCalculation: boolean;
   streamMode: boolean;
   parsedHintsFilters: boolean;
   automaticMode: boolean;
@@ -176,6 +186,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showBlueChu: true,
   genericTriforceShards: false,
   chartSortByNumber: true,
+  sphereCalculation: true,
   streamMode: false,
   parsedHintsFilters: true,
   automaticMode: false,

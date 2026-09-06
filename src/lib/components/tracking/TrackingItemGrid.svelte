@@ -31,6 +31,7 @@
   import { data } from "$lib/state/data.svelte";
   import { itemImage } from "$lib/logic/images";
   import { canTrackBlueChu } from "$lib/logic/map-icons";
+  import { getSphereBlueChuJellyCount } from "$lib/logic/sphere-calculation";
   import { isGoMode } from "$lib/logic/locations";
   import { checked } from "$lib/state/checked.svelte";
   import ChartMenu from "./ChartMenu.svelte";
@@ -41,7 +42,10 @@
 
   // Jellies are marked on each sector's location list; this is the running
   // total, in the gap beside Tingle Statue.
-  const blueChuCount = $derived(Object.keys(checked).filter((id) => id.startsWith("blue-chu-jelly:") && checked[id]).length);
+  // The seed's starting jellies plus the ones marked on the map - the same
+  // count the logic works from, so the number here and Windfall's potion shop
+  // check can never tell different stories.
+  const blueChuCount = $derived(getSphereBlueChuJellyCount());
 
   const pearlEntries: Array<{ itemName: string; className: string }> = [
     { itemName: "Nayru's Pearl", className: "pearl-top" },
@@ -288,10 +292,10 @@
       &gt;DONE MARKING STARTING ITEMS&lt;
     </button>
   {:else if ui.hoveredRowName}
-    <!-- The full name of whatever list row is under the pointer: what a
-         hovered entrance would have been without entrance rando, or a
-         location's whole name, since the lists shorten those to fit and half a
-         dozen of them read "Cave Chest".
+    <!-- The full name of whatever is under the pointer: the area a map cell
+         stands for, what a hovered entrance would have been without entrance
+         rando, or a location's whole name, since the lists shorten those to
+         fit and half a dozen of them read "Cave Chest".
 
          Shares the empty 7th row with the button above, for the same reason:
          the row already exists, so showing it never changes the item column's

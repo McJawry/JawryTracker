@@ -273,6 +273,7 @@ export type FlatRequirement =
   | { type: "item"; item: string; count: number }
   | { type: "health"; count: number }
   | { type: "triforce" }
+  | { type: "tingle" }
   | { type: "and"; args: FlatRequirement[] }
   | { type: "or"; args: FlatRequirement[] };
 
@@ -280,30 +281,39 @@ const TRIFORCE_SHARD_KEYS = new Set(
   Array.from({ length: 8 }, (_, index) => normalize(`Triforce Shard ${index + 1}`))
 );
 
-const isShard = (requirement: FlatRequirement): boolean =>
-  requirement.type === "item" && requirement.count === 1 && TRIFORCE_SHARD_KEYS.has(normalize(requirement.item));
+const TINGLE_STATUE_KEYS = new Set(
+  ["Dragon", "Forbidden", "Goddess", "Earth", "Wind"].map((statue) => normalize(`${statue} Tingle Statue`))
+);
+
+/** The families the tracker counts rather than tracks one by one. */
+const COUNTED_FAMILIES: Array<{ keys: Set<string>; node: FlatRequirement }> = [
+  { keys: TRIFORCE_SHARD_KEYS, node: { type: "triforce" } },
+  { keys: TINGLE_STATUE_KEYS, node: { type: "tingle" } }
+];
+
+const isMemberOf = (keys: Set<string>) => (requirement: FlatRequirement): boolean =>
+  requirement.type === "item" && requirement.count === 1 && keys.has(normalize(requirement.item));
 
 /**
- * Our logic files name the eight shards individually; the randomizer's own
- * item pool models them as eight copies of one item, so its tracker prints a
- * single "Triforce of Courage" line. Collapsing a complete set here matches
+ * Our logic files name the eight shards and the five statues individually;
+ * the item pool models each family as copies of one item, and the grid tracks
+ * them as one cell, so a full set prints as one line. Collapsing here matches
  * that without pretending the logic says something it doesn't - a partial set
- * is still listed shard by shard.
+ * is still listed one by one.
  */
-function collapseTriforce(requirement: FlatRequirement): FlatRequirement {
+function collapseCountedFamilies(requirement: FlatRequirement): FlatRequirement {
   if (requirement.type !== "and" && requirement.type !== "or") return requirement;
-  const args = requirement.args.map(collapseTriforce);
+  let args = requirement.args.map(collapseCountedFamilies);
+  if (requirement.type !== "and") return { type: requirement.type, args };
 
-  if (requirement.type === "and") {
-    const shards = new Set(args.filter(isShard).map((arg) => normalize((arg as { item: string }).item)));
-    if (shards.size === TRIFORCE_SHARD_KEYS.size) {
-      const rest = args.filter((arg) => !isShard(arg));
-      const collapsed: FlatRequirement[] = [{ type: "triforce" }, ...rest];
-      return collapsed.length === 1 ? collapsed[0] : { type: "and", args: collapsed };
-    }
-  }
+  COUNTED_FAMILIES.forEach(({ keys, node }) => {
+    const isMember = isMemberOf(keys);
+    const found = new Set(args.filter(isMember).map((arg) => normalize((arg as { item: string }).item)));
+    if (found.size !== keys.size) return;
+    args = [node, ...args.filter((arg) => !isMember(arg))];
+  });
 
-  return { type: requirement.type, args };
+  return args.length === 1 ? args[0] : { type: "and", args };
 }
 
 let flattenedRequirements: Record<string, FlatRequirement> | null = null;
@@ -391,7 +401,7 @@ function getFlattenedRequirements(): Record<string, FlatRequirement> {
     additionalStartAreas: savewarpStarts
   }) as Record<string, FlatRequirement>;
   Object.keys(flattenedRequirements).forEach((locationKey) => {
-    flattenedRequirements![locationKey] = collapseTriforce(flattenedRequirements![locationKey]);
+    flattenedRequirements![locationKey] = collapseCountedFamilies(flattenedRequirements![locationKey]);
   });
   flattenedKey = key;
   return flattenedRequirements;
@@ -415,6 +425,10 @@ function isSatisfied(requirement: FlatRequirement): boolean {
       // of the eight without saying which, and asking after Triforce Shard 5
       // by name would call the set incomplete with all eight in hand.
       return getHeldTriforceShardCount() >= TRIFORCE_SHARD_COUNT;
+    case "tingle":
+      // Same again, and the grid's one cell is the whole account of them:
+      // five statues open the Ankle reward, whichever five they were.
+      return getEffectiveItemStage("Tingle Statue") >= TINGLE_STATUE_KEYS.size;
     case "and":
       return requirement.args.every(isSatisfied);
     case "or":
@@ -437,6 +451,11 @@ function renderRequirement(
   if (requirement.type === "triforce") {
     const status: RequirementStatus = isSatisfied(requirement) ? "have" : "missing";
     tokens.push({ text: "Triforce of Courage", kind: "atom", status });
+    return;
+  }
+  if (requirement.type === "tingle") {
+    const status: RequirementStatus = isSatisfied(requirement) ? "have" : "missing";
+    tokens.push({ text: "Tingle Statue x5", kind: "atom", status });
     return;
   }
   if (requirement.type === "nothing") {

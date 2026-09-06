@@ -690,7 +690,11 @@
   }
 
   function canonicalInventoryName(itemName) {
-    const key = normalize(itemName);
+    // The item pool - and so anything recorded at a location - calls a
+    // dungeon's big key its "Boss Key", while the logic asks for
+    // "<Dungeon> Big Key". Held keys were reaching the inventory under the
+    // pool's name, so the boss door they open stayed shut.
+    const key = normalize(itemName).replace(/\bboss key$/, "big key");
     return CANONICAL_INVENTORY_ALIASES[key] || key;
   }
 

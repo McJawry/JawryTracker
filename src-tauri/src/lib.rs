@@ -58,6 +58,19 @@ pub fn run() {
     // frontend pieces are kept unwired in tauri/updater.ts +
     // UpdateNotice.svelte for whenever it comes back.
     tauri::Builder::default()
+        // Registered first, as this plugin requires. A second copy hands its
+        // arguments to the one already running and exits, rather than starting
+        // a rival that shares this one's data folder - both the WebView2
+        // profile, where every tracker state lives, and autosave.json. Two
+        // copies writing those meant a corrupted profile and a run rolled back
+        // to whatever the loser last wrote.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            use tauri::Manager;
+            for (_, window) in app.webview_windows() {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

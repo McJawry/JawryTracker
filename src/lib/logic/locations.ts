@@ -19,6 +19,7 @@ import {
 } from "$lib/logic/entrances";
 import { data } from "$lib/state/data.svelte";
 import { checked, setChecked } from "$lib/state/checked.svelte";
+import { settings } from "$lib/state/settings.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
 
 const normalize = WWRSphereEngine.normalize;
@@ -184,6 +185,10 @@ export function getLocationSphere(location: string): number | null {
  * can't reach it at all.
  */
 export function getLocationSphereLabel(location: string): string {
+  // Nothing to say when the spheres are not being worked out - the list drops
+  // the column rather than showing a row of dashes.
+  if (!settings.sphereCalculation) return "";
+
   const sphereNumber = getLocationSphere(location);
   // No determinate sphere, but you can still walk in there with what you're
   // holding - "-" would read as unreachable and contradict the colour.
