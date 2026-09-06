@@ -31,6 +31,7 @@
   import { data } from "$lib/state/data.svelte";
   import { itemImage } from "$lib/logic/images";
   import { canTrackBlueChu } from "$lib/logic/map-icons";
+  import { getSphereBlueChuJellyCount } from "$lib/logic/sphere-calculation";
   import { isGoMode } from "$lib/logic/locations";
   import { checked } from "$lib/state/checked.svelte";
   import ChartMenu from "./ChartMenu.svelte";
@@ -41,7 +42,10 @@
 
   // Jellies are marked on each sector's location list; this is the running
   // total, in the gap beside Tingle Statue.
-  const blueChuCount = $derived(Object.keys(checked).filter((id) => id.startsWith("blue-chu-jelly:") && checked[id]).length);
+  // The seed's starting jellies plus the ones marked on the map - the same
+  // count the logic works from, so the number here and Windfall's potion shop
+  // check can never tell different stories.
+  const blueChuCount = $derived(getSphereBlueChuJellyCount());
 
   const pearlEntries: Array<{ itemName: string; className: string }> = [
     { itemName: "Nayru's Pearl", className: "pearl-top" },

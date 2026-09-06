@@ -16,6 +16,7 @@ import { getEffectiveEntranceMappings, getEntranceConnection, getEntrancesForAre
 // code while it is still loading - and the alternative was a second copy of
 // the walk that finds the boss behind a marked sector.
 import { getDefeatedBossEvents, getRequiredBossOptions } from "$lib/logic/entrance-paths";
+import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -68,8 +69,27 @@ export function isOwnDungeonKeyForPath(item: string): boolean {
   return false;
 }
 
+/** What the seed hands you, from config.yaml's starting_blue_chu_jellys. */
+function getStartingBlueChuJellies(): number {
+  const value = Number(data.sphereOptions.starting_blue_chu_jellys);
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** The ones marked on the map, one marker per bird that drops them. */
+function getMarkedBlueChuJellies(): number {
+  return Object.keys(checked).filter((id) => id.startsWith("blue-chu-jelly:") && checked[id]).length;
+}
+
+/**
+ * How many Blue Chu Jellies you have: the seed's own plus the ones marked.
+ *
+ * Windfall's potion shop wants fifteen, and this used to answer fifteen
+ * whatever was tracked, so that check read available from the first minute of
+ * a run. Counting them for real is also what the number beside the item grid
+ * shows, so the two cannot disagree.
+ */
 export function getSphereBlueChuJellyCount(): number {
-  return 15;
+  return getStartingBlueChuJellies() + getMarkedBlueChuJellies();
 }
 
 /**
