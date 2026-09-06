@@ -485,6 +485,102 @@ export function isSphereExitTraversable(parent: string, connected: string): bool
   return getSphereTraversableExitSet().has(normalize(`${parent} -> ${connected}`));
 }
 
+/**
+ * Dungeon keys the player has pinned to a location, and where.
+ *
+ * A key whose location is written down is no longer one of the pool's
+ * "could be anywhere in this dungeon" copies - it is behind that one chest,
+ * and whatever the chest costs has to be paid to hold it.
+ */
+export function getPlacedOwnDungeonKeys(): Array<{ item: string; itemKey: string; location: string }> {
+  return sphere.placements
+    .filter((placement) => isOwnDungeonKeyForPath(placement.item))
+    .map((placement) => ({
+      item: getDungeonSmallKeyName(placement.item, placement.location) || placement.item,
+      itemKey: getSphereInventoryItemKey(placement.item, placement.location),
+      location: placement.location
+    }));
+}
+
+/** How many of a dungeon key the seed holds in total. */
+function dungeonKeyCopyCount(item: string): number {
+  const key = normalize(item);
+  if (!/small key$/.test(key)) return 1;
+  return DUNGEON_KEY_LOGIC.find((entry) => key === normalize(`${entry.dungeon} Small Key`))?.smallKeyCount ?? 1;
+}
+
+/** A signature of the above, for callers that cache on it. */
+export function placedOwnDungeonKeySignature(): string {
+  const placed = getPlacedOwnDungeonKeys();
+  if (!placed.length) return "";
+  return placed.map(({ itemKey, location }) => `${itemKey}@${normalize(location)}`).sort().join("|");
+}
+
+/**
+ * Reachability where a key recorded at a location has to be fetched from it.
+ *
+ * The everything-inventory hands out every dungeon key, which answers "could
+ * this item ever matter" but not "does it matter in *this* run". Dragon Roost's
+ * big key chest holding a small key is the case that matters: the chest wants
+ * Magic, so without Magic that key is never in hand and Gohma is never
+ * reached - and the tracker only knows it because the key was written down
+ * there. Keys nobody has placed stay free, so nothing is claimed about a
+ * dungeon the player has not opened up yet.
+ */
+export function getSphereReachabilityWithPlacedDungeonKeys(
+  items: string[],
+  options: { additionalStartAreas?: string[] } = {}
+): Set<string> {
+  const placed = getPlacedOwnDungeonKeys();
+  if (!placed.length) return getSphereReachabilityWithOwnDungeonKeys(items, options);
+
+  // Rebuilt from the dungeon rather than trimmed from what came in: the
+  // everything-inventory carries a spare copy of each dungeon key (the grid
+  // lists one and the key logic adds the dungeon's own), and one spare is
+  // enough to open the locked route that the recorded key was supposed to
+  // gate. So every copy is taken out and exactly the unrecorded ones handed
+  // back.
+  const pendingByKey = new Map<string, typeof placed>();
+  placed.forEach((key) => {
+    if (!pendingByKey.has(key.itemKey)) pendingByKey.set(key.itemKey, []);
+    pendingByKey.get(key.itemKey)!.push(key);
+  });
+
+  let held = items.filter((item) => !pendingByKey.has(getSphereInventoryItemKey(item)));
+  let pending: typeof placed = [];
+  pendingByKey.forEach((keys, itemKey) => {
+    const heldBefore = items.filter((item) => getSphereInventoryItemKey(item) === itemKey).length;
+    if (!heldBefore) return;
+
+    // Where a key is does not change with what has been collected since: the
+    // run still had to fetch it from the chest it was written into. Only the
+    // copies nobody has placed stay free, and when enough of those are left to
+    // open the dungeon anyway, nothing here is claimed to be required.
+    const free = Math.max(0, dungeonKeyCopyCount(keys[0].item) - keys.length);
+    held = [...held, ...Array(free).fill(keys[0].item)];
+    pending = [...pending, ...keys];
+  });
+  if (!pending.length) return getSphereReachabilityWithOwnDungeonKeys(items, options);
+
+  let reachable = getSphereReachabilityWithOwnDungeonKeys(held, options);
+  let earned = true;
+  while (earned && pending.length) {
+    earned = false;
+    const stillPending: typeof pending = [];
+    pending.forEach((key) => {
+      if (!reachable.has(normalize(key.location))) {
+        stillPending.push(key);
+        return;
+      }
+      held = [...held, key.item];
+      earned = true;
+    });
+    pending = stillPending;
+    if (earned) reachable = getSphereReachabilityWithOwnDungeonKeys(held, options);
+  }
+  return reachable;
+}
+
 export function getMaximalSphereLogicInventory(): string[] {
   const items: string[] = [];
   data.items.forEach((item) => {

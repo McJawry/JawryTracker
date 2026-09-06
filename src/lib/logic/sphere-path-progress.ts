@@ -63,7 +63,7 @@ export function getPathBossProgressEntries(
             kind: "exact",
             sphere: exactSphere as number,
             bossLocation,
-            logicalIds: withoutOwnDungeonKeys(knowledge, calculation.dependencies[normalize(bossLocation)] ?? [])
+            logicalIds: calculation.dependencies[normalize(bossLocation)] ?? []
           }
         : { kind: "unknown", bossLocation, logicalIds: [] }
     };
@@ -115,9 +115,7 @@ export function getPathBossProgressEntries(
         kind: "relative",
         level: level + 1,
         bossLocation: entry.progress.bossLocation,
-        logicalIds: bossPlacement
-          ? withoutOwnDungeonKeys(knowledge, relativeUnknown.dependencies.get(bossPlacement.id) ?? [])
-          : []
+        logicalIds: bossPlacement ? relativeUnknown.dependencies.get(bossPlacement.id) ?? [] : []
       };
     });
 
@@ -162,13 +160,6 @@ export function getPathBossProgressEntries(
   return entries;
 }
 
-/** Own-dungeon keys are noise on a path chain - they never came from the
- *  hinted area, they came from inside the dungeon itself. */
-function withoutOwnDungeonKeys(knowledge: SphereTrackingKnowledge, ids: string[]): string[] {
-  const itemById = new Map(knowledge.placements.map((placement) => [placement.id, placement.item]));
-  return ids.filter((id) => !isOwnDungeonKeyForPath(itemById.get(id) ?? ""));
-}
-
 export function getPathSphereLabel(progress: PathProgress): string {
   if (progress.kind === "exact") return `Sphere ${progress.sphere}`;
   if (progress.kind === "relative") return progress.level === 1 ? "After sphere ?" : `${progress.level} steps after ?`;
@@ -201,6 +192,11 @@ export function getPathHintSourceIds(
     return calculation.dependencies[normalize(placement.location)] ?? relativeUnknown.dependencies.get(sourceId) ?? [];
   };
 
+  // Keys are walked *through* rather than dropped here: a dungeon key is never
+  // a path item itself - the source list below filters them out - but the
+  // chain to the real one often runs straight through it. Dragon Roost's big
+  // key chest holding a small key is the case: Gohma needs that key, the key
+  // needs Magic, and cutting the key out of the walk lost Magic with it.
   const ancestors = new Set<string>();
   const pending = [...(progress.logicalIds ?? [])];
   while (pending.length) {
