@@ -14,7 +14,14 @@
   import { getAreaAccessibility, getAreaLocationChoices, getLocationCheckedId } from "$lib/logic/locations";
   import { setChecked } from "$lib/state/checked.svelte";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
-  import { openLocationDropList, ui, clearPendingEntranceAssignment, setHighlightSectorMode } from "$lib/state/ui.svelte";
+  import {
+    openLocationDropList,
+    ui,
+    clearPendingEntranceAssignment,
+    setHighlightSectorMode,
+    showHoveredRowName,
+    clearHoveredRowName
+  } from "$lib/state/ui.svelte";
   import { sphere, toggleSectorHighlight } from "$lib/state/sphere.svelte";
   import { DUNGEON_DRAG_MIME } from "$lib/components/map/dungeon-drag";
   import { TRACKED_AREAS } from "$lib/gameData";
@@ -151,6 +158,8 @@
   data-target-kind={targetKind}
   onclick={handleClick}
   oncontextmenu={handleContextMenu}
+  onmouseenter={() => showHoveredRowName(areaName)}
+  onmouseleave={clearHoveredRowName}
   ondragover={handleDragOver}
   ondragleave={() => (dragOver = false)}
   ondrop={handleDrop}

@@ -292,10 +292,10 @@
       &gt;DONE MARKING STARTING ITEMS&lt;
     </button>
   {:else if ui.hoveredRowName}
-    <!-- The full name of whatever list row is under the pointer: what a
-         hovered entrance would have been without entrance rando, or a
-         location's whole name, since the lists shorten those to fit and half a
-         dozen of them read "Cave Chest".
+    <!-- The full name of whatever is under the pointer: the area a map cell
+         stands for, what a hovered entrance would have been without entrance
+         rando, or a location's whole name, since the lists shorten those to
+         fit and half a dozen of them read "Cave Chest".
 
          Shares the empty 7th row with the button above, for the same reason:
          the row already exists, so showing it never changes the item column's
