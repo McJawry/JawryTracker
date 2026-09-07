@@ -390,7 +390,17 @@ export function findEntranceRegions(areaName: string): string[] {
     }
     pending.push(...step(current));
   }
-  const result = [...regions];
+  // A door out of a dungeon does not put what is outside it inside. Walking
+  // back from the Rito Aerie reaches Dragon Roost Cavern through the cavern's
+  // own front door, which listed Hoskit's golden feathers under the dungeon as
+  // well as the island it is on - and put the Wind Temple's door under the
+  // Wind Temple. Where the walk also reached somewhere that is not a dungeon,
+  // that is the answer; a room with nothing else to inherit from - a boss
+  // arena, a mini-boss room - still keeps its dungeon.
+  const dungeons = world.dungeonStarts ?? {};
+  const found = [...regions];
+  const outside = found.filter((region) => !(normalize(region) in dungeons));
+  const result = outside.length ? outside : found;
   graph.regions.set(normalize(areaName), result);
   return result;
 }
