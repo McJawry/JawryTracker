@@ -5,7 +5,13 @@ import { WWRSphereEngine } from "$lib/logic";
 import { ITEM_NAME_ALIASES, REQUIREMENT_ALIASES, type RequirementAlias } from "$lib/gameData";
 import { bossImage, itemImage } from "$lib/logic/images";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
-import { findBest, findBestArea, findBestLocation, type MatchResult } from "$lib/logic/fuzzy-match";
+import {
+  findBest,
+  findBestArea,
+  findBestBoss,
+  findBestLocation,
+  type MatchResult
+} from "$lib/logic/fuzzy-match";
 import { data } from "$lib/state/data.svelte";
 import { NUMBERED_ITEM_GROUPS } from "$lib/gameData";
 import type { Hint, HintType } from "$lib/state/hints.svelte";
@@ -234,7 +240,7 @@ function parseLine(rawLine: string, lineNumber: number): Hint | null {
   const pathParts = line.match(/^(.+?)\s+to\s+(.+)$/i);
   if (pathParts && !isNoteToMomItemHint(line)) {
     const areas = parseHintAreas(pathParts[1]);
-    const boss = findBest(pathParts[2], data.bosses);
+    const boss = findBestBoss(pathParts[2]);
     return buildHint("path", line, lineNumber, areas[0], boss, null, areas.map((match) => match.name));
   }
 

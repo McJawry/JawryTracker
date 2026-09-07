@@ -98,6 +98,8 @@ export interface Settings {
    * locations are all still there when it is turned back on.
    */
   sphereCalculation: boolean;
+  /** Show the icon of whatever item is recorded at a location, in the lists. */
+  showPlacedItemIcons: boolean;
   streamMode: boolean;
   parsedHintsFilters: boolean;
   automaticMode: boolean;
@@ -187,6 +189,7 @@ export const DEFAULT_SETTINGS: Settings = {
   genericTriforceShards: false,
   chartSortByNumber: true,
   sphereCalculation: true,
+  showPlacedItemIcons: true,
   streamMode: false,
   parsedHintsFilters: true,
   automaticMode: false,

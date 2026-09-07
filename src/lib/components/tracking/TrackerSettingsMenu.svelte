@@ -64,6 +64,14 @@
         </span>
       </label>
 
+      <label class="tracker-settings-option">
+        <input type="checkbox" bind:checked={settings.showPlacedItemIcons} onchange={saveSettings} />
+        <span>
+          <strong>Display item on location list</strong>
+          <em>Show the icon of the item recorded at a location beside its name.</em>
+        </span>
+      </label>
+
       <div class="tracker-settings-row">
         <span class="tracker-settings-label">Randomizer folder</span>
         <span class="tracker-settings-path" title={settings.randoFolderPath || "No folder selected yet"}>

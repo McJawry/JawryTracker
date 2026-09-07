@@ -3266,6 +3266,17 @@ body.stream-mode .empty-state {
   opacity: 0.75;
 }
 
+/* The item recorded here, sat outside the sphere number. Sized off the row's
+   own text so it grows with the panel scale rather than pinning a pixel
+   height, and never squashed by a long location name. */
+.location-drop-item {
+  flex: 0 0 auto;
+  width: 1.35em;
+  height: 1.35em;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
 .location-drop-name {
   flex: 1 1 auto;
   min-width: 0;

@@ -4,6 +4,7 @@
 import { WWRSphereEngine } from "$lib/logic";
 import { data } from "$lib/state/data.svelte";
 import { getAvailableLocations } from "$lib/logic/locations";
+import { MANUAL_BOSS_ABBREVIATIONS } from "$lib/gameData";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -102,6 +103,18 @@ function getAreaAliasMatch(query: string): MatchResult | null {
   }
 
   return null;
+}
+
+/**
+ * A boss, by name or by the initials people actually type. The abbreviation
+ * wins outright: "KD" scores nothing against "Kalle Demos" as a fuzzy match,
+ * and would otherwise land on whichever boss happened to share a letter.
+ */
+export function findBestBoss(query: string): MatchResult {
+  const alias = MANUAL_BOSS_ABBREVIATIONS[normalize(query).toUpperCase()]
+    ?? Object.entries(MANUAL_BOSS_ABBREVIATIONS).find(([abbr]) => normalize(abbr) === normalize(query))?.[1];
+  if (alias) return { name: alias, score: 140, confidence: "exact", note: "Abbreviation match" };
+  return findBest(query, data.bosses);
 }
 
 export function findBestArea(query: string): MatchResult {

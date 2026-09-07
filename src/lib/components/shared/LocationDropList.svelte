@@ -35,6 +35,10 @@
   import { setChecked } from "$lib/state/checked.svelte";
   import { toggleLocationChecked } from "$lib/logic/locations";
   import { trackerAreaImage } from "$lib/logic/tracker-images";
+  import { itemImage } from "$lib/logic/images";
+  import { WWRSphereEngine } from "$lib/logic";
+  import { settings } from "$lib/state/settings.svelte";
+  import { sphere } from "$lib/state/sphere.svelte";
   import { getStaticSectorIcons } from "$lib/logic/map-icons";
   import MapIcon from "$lib/components/map/MapIcon.svelte";
   import { ui } from "$lib/state/ui.svelte";
@@ -213,6 +217,13 @@
     }
     onClose();
   }
+
+  const normalizeLocation = WWRSphereEngine.normalize;
+  // What is recorded at each location, built once for the list rather than
+  // scanned per row.
+  const placedItems = $derived(
+    new Map(sphere.placements.map((placement) => [normalizeLocation(placement.location), placement.item]))
+  );
 </script>
 
 <svelte:window
@@ -283,6 +294,16 @@
                   hideRequirementTooltip();
                 }}
               >
+                <!-- What is recorded here, outermost: the sphere number and the
+                     name keep their places whether or not an item is shown. -->
+                {#if settings.showPlacedItemIcons && placedItems.get(normalizeLocation(location))}
+                  <img
+                    class="location-drop-item"
+                    src={itemImage(placedItems.get(normalizeLocation(location))!)}
+                    alt={placedItems.get(normalizeLocation(location))}
+                    title={placedItems.get(normalizeLocation(location))}
+                  />
+                {/if}
                 <!-- Sphere number sits left of the name; "?" when it depends on an
                      unassigned item, "-" when the logic can't reach it. Empty
                      when sphere calculation is off, and then it takes no room. -->
