@@ -45,9 +45,9 @@ describe("multi-boss path hints", () => {
     });
   });
 
-  it("3: A is required for both, so it accounts for neither on its own", () => {
+  it("3: A could be either boss's item, so neither is still looked for down A", () => {
     expect(icons({ A: { required: ["boss1", "boss2"] }, B: { required: [] } }, TWO)).toEqual({
-      A: ["boss1", "boss2"],
+      A: [],
       B: ["boss1", "boss2"]
     });
   });
@@ -85,9 +85,12 @@ describe("multi-boss path hints", () => {
 describe("beyond two bosses and two items", () => {
   const THREE = ["boss1", "boss2", "boss3"];
 
-  it("one branch required for all three accounts for none of them", () => {
+  it("one branch required for all three is a candidate for all three", () => {
+    // Same as scenario 3 with a boss more: A answers whichever it turns out to
+    // belong to, so none of them is still being looked for down A - while B
+    // and C, which answer nothing, could hold any of the three.
     expect(icons({ A: { required: THREE }, B: { required: [] }, C: { required: [] } }, THREE)).toEqual({
-      A: THREE,
+      A: [],
       B: THREE,
       C: THREE
     });
@@ -176,8 +179,11 @@ describe("what the bosses get paired against", () => {
   it("does not let two downstream items fake a solved area", () => {
     const { built } = model(pawprint);
     const plan = planPathBossIcons(TWO, built.candidatesByBoss, built.locations, built.openRootIds);
-    // One branch answering both bosses accounts for neither: scenario 3.
-    expect([...(plan.get("farOffChest") ?? [])].sort()).toEqual(["boss1", "boss2"]);
+    // The Spoils Bag branch answers both bosses, so neither is still being
+    // looked for down it - scenario 3. The bosses are not resolved, though:
+    // one item cannot be both path items, so the area's other locations still
+    // carry both icons.
+    expect([...(plan.get("farOffChest") ?? [])].sort()).toEqual([]);
   });
 
   it("rolls a downstream item's requirement up to the branch that reaches it", () => {
