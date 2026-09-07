@@ -393,11 +393,40 @@ export function getSavewarpStartAreas(items: string[]): string[] {
   return seeded;
 }
 
+/**
+ * Dungeon starting rooms nothing can walk to, for callers that have to be able
+ * to measure what is inside a dungeon.
+ *
+ * Under entrance randomisation a dungeon whose door nobody has recorded yet is
+ * sealed off entirely - no route in, so no check inside it can be reached and
+ * nothing about it can be measured. Seeding its starting room puts the inside
+ * back on the map.
+ *
+ * Only the sealed-off ones. Seeding a dungeon you *can* reach also throws away
+ * the price of the door: with the Tower of the Gods started from the inside,
+ * the pearls that raise it stop counting as required and take the whole chain
+ * of items that leads to them with them.
+ */
+export function getUnreachableDungeonStartAreas(items: string[]): string[] {
+  const starts = [...new Set(Object.values(data.sphereWorld?.dungeonStarts ?? {}).filter((area): area is string => !!area))];
+  if (!starts.length) return [];
+  const areas = WWRSphereEngine.getAccessibleAreas({
+    ...getSphereCalculationInput([], false),
+    items,
+    additionalStartAreas: getSavewarpStartAreas(items)
+  });
+  return starts.filter((area) => !areas.has(normalize(area)));
+}
+
 export function getSphereReachableLocationSet(items: string[], options: ReachabilityOptions = {}): Set<string> {
   // Savewarp destinations are part of "where can I get to", so they belong
   // here rather than at each call site - and in the cache key with them.
   const additionalStartAreas = [...new Set([...(options.additionalStartAreas || []), ...getSavewarpStartAreas(items)])];
-  const cacheKey = reachabilityCacheKey(items, { additionalStartAreas });
+  // Every option in the key, not just the start areas: asking with defeated
+  // bosses ignored and asking without differ, and with only the start areas
+  // written down the two questions shared one answer - whichever was asked
+  // first.
+  const cacheKey = reachabilityCacheKey(items, { ...options, additionalStartAreas });
   const cached = sphereReachabilityCache.get(cacheKey);
   if (cached) return cached;
 
