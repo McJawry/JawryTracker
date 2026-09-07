@@ -185,6 +185,18 @@ function namedItemInventory(placements: SpherePlacement[]): { gear: string[]; pl
   };
 }
 
+/**
+ * Placements with shared-name copies given the individual names the logic
+ * asks for - a generic Triforce shard becomes one of the eight.
+ *
+ * Anything asking "is this item required" has to work from these: the item
+ * pool has no such thing as a plain "Triforce Shard", so a card holding one
+ * matches nothing and reads as an item the seed does not contain.
+ */
+export function withNamedPlacementItems(placements: SpherePlacement[]): SpherePlacement[] {
+  return namedItemInventory(placements).placements;
+}
+
 export function getSphereLogicStartingGear(): string[] {
   return namedItemInventory(sphere.placements).gear;
 }
@@ -293,7 +305,20 @@ const BOSS_LOCATIONS_FOR_REACHABILITY = [
 // to while every cached answer stayed on the old world: a door you had just
 // opened the way to kept its red, disagreeing with its own tooltip, until some
 // unrelated item click happened to change the key.
-function reachabilityCacheKey(items: string[], options: { additionalStartAreas?: string[] }): string {
+export interface ReachabilityOptions {
+  additionalStartAreas?: string[];
+  /**
+   * Ask what the seed asks for rather than what is left to do.
+   *
+   * A boss whose heart container is checked is normally credited as beaten,
+   * which is right for "can I get there from here" - but it also excuses
+   * whatever it took to beat them, so the Skull Hammer stopped counting as
+   * required the moment Helmaroc King was crossed off.
+   */
+  ignoreDefeatedBosses?: boolean;
+}
+
+function reachabilityCacheKey(items: string[], options: ReachabilityOptions): string {
   return JSON.stringify({
     items: items.map(normalize).sort(),
     additionalStartAreas: (options.additionalStartAreas || []).map(normalize).sort(),
@@ -310,7 +335,7 @@ function reachabilityCacheKey(items: string[], options: { additionalStartAreas?:
     // six heart containers are a couple of lookups. The entrances that turn a
     // mark into a named boss are already above.
     highlightedSectors: sphere.highlightedSectors.map(normalize).sort(),
-    defeatedBosses: getDefeatedBossEvents().map(normalize)
+    defeatedBosses: options.ignoreDefeatedBosses ? "ignored" : getDefeatedBossEvents().map(normalize)
   });
 }
 
@@ -368,7 +393,7 @@ export function getSavewarpStartAreas(items: string[]): string[] {
   return seeded;
 }
 
-export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+export function getSphereReachableLocationSet(items: string[], options: ReachabilityOptions = {}): Set<string> {
   // Savewarp destinations are part of "where can I get to", so they belong
   // here rather than at each call site - and in the cache key with them.
   const additionalStartAreas = [...new Set([...(options.additionalStartAreas || []), ...getSavewarpStartAreas(items)])];
@@ -393,7 +418,8 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
       // the way any more. The spheres answer a different question - what the
       // run needed to get this far - and there the pearls that raised the
       // Tower of the Gods were needed, whether or not Gohdan is still alive.
-      additionalEvents: getDefeatedBossEvents(),
+      // Callers asking what the seed itself demands turn this off.
+      additionalEvents: options.ignoreDefeatedBosses ? [] : getDefeatedBossEvents(),
       entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
       entranceConnections: { ...sphere.entranceConnections },
       chartMappings: {},
@@ -529,7 +555,7 @@ export function placedOwnDungeonKeySignature(): string {
  */
 export function getSphereReachabilityWithPlacedDungeonKeys(
   items: string[],
-  options: { additionalStartAreas?: string[] } = {}
+  options: ReachabilityOptions = {}
 ): Set<string> {
   const placed = getPlacedOwnDungeonKeys();
   if (!placed.length) return getSphereReachabilityWithOwnDungeonKeys(items, options);
@@ -651,7 +677,7 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
 
 const ownDungeonKeyReachabilityCache = new Map<string, Set<string>>();
 
-export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: ReachabilityOptions = {}): Set<string> {
   const keyPools = getOwnDungeonKeyPotentialPools();
   if (!keyPools.size) return getSphereReachableLocationSet(items, options);
 
