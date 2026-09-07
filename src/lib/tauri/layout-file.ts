@@ -43,6 +43,9 @@ export interface LayoutPreferences {
   sectionWidths: Record<string, number>;
   sectionVisibility: SectionVisibility;
   sphereBoardZoom: number;
+  /** Requirement tooltip scale, as a percentage - a screen-size setting like
+   *  the two zooms either side of it, so it travels with a layout. */
+  tooltipScale: number;
   /** Per-section content scale for undocked windows, keyed by section id. */
   popoutZoom: Record<string, number>;
   /** Sections popped out into their own window, reopened on next launch. */
@@ -71,6 +74,7 @@ function currentPreferences(
     sectionWidths: { ...settings.sectionWidths },
     sectionVisibility: { ...settings.sectionVisibility },
     sphereBoardZoom: settings.sphereBoardZoom,
+    tooltipScale: settings.tooltipScale,
     popoutZoom: { ...settings.popoutZoom },
     undockedSections: [...undockedState.ids],
     windowSize: readWindowSize()
@@ -85,6 +89,9 @@ function applyPreferences(prefs: Partial<LayoutPreferences>, { trustLiveUndocked
   if (prefs.sectionWidths) Object.assign(settings.sectionWidths, { ...DEFAULT_SECTION_WIDTHS, ...prefs.sectionWidths });
   if (prefs.sectionVisibility) Object.assign(settings.sectionVisibility, { ...DEFAULT_SECTION_VISIBILITY, ...prefs.sectionVisibility });
   if (typeof prefs.sphereBoardZoom === "number") settings.sphereBoardZoom = prefs.sphereBoardZoom;
+  // Left alone when a preset predates the field, the same as the zoom above:
+  // a scalar with a sensible default reads better kept than reset.
+  if (typeof prefs.tooltipScale === "number") settings.tooltipScale = prefs.tooltipScale;
   // Replaced, not merged, and cleared even when the preset has no popoutZoom
   // at all: a preset that omits a section means "no scale override there", and
   // one saved before this field existed (anything older than 0.1.4) omits all

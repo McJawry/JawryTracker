@@ -103,7 +103,18 @@ export function planPathBossIcons(
   // already in hand, so nothing here is worth searching and no icon is drawn.
   if (!unresolvedBosses.length) return plan;
 
-  locations.forEach((location) => unresolvedBosses.forEach((bossName) => add(location.key, bossName)));
+  unresolvedBosses.forEach((bossName) => {
+    // A branch whose own item is already known to be required for this boss is
+    // not somewhere still being searched for it: that item is the candidate,
+    // and whatever else lies down the branch is not what the hint meant. An
+    // item required for both bosses therefore clears its branch of both, even
+    // though which boss it belongs to is still open.
+    const answered = candidatesByBoss.get(bossName) ?? [];
+    locations.forEach((location) => {
+      if (answered.some((rootId) => location.branches.has(rootId))) return;
+      add(location.key, bossName);
+    });
+  });
 
   // A boss the matching did settle, but only onto branches that are still
   // open, is not settled firmly: such a branch could yet prove required for

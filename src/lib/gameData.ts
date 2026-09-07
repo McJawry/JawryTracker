@@ -232,6 +232,15 @@ export const LOCATION_CATEGORY_ALIASES: Record<string, string> = {
   "Wind Temple - Wizzrobe Mini Boss": "Wind Temple - Wizzrobe Miniboss Room"
 };
 
+/**
+ * Bosses whose initials are worth typing. Only the two-word ones need it -
+ * every other boss is already the shortest thing it could be called, and a
+ * prefix like "molg" finds it on its own.
+ */
+export const MANUAL_BOSS_ABBREVIATIONS: Record<string, string> = {
+  KD: "Kalle Demos"
+};
+
 export const MANUAL_AREA_ABBREVIATIONS: Record<string, string> = {
   DRC: "Dragon Roost Cavern",
   DRI: "Dragon Roost Island",

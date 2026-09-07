@@ -8,6 +8,7 @@
     getLocationRequirements,
     type LocationRequirements
   } from "$lib/logic/requirement-text";
+  import { settings } from "$lib/state/settings.svelte";
 
   let {
     location,
@@ -25,15 +26,21 @@
   // Flipped toward whichever side has room, so the tooltip never runs off
   // the window on a location near the right or bottom edge.
   const MAX_WIDTH = 380;
-  const flipX = $derived(typeof window !== "undefined" && x + MAX_WIDTH + 24 > window.innerWidth);
-  const flipY = $derived(typeof window !== "undefined" && y + 260 > window.innerHeight);
+
+  // Scaled from its own setting - see SettingsState.tooltipScale. Everything
+  // inside is sized in em off the tooltip's own font size, so the one number
+  // moves the whole thing, edge-flipping included.
+  const scale = $derived((settings.tooltipScale || 100) / 100);
+  const maxWidth = $derived(Math.round(MAX_WIDTH * scale));
+  const flipX = $derived(typeof window !== "undefined" && x + maxWidth + 24 > window.innerWidth);
+  const flipY = $derived(typeof window !== "undefined" && y + 260 * scale > window.innerHeight);
 </script>
 
 <div
   class="requirement-tooltip"
   class:flip-x={flipX}
   class:flip-y={flipY}
-  style="left: {x}px; top: {y}px; max-width: {MAX_WIDTH}px"
+  style="left: {x}px; top: {y}px; max-width: {maxWidth}px; --tooltip-scale: {scale}"
   role="tooltip"
 >
   {#if requirements.entrancePath.length}

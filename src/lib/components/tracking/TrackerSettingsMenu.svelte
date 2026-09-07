@@ -64,6 +64,25 @@
         </span>
       </label>
 
+      <label class="tracker-settings-option">
+        <input type="checkbox" bind:checked={settings.showPlacedItemIcons} onchange={saveSettings} />
+        <span>
+          <strong>Display item on location list</strong>
+          <em>Show the icon of the item recorded at a location beside its name.</em>
+        </span>
+      </label>
+
+      <label class="tracker-settings-option tracker-settings-slider">
+        <span>
+          <strong>Location tooltip size</strong>
+          <em>How large the requirement tooltip is drawn.</em>
+        </span>
+        <span class="tracker-settings-slider-row">
+          <input type="range" min="50" max="200" step="5" bind:value={settings.tooltipScale} onchange={saveSettings} />
+          <span class="tracker-settings-slider-value">{settings.tooltipScale}%</span>
+        </span>
+      </label>
+
       <div class="tracker-settings-row">
         <span class="tracker-settings-label">Randomizer folder</span>
         <span class="tracker-settings-path" title={settings.randoFolderPath || "No folder selected yet"}>

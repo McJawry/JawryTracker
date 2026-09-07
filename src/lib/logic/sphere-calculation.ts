@@ -185,6 +185,18 @@ function namedItemInventory(placements: SpherePlacement[]): { gear: string[]; pl
   };
 }
 
+/**
+ * Placements with shared-name copies given the individual names the logic
+ * asks for - a generic Triforce shard becomes one of the eight.
+ *
+ * Anything asking "is this item required" has to work from these: the item
+ * pool has no such thing as a plain "Triforce Shard", so a card holding one
+ * matches nothing and reads as an item the seed does not contain.
+ */
+export function withNamedPlacementItems(placements: SpherePlacement[]): SpherePlacement[] {
+  return namedItemInventory(placements).placements;
+}
+
 export function getSphereLogicStartingGear(): string[] {
   return namedItemInventory(sphere.placements).gear;
 }
@@ -293,7 +305,20 @@ const BOSS_LOCATIONS_FOR_REACHABILITY = [
 // to while every cached answer stayed on the old world: a door you had just
 // opened the way to kept its red, disagreeing with its own tooltip, until some
 // unrelated item click happened to change the key.
-function reachabilityCacheKey(items: string[], options: { additionalStartAreas?: string[] }): string {
+export interface ReachabilityOptions {
+  additionalStartAreas?: string[];
+  /**
+   * Ask what the seed asks for rather than what is left to do.
+   *
+   * A boss whose heart container is checked is normally credited as beaten,
+   * which is right for "can I get there from here" - but it also excuses
+   * whatever it took to beat them, so the Skull Hammer stopped counting as
+   * required the moment Helmaroc King was crossed off.
+   */
+  ignoreDefeatedBosses?: boolean;
+}
+
+function reachabilityCacheKey(items: string[], options: ReachabilityOptions): string {
   return JSON.stringify({
     items: items.map(normalize).sort(),
     additionalStartAreas: (options.additionalStartAreas || []).map(normalize).sort(),
@@ -310,7 +335,7 @@ function reachabilityCacheKey(items: string[], options: { additionalStartAreas?:
     // six heart containers are a couple of lookups. The entrances that turn a
     // mark into a named boss are already above.
     highlightedSectors: sphere.highlightedSectors.map(normalize).sort(),
-    defeatedBosses: getDefeatedBossEvents().map(normalize)
+    defeatedBosses: options.ignoreDefeatedBosses ? "ignored" : getDefeatedBossEvents().map(normalize)
   });
 }
 
@@ -368,7 +393,7 @@ export function getSavewarpStartAreas(items: string[]): string[] {
   return seeded;
 }
 
-export function getSphereReachableLocationSet(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+export function getSphereReachableLocationSet(items: string[], options: ReachabilityOptions = {}): Set<string> {
   // Savewarp destinations are part of "where can I get to", so they belong
   // here rather than at each call site - and in the cache key with them.
   const additionalStartAreas = [...new Set([...(options.additionalStartAreas || []), ...getSavewarpStartAreas(items)])];
@@ -393,7 +418,8 @@ export function getSphereReachableLocationSet(items: string[], options: { additi
       // the way any more. The spheres answer a different question - what the
       // run needed to get this far - and there the pearls that raised the
       // Tower of the Gods were needed, whether or not Gohdan is still alive.
-      additionalEvents: getDefeatedBossEvents(),
+      // Callers asking what the seed itself demands turn this off.
+      additionalEvents: options.ignoreDefeatedBosses ? [] : getDefeatedBossEvents(),
       entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
       entranceConnections: { ...sphere.entranceConnections },
       chartMappings: {},
@@ -485,6 +511,102 @@ export function isSphereExitTraversable(parent: string, connected: string): bool
   return getSphereTraversableExitSet().has(normalize(`${parent} -> ${connected}`));
 }
 
+/**
+ * Dungeon keys the player has pinned to a location, and where.
+ *
+ * A key whose location is written down is no longer one of the pool's
+ * "could be anywhere in this dungeon" copies - it is behind that one chest,
+ * and whatever the chest costs has to be paid to hold it.
+ */
+export function getPlacedOwnDungeonKeys(): Array<{ item: string; itemKey: string; location: string }> {
+  return sphere.placements
+    .filter((placement) => isOwnDungeonKeyForPath(placement.item))
+    .map((placement) => ({
+      item: getDungeonSmallKeyName(placement.item, placement.location) || placement.item,
+      itemKey: getSphereInventoryItemKey(placement.item, placement.location),
+      location: placement.location
+    }));
+}
+
+/** How many of a dungeon key the seed holds in total. */
+function dungeonKeyCopyCount(item: string): number {
+  const key = normalize(item);
+  if (!/small key$/.test(key)) return 1;
+  return DUNGEON_KEY_LOGIC.find((entry) => key === normalize(`${entry.dungeon} Small Key`))?.smallKeyCount ?? 1;
+}
+
+/** A signature of the above, for callers that cache on it. */
+export function placedOwnDungeonKeySignature(): string {
+  const placed = getPlacedOwnDungeonKeys();
+  if (!placed.length) return "";
+  return placed.map(({ itemKey, location }) => `${itemKey}@${normalize(location)}`).sort().join("|");
+}
+
+/**
+ * Reachability where a key recorded at a location has to be fetched from it.
+ *
+ * The everything-inventory hands out every dungeon key, which answers "could
+ * this item ever matter" but not "does it matter in *this* run". Dragon Roost's
+ * big key chest holding a small key is the case that matters: the chest wants
+ * Magic, so without Magic that key is never in hand and Gohma is never
+ * reached - and the tracker only knows it because the key was written down
+ * there. Keys nobody has placed stay free, so nothing is claimed about a
+ * dungeon the player has not opened up yet.
+ */
+export function getSphereReachabilityWithPlacedDungeonKeys(
+  items: string[],
+  options: ReachabilityOptions = {}
+): Set<string> {
+  const placed = getPlacedOwnDungeonKeys();
+  if (!placed.length) return getSphereReachabilityWithOwnDungeonKeys(items, options);
+
+  // Rebuilt from the dungeon rather than trimmed from what came in: the
+  // everything-inventory carries a spare copy of each dungeon key (the grid
+  // lists one and the key logic adds the dungeon's own), and one spare is
+  // enough to open the locked route that the recorded key was supposed to
+  // gate. So every copy is taken out and exactly the unrecorded ones handed
+  // back.
+  const pendingByKey = new Map<string, typeof placed>();
+  placed.forEach((key) => {
+    if (!pendingByKey.has(key.itemKey)) pendingByKey.set(key.itemKey, []);
+    pendingByKey.get(key.itemKey)!.push(key);
+  });
+
+  let held = items.filter((item) => !pendingByKey.has(getSphereInventoryItemKey(item)));
+  let pending: typeof placed = [];
+  pendingByKey.forEach((keys, itemKey) => {
+    const heldBefore = items.filter((item) => getSphereInventoryItemKey(item) === itemKey).length;
+    if (!heldBefore) return;
+
+    // Where a key is does not change with what has been collected since: the
+    // run still had to fetch it from the chest it was written into. Only the
+    // copies nobody has placed stay free, and when enough of those are left to
+    // open the dungeon anyway, nothing here is claimed to be required.
+    const free = Math.max(0, dungeonKeyCopyCount(keys[0].item) - keys.length);
+    held = [...held, ...Array(free).fill(keys[0].item)];
+    pending = [...pending, ...keys];
+  });
+  if (!pending.length) return getSphereReachabilityWithOwnDungeonKeys(items, options);
+
+  let reachable = getSphereReachabilityWithOwnDungeonKeys(held, options);
+  let earned = true;
+  while (earned && pending.length) {
+    earned = false;
+    const stillPending: typeof pending = [];
+    pending.forEach((key) => {
+      if (!reachable.has(normalize(key.location))) {
+        stillPending.push(key);
+        return;
+      }
+      held = [...held, key.item];
+      earned = true;
+    });
+    pending = stillPending;
+    if (earned) reachable = getSphereReachabilityWithOwnDungeonKeys(held, options);
+  }
+  return reachable;
+}
+
 export function getMaximalSphereLogicInventory(): string[] {
   const items: string[] = [];
   data.items.forEach((item) => {
@@ -555,7 +677,7 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
 
 const ownDungeonKeyReachabilityCache = new Map<string, Set<string>>();
 
-export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: { additionalStartAreas?: string[] } = {}): Set<string> {
+export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: ReachabilityOptions = {}): Set<string> {
   const keyPools = getOwnDungeonKeyPotentialPools();
   if (!keyPools.size) return getSphereReachableLocationSet(items, options);
 

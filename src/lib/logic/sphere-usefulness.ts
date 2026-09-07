@@ -12,10 +12,10 @@
  *   "Paths + required" also shows what beating the game depends on, worked out
  *                      transitively: the items needed to reach Ganondorf, then
  *                      the items needed to reach wherever those sit, and so on.
- *                      It keeps an item whose branch is still unfinished too -
- *                      hiding one is a claim that nothing down its path helps
- *                      beat the game, and that can only be claimed once every
- *                      location it opens has actually been checked.
+ *                      Anything the run can be finished without is hidden, even
+ *                      with places it opens still unlooked-in - if the seed is
+ *                      beatable without the item, nothing down that branch can
+ *                      be needed to beat it.
  *
  * The requirement walk seeds every dungeon's start area, the same trick
  * isLogicRequiredItemForLocation uses for dungeon interiors. Without it an
@@ -29,10 +29,10 @@ import {
   getMaximalSphereLogicInventory,
   getSphereInventoryItemKey,
   getSphereReachabilityWithOwnDungeonKeys,
-  getTraversableExitsWith
+  getTraversableExitsWith,
+  withNamedPlacementItems
 } from "$lib/logic/sphere-calculation";
 import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
-import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
 import { data } from "$lib/state/data.svelte";
 import { type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -87,15 +87,23 @@ function getDungeonStartAreas(): string[] {
  */
 async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[], sphereLocations: string[][]): Promise<Set<string>> {
   const required = new Set<string>();
-  const additionalStartAreas = getDungeonStartAreas();
+  // What the seed demands, not what is left to do: a boss already crossed off
+  // is credited as beaten everywhere else, and that excuses whatever it took
+  // to beat them - the Skull Hammer stopped counting the moment Helmaroc King
+  // was checked. The filter is about beating the game, so it asks without that
+  // credit.
+  const reachabilityOptions = { additionalStartAreas: getDungeonStartAreas(), ignoreDefeatedBosses: true };
   const maximalInventory = getMaximalSphereLogicInventory();
-  const withEverything = getSphereReachabilityWithOwnDungeonKeys(maximalInventory, { additionalStartAreas });
+  const withEverything = getSphereReachabilityWithOwnDungeonKeys(maximalInventory, reachabilityOptions);
   // Nothing to measure against - treat every card as required rather than hide
   // something the run might still need.
   if (!withEverything.has(normalize(GOAL_LOCATION))) return new Set(placements.map((placement) => placement.id));
 
+  // Named first: a card holding a generic Triforce shard keys as "triforce
+  // shard", which the item pool has no copies of, so it measured as an item
+  // the seed does not contain and was hidden - shards included.
   const placementsByItemKey = new Map<string, SpherePlacement[]>();
-  placements.forEach((placement) => {
+  withNamedPlacementItems(placements).forEach((placement) => {
     const key = getSphereInventoryItemKey(placement.item);
     if (!key) return;
     if (!placementsByItemKey.has(key)) placementsByItemKey.set(key, []);
@@ -123,12 +131,18 @@ async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[
   const reachableWithCopies = new Map<string, Set<string>[]>();
   for (const [itemKey, holders] of placementsByItemKey) {
     const copiesInSeed = maximalInventory.filter((item) => getSphereInventoryItemKey(item) === itemKey).length;
-    if (!copiesInSeed) continue;
+    // Nothing to measure against - an item the pool does not list cannot be
+    // tested by withholding it, and an unmeasurable card is not grounds for
+    // hiding one.
+    if (!copiesInSeed) {
+      holders.forEach((holder) => required.add(holder.id));
+      continue;
+    }
     const others = maximalInventory.filter((item) => getSphereInventoryItemKey(item) !== itemKey);
     const sets: Set<string>[] = [];
     for (let copies = 0; copies <= copiesInSeed; copies += 1) {
       sets.push(
-        getSphereReachabilityWithOwnDungeonKeys([...others, ...Array(copies).fill(holders[0].item)], { additionalStartAreas })
+        getSphereReachabilityWithOwnDungeonKeys([...others, ...Array(copies).fill(holders[0].item)], reachabilityOptions)
       );
       await yieldToBrowser();
     }
@@ -175,26 +189,11 @@ async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[
     }
   }
 
-  // An item that still opens somewhere unchecked has an unfinished branch, so
-  // whether it leads to anything needed is not yet knowable - and an unknown
-  // is not grounds for hiding it. Once every location it opens has been
-  // checked, the question is settled and the answer above decides.
-  const occupied = new Set(placements.map((placement) => normalize(placement.location)));
-  const unchecked = getAvailableLocations().filter((location) => {
-    const key = normalize(location);
-    return withEverything.has(key) && !occupied.has(key) && !isLocationMarked(location);
-  });
-
-  for (const [itemKey, holders] of placementsByItemKey) {
-    const sets = reachableWithCopies.get(itemKey);
-    if (!sets) continue;
-    // Index 0 means that location is reachable without the item, so it is not
-    // one this item opens; -1 means out of reach either way.
-    const opensSomethingUnchecked = unchecked.some((location) => sets.findIndex((set) => set.has(normalize(location))) > 0);
-    if (opensSomethingUnchecked) holders.forEach((holder) => required.add(holder.id));
-    await yieldToBrowser();
-  }
-
+  // Nothing else is kept. An item the run can be finished without is hidden
+  // whether or not the places it opens have been looked in: an unexplored
+  // branch used to hold a card back on the grounds that something needed might
+  // still turn up down it, but if the seed is already beatable without the
+  // item, nothing down there can be needed to beat it.
   return required;
 }
 

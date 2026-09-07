@@ -12,7 +12,13 @@ import type { SphereCalculationResult } from "$lib/logic";
 import { BOSS_LOCATIONS } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getPathHintAreaLocations, isLocationMarked } from "$lib/logic/locations";
-import { getMaximalSphereLogicInventory, getSphereInventoryItemKey, getSphereReachabilityWithOwnDungeonKeys, isOwnDungeonKeyForPath } from "$lib/logic/sphere-calculation";
+import {
+  getMaximalSphereLogicInventory,
+  getSphereInventoryItemKey,
+  getSphereReachabilityWithPlacedDungeonKeys,
+  isOwnDungeonKeyForPath,
+  placedOwnDungeonKeySignature
+} from "$lib/logic/sphere-calculation";
 import { pathHintAreaKey } from "$lib/logic/sphere-path-progress";
 import { data } from "$lib/state/data.svelte";
 import type { SpherePlacement } from "$lib/state/sphere.svelte";
@@ -46,7 +52,10 @@ export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined
     options: data.sphereOptions,
     entrances: Object.entries(data.sphereWorld?.dungeonStarts || {}).sort(([a], [b]) => a.localeCompare(b))
   });
-  const cacheKey = `${logicKey}|${normalize(bossName)}|${itemKey}`;
+  // Recorded keys are part of the answer now, so they are part of the key -
+  // and this cache outlives a placement change, which only clears on a logic
+  // reload.
+  const cacheKey = `${logicKey}|${placedOwnDungeonKeySignature()}|${normalize(bossName)}|${itemKey}`;
   const cached = sphereHardBossRequirementCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -60,8 +69,11 @@ export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined
   const bossDungeon = getAreaFromLocation(bossLocation);
   const dungeonStart = data.sphereWorld?.dungeonStarts?.[normalize(bossDungeon)];
   const isHardRequiredWith = (options: { additionalStartAreas?: string[] }) => {
-    const fullReachability = getSphereReachabilityWithOwnDungeonKeys(maximalInventory, options);
-    return fullReachability.has(normalize(bossLocation)) && !getSphereReachabilityWithOwnDungeonKeys(reducedInventory, options).has(normalize(bossLocation));
+    const fullReachability = getSphereReachabilityWithPlacedDungeonKeys(maximalInventory, options);
+    return (
+      fullReachability.has(normalize(bossLocation)) &&
+      !getSphereReachabilityWithPlacedDungeonKeys(reducedInventory, options).has(normalize(bossLocation))
+    );
   };
   const hardRequired = dungeonStart ? isHardRequiredWith({ additionalStartAreas: [dungeonStart] }) || isHardRequiredWith({}) : isHardRequiredWith({});
   sphereHardBossRequirementCache.set(cacheKey, hardRequired);

@@ -98,6 +98,15 @@ export interface Settings {
    * locations are all still there when it is turned back on.
    */
   sphereCalculation: boolean;
+  /** Show the icon of whatever item is recorded at a location, in the lists. */
+  showPlacedItemIcons: boolean;
+  /**
+   * Size of the requirement tooltip, as a percentage. Its own setting rather
+   * than following the panel scale: the tooltip is drawn against the window
+   * rather than inside a panel, so on a small screen with large system text it
+   * can dwarf what it is describing.
+   */
+  tooltipScale: number;
   streamMode: boolean;
   parsedHintsFilters: boolean;
   automaticMode: boolean;
@@ -187,6 +196,8 @@ export const DEFAULT_SETTINGS: Settings = {
   genericTriforceShards: false,
   chartSortByNumber: true,
   sphereCalculation: true,
+  showPlacedItemIcons: true,
+  tooltipScale: 100,
   streamMode: false,
   parsedHintsFilters: true,
   automaticMode: false,
