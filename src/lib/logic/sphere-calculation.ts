@@ -558,6 +558,11 @@ export function getPlacedOwnDungeonKeys(): Array<{ item: string; itemKey: string
 }
 
 /** How many of a dungeon key the seed holds in total. */
+/** A dungeon's own key, by name - "Earth Temple Small Key", "Boss Key". */
+export function isDungeonKeyName(item: string): boolean {
+  return /\b(?:small|big|boss)\s+key$/i.test(String(item || ""));
+}
+
 function dungeonKeyCopyCount(item: string): number {
   const key = normalize(item);
   if (!/small key$/.test(key)) return 1;
@@ -644,6 +649,13 @@ export function getMaximalSphereLogicInventory(): string[] {
   });
   const tracked = new Set(data.items.map(normalize));
   data.sphereStartingGear.forEach((gear) => {
+    // Dungeon keys are counted below, from the dungeon rather than from where
+    // they start. A seed that hands you one of Dragon Roost's four small keys
+    // still only has four - added here as well it became five, and a spare key
+    // makes the whole dungeon's key logic toothless: a key written into the Big
+    // Key Chest costs nothing when there is one going spare, so nothing inside
+    // the dungeon ever measures as required.
+    if (isDungeonKeyName(gear)) return;
     if (!tracked.has(normalize(gear))) items.push(gear);
   });
   DUNGEON_KEY_LOGIC.forEach(({ dungeon, smallKeyCount }) => {
