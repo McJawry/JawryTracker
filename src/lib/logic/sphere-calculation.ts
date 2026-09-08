@@ -7,7 +7,7 @@
 import { WWRSphereEngine, type SphereCalculationInput, type SphereCalculationResult } from "$lib/logic";
 import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
-import { getAvailableLocations } from "$lib/logic/locations";
+import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
 import { getEffectiveEntranceMappings, getEntranceConnection, getEntrancesForArea } from "$lib/logic/entrances";
@@ -669,6 +669,7 @@ interface OwnDungeonKeyPool {
   item: string;
   count: number;
   itemPools: string[][];
+  dungeon: string;
 }
 
 let sphereOwnDungeonKeyPoolCache: { key: string; pools: Map<string, OwnDungeonKeyPool> } = { key: "", pools: new Map() };
@@ -708,7 +709,7 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
         const reachable = getSphereReachableLocationSet([...inventoryWithoutKey, ...Array(itemCount).fill(item)]);
         itemPools.push(dungeonLocations.filter((location) => reachable.has(normalize(location))));
       }
-      pools.set(itemKey, { item, count, itemPools });
+      pools.set(itemKey, { item, count, itemPools, dungeon });
     });
   });
 
@@ -738,11 +739,23 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
   let changed = true;
   while (changed) {
     changed = false;
-    keyPools.forEach(({ item, count, itemPools }, itemKey) => {
+    keyPools.forEach(({ item, count, itemPools, dungeon }, itemKey) => {
       let ownedCount = effectiveItems.filter((candidate) => getSphereInventoryItemKey(candidate) === itemKey).length;
-      while (ownedCount < count) {
+      // A door inside the dungeon that you have found but not written down
+      // could lead to another chest the key might be in, so nothing is
+      // guaranteed while one is outstanding. Upstream's check, and a no-op
+      // until boss or miniboss entrances are shuffled - a dungeon's own front
+      // door belongs to the island it stands on, not to the dungeon.
+      const unrecordedDoor = getEntrancesForArea(dungeon).some(
+        (entrance) => !getEntranceConnection(entrance) && isSphereAreaAccessible(entrance.parent)
+      );
+      while (!unrecordedDoor && ownedCount < count) {
         const potentialLocations = itemPools[ownedCount] || [];
-        const keyIsGuaranteed = potentialLocations.length > 0 && potentialLocations.every((location) => reachable.has(normalize(location)));
+        // Checked counts as reached: you have been there, whatever the logic
+        // now says about getting back.
+        const keyIsGuaranteed =
+          potentialLocations.length > 0 &&
+          potentialLocations.every((location) => reachable.has(normalize(location)) || isLocationMarked(location));
         if (!keyIsGuaranteed) break;
         effectiveItems.push(item);
         ownedCount += 1;
