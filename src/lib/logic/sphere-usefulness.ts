@@ -17,11 +17,12 @@
  *                      beatable without the item, nothing down that branch can
  *                      be needed to beat it.
  *
- * The requirement walk seeds every dungeon's start area, the same trick
- * isLogicRequiredItemForLocation uses for dungeon interiors. Without it an
- * unmapped dungeon entrance seals off the back half of the world, the goal
- * tests as unreachable, and nothing qualifies as required - which would hide
- * the Triforce Shards.
+ * The requirement walk seeds the start area of any dungeon nothing can walk to
+ * - under entrance randomisation an unrecorded door seals a dungeon off
+ * entirely, and with the goal behind one the walk would find nothing required
+ * at all. Only those: seeding a dungeon you can already reach throws away the
+ * price of its door, and a Tower of the Gods entered from the inside makes the
+ * pearls that raise it - and everything that leads to them - look optional.
  */
 import { WWRSphereEngine } from "$lib/logic";
 import type { SphereFilters } from "$lib/constants";
@@ -30,6 +31,7 @@ import {
   getSphereInventoryItemKey,
   getSphereReachabilityWithOwnDungeonKeys,
   getTraversableExitsWith,
+  getUnreachableDungeonStartAreas,
   withNamedPlacementItems
 } from "$lib/logic/sphere-calculation";
 import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
@@ -69,10 +71,6 @@ function yieldToBrowser(): Promise<void> {
   });
 }
 
-function getDungeonStartAreas(): string[] {
-  return Object.values(data.sphereWorld?.dungeonStarts ?? {}).filter((area): area is string => !!area);
-}
-
 /**
  * Placements that beating the game depends on, closed over transitively.
  *
@@ -82,8 +80,8 @@ function getDungeonStartAreas(): string[] {
  * turns up.
  *
  * Reachability is measured up front, once per copy count of each item, so the
- * walk itself is only set lookups: with all dungeon starts seeded, "how many
- * copies of K does location L need" is the first count whose set contains L.
+ * walk itself is only set lookups: "how many copies of K does location L need"
+ * is the first count whose set contains L.
  */
 async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[], sphereLocations: string[][]): Promise<Set<string>> {
   const required = new Set<string>();
@@ -92,8 +90,11 @@ async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[
   // to beat them - the Skull Hammer stopped counting the moment Helmaroc King
   // was checked. The filter is about beating the game, so it asks without that
   // credit.
-  const reachabilityOptions = { additionalStartAreas: getDungeonStartAreas(), ignoreDefeatedBosses: true };
   const maximalInventory = getMaximalSphereLogicInventory();
+  const reachabilityOptions = {
+    additionalStartAreas: getUnreachableDungeonStartAreas(maximalInventory),
+    ignoreDefeatedBosses: true
+  };
   const withEverything = getSphereReachabilityWithOwnDungeonKeys(maximalInventory, reachabilityOptions);
   // Nothing to measure against - treat every card as required rather than hide
   // something the run might still need.

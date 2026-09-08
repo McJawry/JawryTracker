@@ -28,6 +28,7 @@ import { getSphereTrackingKnowledge, type SphereTrackingKnowledge } from "$lib/l
 import {
   getSphereBlueChuJellyCount,
   getSphereProgressionInput,
+  getSphereReachabilityWithOwnDungeonKeys,
   getSphereReachableLocationSet,
   getOwnedInventory,
   sphereReachabilityCache,
@@ -154,9 +155,16 @@ function computeCertainLocationKeys(): Set<string> {
  * beside the calculation, so locations.ts can read it off the shared cache -
  * importing sphere-calculation from locations.ts directly would close an
  * import cycle (sphere-calculation already imports getAvailableLocations).
+ *
+ * A dungeon's own keys count as held once every chest they could be in is
+ * reachable: with keys shuffled inside their own dungeon, a Tower of the Gods
+ * you can search end to end is a Tower you can unlock end to end, so the Stone
+ * Tablet and everything past the locked doors is somewhere you can go. The
+ * spheres already worked this way; only the colours were still asking without
+ * it, so half of an open dungeon stayed red.
  */
 function computeInventoryReachableKeys(): Set<string> {
-  return getSphereReachableLocationSet(getOwnedInventory());
+  return getSphereReachabilityWithOwnDungeonKeys(getOwnedInventory());
 }
 
 /** Beating the game - the location the requirement walk aims at. */

@@ -7,7 +7,7 @@
 import { WWRSphereEngine, type SphereCalculationInput, type SphereCalculationResult } from "$lib/logic";
 import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
-import { getAvailableLocations } from "$lib/logic/locations";
+import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
 import { getEffectiveEntranceMappings, getEntranceConnection, getEntrancesForArea } from "$lib/logic/entrances";
@@ -393,11 +393,40 @@ export function getSavewarpStartAreas(items: string[]): string[] {
   return seeded;
 }
 
+/**
+ * Dungeon starting rooms nothing can walk to, for callers that have to be able
+ * to measure what is inside a dungeon.
+ *
+ * Under entrance randomisation a dungeon whose door nobody has recorded yet is
+ * sealed off entirely - no route in, so no check inside it can be reached and
+ * nothing about it can be measured. Seeding its starting room puts the inside
+ * back on the map.
+ *
+ * Only the sealed-off ones. Seeding a dungeon you *can* reach also throws away
+ * the price of the door: with the Tower of the Gods started from the inside,
+ * the pearls that raise it stop counting as required and take the whole chain
+ * of items that leads to them with them.
+ */
+export function getUnreachableDungeonStartAreas(items: string[]): string[] {
+  const starts = [...new Set(Object.values(data.sphereWorld?.dungeonStarts ?? {}).filter((area): area is string => !!area))];
+  if (!starts.length) return [];
+  const areas = WWRSphereEngine.getAccessibleAreas({
+    ...getSphereCalculationInput([], false),
+    items,
+    additionalStartAreas: getSavewarpStartAreas(items)
+  });
+  return starts.filter((area) => !areas.has(normalize(area)));
+}
+
 export function getSphereReachableLocationSet(items: string[], options: ReachabilityOptions = {}): Set<string> {
   // Savewarp destinations are part of "where can I get to", so they belong
   // here rather than at each call site - and in the cache key with them.
   const additionalStartAreas = [...new Set([...(options.additionalStartAreas || []), ...getSavewarpStartAreas(items)])];
-  const cacheKey = reachabilityCacheKey(items, { additionalStartAreas });
+  // Every option in the key, not just the start areas: asking with defeated
+  // bosses ignored and asking without differ, and with only the start areas
+  // written down the two questions shared one answer - whichever was asked
+  // first.
+  const cacheKey = reachabilityCacheKey(items, { ...options, additionalStartAreas });
   const cached = sphereReachabilityCache.get(cacheKey);
   if (cached) return cached;
 
@@ -529,6 +558,11 @@ export function getPlacedOwnDungeonKeys(): Array<{ item: string; itemKey: string
 }
 
 /** How many of a dungeon key the seed holds in total. */
+/** A dungeon's own key, by name - "Earth Temple Small Key", "Boss Key". */
+export function isDungeonKeyName(item: string): boolean {
+  return /\b(?:small|big|boss)\s+key$/i.test(String(item || ""));
+}
+
 function dungeonKeyCopyCount(item: string): number {
   const key = normalize(item);
   if (!/small key$/.test(key)) return 1;
@@ -615,6 +649,13 @@ export function getMaximalSphereLogicInventory(): string[] {
   });
   const tracked = new Set(data.items.map(normalize));
   data.sphereStartingGear.forEach((gear) => {
+    // Dungeon keys are counted below, from the dungeon rather than from where
+    // they start. A seed that hands you one of Dragon Roost's four small keys
+    // still only has four - added here as well it became five, and a spare key
+    // makes the whole dungeon's key logic toothless: a key written into the Big
+    // Key Chest costs nothing when there is one going spare, so nothing inside
+    // the dungeon ever measures as required.
+    if (isDungeonKeyName(gear)) return;
     if (!tracked.has(normalize(gear))) items.push(gear);
   });
   DUNGEON_KEY_LOGIC.forEach(({ dungeon, smallKeyCount }) => {
@@ -628,6 +669,7 @@ interface OwnDungeonKeyPool {
   item: string;
   count: number;
   itemPools: string[][];
+  dungeon: string;
 }
 
 let sphereOwnDungeonKeyPoolCache: { key: string; pools: Map<string, OwnDungeonKeyPool> } = { key: "", pools: new Map() };
@@ -667,7 +709,7 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
         const reachable = getSphereReachableLocationSet([...inventoryWithoutKey, ...Array(itemCount).fill(item)]);
         itemPools.push(dungeonLocations.filter((location) => reachable.has(normalize(location))));
       }
-      pools.set(itemKey, { item, count, itemPools });
+      pools.set(itemKey, { item, count, itemPools, dungeon });
     });
   });
 
@@ -697,11 +739,23 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
   let changed = true;
   while (changed) {
     changed = false;
-    keyPools.forEach(({ item, count, itemPools }, itemKey) => {
+    keyPools.forEach(({ item, count, itemPools, dungeon }, itemKey) => {
       let ownedCount = effectiveItems.filter((candidate) => getSphereInventoryItemKey(candidate) === itemKey).length;
-      while (ownedCount < count) {
+      // A door inside the dungeon that you have found but not written down
+      // could lead to another chest the key might be in, so nothing is
+      // guaranteed while one is outstanding. Upstream's check, and a no-op
+      // until boss or miniboss entrances are shuffled - a dungeon's own front
+      // door belongs to the island it stands on, not to the dungeon.
+      const unrecordedDoor = getEntrancesForArea(dungeon).some(
+        (entrance) => !getEntranceConnection(entrance) && isSphereAreaAccessible(entrance.parent)
+      );
+      while (!unrecordedDoor && ownedCount < count) {
         const potentialLocations = itemPools[ownedCount] || [];
-        const keyIsGuaranteed = potentialLocations.length > 0 && potentialLocations.every((location) => reachable.has(normalize(location)));
+        // Checked counts as reached: you have been there, whatever the logic
+        // now says about getting back.
+        const keyIsGuaranteed =
+          potentialLocations.length > 0 &&
+          potentialLocations.every((location) => reachable.has(normalize(location)) || isLocationMarked(location));
         if (!keyIsGuaranteed) break;
         effectiveItems.push(item);
         ownedCount += 1;

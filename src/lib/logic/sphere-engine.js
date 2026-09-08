@@ -1245,8 +1245,22 @@
         const representative = candidatePlacements[0];
         const reducedInventory = removeInventoryItem(inventoryForSphere, representative.item, representative.location);
         const reachable = getReachableLocationSet(locations, rules, world, { ...contextBase, inventory: reducedInventory });
+        // Spare copies: a run holding three Bows where two are wanted misses
+        // none of them one at a time, so nothing came out as depending on a Bow
+        // at all - not even the two that are carrying the requirement between
+        // them. Asked again with the whole group withheld, they answer for it
+        // together, and the copies are credited as a group because the logic
+        // cannot say which of them was the one you used.
+        let withoutTheGroup = null;
+        if (candidatePlacements.length > 1 && locationKeys.some((locationKey) => reachable.has(locationKey))) {
+          let stripped = inventoryForSphere;
+          candidatePlacements.forEach(() => {
+            stripped = removeInventoryItem(stripped, representative.item, representative.location);
+          });
+          withoutTheGroup = getReachableLocationSet(locations, rules, world, { ...contextBase, inventory: stripped });
+        }
         locationKeys.forEach((locationKey) => {
-          if (reachable.has(locationKey)) return;
+          if (reachable.has(locationKey) && (!withoutTheGroup || withoutTheGroup.has(locationKey))) return;
           if (!dependencies[locationKey]) dependencies[locationKey] = [];
           dependencies[locationKey].push(...candidatePlacements.map((placement) => placement.id));
         });
