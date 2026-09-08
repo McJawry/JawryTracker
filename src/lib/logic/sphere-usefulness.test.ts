@@ -1,0 +1,101 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * The "Paths + required" filter's hiding rule, written down as the tracker's
+ * owner specified it: an item is only hidden once the question of what it
+ * leads to is settled. While it still opens a location nobody has looked in,
+ * the card stays - hiding it would claim to know that nothing needed is down
+ * there. Go mode is the one exception: the run is already finishable with what
+ * is held, so nothing still in a chest can help beat it.
+ *
+ * The world here is deliberately tiny: two items, one that opens an unchecked
+ * location and one whose only location has been checked, and a goal that needs
+ * neither of them.
+ */
+/** As WWRSphereEngine.normalize writes it - apostrophes drop out. */
+const GOAL = "ganons tower defeat ganondorf";
+
+/** Which item each location needs; the goal needs nothing. */
+const LOCATION_NEEDS: Record<string, string> = {
+  "unchecked chest": "opener",
+  "checked chest": "spent"
+};
+
+let goMode = false;
+let checkedLocations = new Set<string>(["checked chest"]);
+
+/** The engine's normalize, small enough to mirror rather than import (the
+ *  mock factories below are hoisted above any import). */
+const normalizeName = (value: string) =>
+  value.toLowerCase().replace(/[']/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
+
+vi.mock("$lib/logic/sphere-calculation", () => ({
+  getMaximalSphereLogicInventory: () => ["Opener", "Spent", "Filler"],
+  getSphereInventoryItemKey: (item: string) => normalizeName(item),
+  // Everything is reachable with the whole pool; withhold an item and the
+  // location it opens drops out. The goal never depends on either item, so
+  // neither is "required" and only the unfinished-branch rule can keep them.
+  getSphereReachabilityWithOwnDungeonKeys: (items: string[]) => {
+    const held = new Set(items.map(normalizeName));
+    const reachable = new Set<string>([GOAL]);
+    Object.entries(LOCATION_NEEDS).forEach(([location, item]) => {
+      if (held.has(item)) reachable.add(location);
+    });
+    return reachable;
+  },
+  getTraversableExitsWith: () => new Set<string>(),
+  getUnreachableDungeonStartAreas: () => [],
+  withNamedPlacementItems: (placements: unknown[]) => placements
+}));
+
+vi.mock("$lib/logic/entrance-paths", () => ({
+  getRequiredBossDoors: () => []
+}));
+
+vi.mock("$lib/logic/locations", () => ({
+  getAvailableLocations: () => ["Unchecked Chest", "Checked Chest"],
+  isGoMode: () => goMode,
+  isLocationMarked: (location: string) => checkedLocations.has(normalizeName(location))
+}));
+
+vi.mock("$lib/state/data.svelte", () => ({
+  data: { sphereLogicLoaded: true, sphereWorld: { dungeonStarts: {} } }
+}));
+
+const { computeHiddenPlacementIds } = await import("./sphere-usefulness");
+
+const placements = [
+  { id: "opener", item: "Opener", location: "Somewhere Else" },
+  { id: "spent", item: "Spent", location: "Another Place" }
+];
+
+async function hidden() {
+  const ids = await computeHiddenPlacementIds({
+    placements,
+    filters: { paths: false, pathsAndRequired: true, showKeys: false },
+    pathChainIds: [],
+    sphereLocations: []
+  });
+  return [...ids].sort();
+}
+
+describe("paths + required: when a card may be hidden", () => {
+  beforeEach(() => {
+    goMode = false;
+    checkedLocations = new Set(["checked chest"]);
+  });
+
+  it("keeps an item that still opens somewhere unchecked, even though the run does not need it", async () => {
+    expect(await hidden()).toEqual(["spent"]);
+  });
+
+  it("hides it once every location it opens has been checked", async () => {
+    checkedLocations = new Set(["checked chest", "unchecked chest"]);
+    expect(await hidden()).toEqual(["opener", "spent"]);
+  });
+
+  it("hides it in go mode, unfinished branch and all", async () => {
+    goMode = true;
+    expect(await hidden()).toEqual(["opener", "spent"]);
+  });
+});

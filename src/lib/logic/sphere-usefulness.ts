@@ -12,10 +12,14 @@
  *   "Paths + required" also shows what beating the game depends on, worked out
  *                      transitively: the items needed to reach Ganondorf, then
  *                      the items needed to reach wherever those sit, and so on.
- *                      Anything the run can be finished without is hidden, even
- *                      with places it opens still unlooked-in - if the seed is
- *                      beatable without the item, nothing down that branch can
- *                      be needed to beat it.
+ *                      An item is only hidden once the question is settled:
+ *                      while it still opens somewhere nobody has looked, what
+ *                      lies down there could be anything, and hiding the card
+ *                      claims to know it is nothing. The exception is go mode -
+ *                      with the run already finishable from what is held, no
+ *                      unopened chest can hold something that helps beat it,
+ *                      so an unfinished branch stops being a reason to keep a
+ *                      card.
  *
  * The requirement walk seeds the start area of any dungeon nothing can walk to
  * - under entrance randomisation an unrecorded door seals a dungeon off
@@ -35,6 +39,7 @@ import {
   withNamedPlacementItems
 } from "$lib/logic/sphere-calculation";
 import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
+import { getAvailableLocations, isGoMode, isLocationMarked } from "$lib/logic/locations";
 import { data } from "$lib/state/data.svelte";
 import { type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -190,11 +195,33 @@ async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[
     }
   }
 
-  // Nothing else is kept. An item the run can be finished without is hidden
-  // whether or not the places it opens have been looked in: an unexplored
-  // branch used to hold a card back on the grounds that something needed might
-  // still turn up down it, but if the seed is already beatable without the
-  // item, nothing down there can be needed to beat it.
+  // An item that still opens somewhere nobody has looked in has an unfinished
+  // branch, and what is down there is not knowable yet - an unknown is not
+  // grounds for hiding a card. Once every location it opens has been checked
+  // the question is settled and the requirement walk above decides.
+  //
+  // Go mode is the one state where the unknown stops mattering: the run can be
+  // finished with what is already held, so nothing still in a chest can help
+  // beat it, whichever branch it is down.
+  if (!isGoMode()) {
+    const occupied = new Set(placements.map((placement) => normalize(placement.location)));
+    const unchecked = getAvailableLocations().filter((location) => {
+      const key = normalize(location);
+      return withEverything.has(key) && !occupied.has(key) && !isLocationMarked(location);
+    });
+
+    for (const [itemKey, holders] of placementsByItemKey) {
+      const sets = reachableWithCopies.get(itemKey);
+      if (!sets) continue;
+      if (holders.every((holder) => required.has(holder.id))) continue;
+      // Index 0 means the location is reachable without the item, so it is not
+      // one this item opens; -1 means out of reach either way.
+      const opensSomethingUnchecked = unchecked.some((location) => sets.findIndex((set) => set.has(normalize(location))) > 0);
+      if (opensSomethingUnchecked) holders.forEach((holder) => required.add(holder.id));
+      await yieldToBrowser();
+    }
+  }
+
   return required;
 }
 
