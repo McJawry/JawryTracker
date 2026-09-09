@@ -7,8 +7,10 @@
   import { trackerAsset } from "$lib/logic/tracker-images";
   import {
     getDungeonItems,
+    getFoundSmallKeys,
     getMaxSmallKeys,
     hasKeyItems,
+    hasStartingDungeonItem,
     cycleSmallKeys,
     toggleDungeonFlag
   } from "$lib/state/dungeon-items.svelte";
@@ -69,7 +71,11 @@
     if (givingUp && removeSmallKey()) return;
     recordTrackerAction();
     cycleSmallKeys(dungeon, step);
-    syncDungeonItemPlacements(hintNames.smallKey, getDungeonItems(dungeon).smallKeys);
+    // Only the keys you found can be at a location: counting the seed's own
+    // key here left a card sitting at a chest after the count came back down
+    // to what the seed gave you, and the board went on holding a key the
+    // tracker no longer says you found.
+    syncDungeonItemPlacements(hintNames.smallKey, getFoundSmallKeys(dungeon));
   }
 
   function onFlag(flag: "bigKey" | "map" | "compass") {
@@ -84,7 +90,9 @@
     }
     recordTrackerAction();
     toggleDungeonFlag(dungeon, flag);
-    syncDungeonItemPlacements(named, getDungeonItems(dungeon)[flag] ? 1 : 0);
+    // Same rule as the keys: one the seed handed you was never found anywhere.
+    const found = getDungeonItems(dungeon)[flag] && !hasStartingDungeonItem(dungeon, flag);
+    syncDungeonItemPlacements(named, found ? 1 : 0);
   }
 
   // Dungeon-qualified names, so a hint says which dungeon's key it is. "Boss
