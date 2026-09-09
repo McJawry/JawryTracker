@@ -19,7 +19,8 @@
  *                      with the run already finishable from what is held, no
  *                      unopened chest can hold something that helps beat it,
  *                      so an unfinished branch stops being a reason to keep a
- *                      card.
+ *                      card. A card the board labels "Optional" - pared out of
+ *                      the minimal playthrough - is hidden either way.
  *
  * The requirement walk seeds the start area of any dungeon nothing can walk to
  * - under entrance randomisation an unrecorded door seals a dungeon off
@@ -47,6 +48,24 @@ const normalize = WWRSphereEngine.normalize;
 
 /** Beating the game - where the requirement walk starts. */
 const GOAL_LOCATION = "Ganon's Tower - Defeat Ganondorf";
+
+/**
+ * Whether a card wears the board's "Optional" label: the sphere calculation
+ * pared it out of the minimal playthrough, and it is not one of the
+ * progressive upgrades a run always wants anyway.
+ *
+ * Shared with SpherePlacementNode, which draws the label, so what is said and
+ * what is hidden cannot drift apart.
+ */
+export function isOptionalPlacement(placement: SpherePlacement, prunedPlacementIds: Iterable<string>): boolean {
+  const itemKey = normalize(placement.item);
+  const jalhallaRequired = !data.requiredBosses.size || data.requiredBosses.has(normalize("Jalhalla"));
+  const mandatoryUpgrade =
+    ["progressive sword", "progressive bow", "progressive picto box"].includes(itemKey) ||
+    (itemKey === "progressive shield" && jalhallaRequired);
+  if (mandatoryUpgrade) return false;
+  return [...prunedPlacementIds].includes(placement.id);
+}
 
 export function isSphereFilterActive(filters: SphereFilters): boolean {
   return filters.paths || filters.pathsAndRequired;
@@ -98,7 +117,11 @@ async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[
   const maximalInventory = getMaximalSphereLogicInventory();
   const reachabilityOptions = {
     additionalStartAreas: getUnreachableDungeonStartAreas(maximalInventory),
-    ignoreDefeatedBosses: true
+    ignoreDefeatedBosses: true,
+    // And for the same reason, a dungeon checked off end to end does not get
+    // its keys for free here: what it took to get through it is still what the
+    // seed demanded.
+    ignoreCheckedLocations: true
   };
   const withEverything = getSphereReachabilityWithOwnDungeonKeys(maximalInventory, reachabilityOptions);
   // Nothing to measure against - treat every card as required rather than hide
@@ -234,6 +257,8 @@ export interface HiddenPlacementsInput {
   /** calculation.sphereLocations, indexed by sphere number - used to keep
    *  interchangeable keys in the same sphere together. */
   sphereLocations?: string[][];
+  /** calculation.prunedPlacementIds - the cards labelled "Optional". */
+  prunedPlacementIds?: string[];
 }
 
 /**
@@ -244,7 +269,8 @@ export async function computeHiddenPlacementIds({
   placements,
   filters,
   pathChainIds = [],
-  sphereLocations = []
+  sphereLocations = [],
+  prunedPlacementIds = []
 }: HiddenPlacementsInput): Promise<Set<string>> {
   const hidden = new Set<string>();
   if (!placements.length || !data.sphereLogicLoaded || !isSphereFilterActive(filters)) return hidden;
@@ -254,6 +280,18 @@ export async function computeHiddenPlacementIds({
 
   if (filters.pathsAndRequired) {
     (await getRequiredAndUnfinishedPlacementIds(placements, sphereLocations)).forEach((id) => visible.add(id));
+  }
+
+  // A card the board itself calls Optional is not something the run needs, so
+  // it goes whatever the rules above made of it - an unfinished branch below an
+  // item the playthrough pared out cannot make that item wanted again. Purple
+  // cards stay: those are the other half of this filter.
+  if (filters.pathsAndRequired && [...prunedPlacementIds].length) {
+    const purple = new Set(pathChainIds);
+    placements.forEach((placement) => {
+      if (purple.has(placement.id)) return;
+      if (isOptionalPlacement(placement, prunedPlacementIds)) visible.delete(placement.id);
+    });
   }
 
   const keyPlacements = placements.filter((placement) => isDungeonKeyItem(placement.item));

@@ -9,6 +9,7 @@
   import { getAreaFromLocation } from "$lib/logic/data-loading";
   import { getProgressiveItemStageImageName } from "$lib/logic/sphere-progressive-items";
   import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
+  import { isOptionalPlacement } from "$lib/logic/sphere-usefulness";
 
   let {
     placement,
@@ -26,12 +27,8 @@
 
   const knownSphere = $derived(Number.isInteger(sphereNumber));
   const outOfLogic = $derived(!Number.isInteger(calculation.locationSpheres[normalize(placement.location)]));
-  const itemKey = $derived(normalize(placement.item));
-  const jalhallaRequired = $derived(!data.requiredBosses.size || data.requiredBosses.has(normalize("Jalhalla")));
-  const mandatoryUpgrade = $derived(
-    ["progressive sword", "progressive bow", "progressive picto box"].includes(itemKey) || (itemKey === "progressive shield" && jalhallaRequired)
-  );
-  const isPruned = $derived(!mandatoryUpgrade && (calculation.prunedPlacementIds || []).includes(placement.id));
+  // Shared with the "Paths + required" filter, which hides what this labels.
+  const isPruned = $derived(isOptionalPlacement(placement, calculation.prunedPlacementIds || []));
   const cardClass = $derived(
     ["sphere-placement", placement.fromHint ? "hint-derived" : null, knownSphere ? null : "unknown-sphere-placement", outOfLogic ? "out-of-logic-placement" : null, isPruned ? "optional-placement" : null]
       .filter(Boolean)

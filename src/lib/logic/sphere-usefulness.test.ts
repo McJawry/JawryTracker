@@ -59,7 +59,7 @@ vi.mock("$lib/logic/locations", () => ({
 }));
 
 vi.mock("$lib/state/data.svelte", () => ({
-  data: { sphereLogicLoaded: true, sphereWorld: { dungeonStarts: {} } }
+  data: { sphereLogicLoaded: true, sphereWorld: { dungeonStarts: {} }, requiredBosses: new Set<string>() }
 }));
 
 const { computeHiddenPlacementIds } = await import("./sphere-usefulness");
@@ -69,12 +69,13 @@ const placements = [
   { id: "spent", item: "Spent", location: "Another Place" }
 ];
 
-async function hidden() {
+async function hidden(prunedPlacementIds: string[] = []) {
   const ids = await computeHiddenPlacementIds({
     placements,
     filters: { paths: false, pathsAndRequired: true, showKeys: false },
     pathChainIds: [],
-    sphereLocations: []
+    sphereLocations: [],
+    prunedPlacementIds
   });
   return [...ids].sort();
 }
@@ -97,5 +98,20 @@ describe("paths + required: when a card may be hidden", () => {
   it("hides it in go mode, unfinished branch and all", async () => {
     goMode = true;
     expect(await hidden()).toEqual(["opener", "spent"]);
+  });
+
+  it("hides a card the board calls Optional, unfinished branch and all", async () => {
+    expect(await hidden(["opener"])).toEqual(["opener", "spent"]);
+  });
+
+  it("keeps an Optional card that is on a path chain - those are the other half of the filter", async () => {
+    const ids = await computeHiddenPlacementIds({
+      placements,
+      filters: { paths: false, pathsAndRequired: true, showKeys: false },
+      pathChainIds: ["opener"],
+      sphereLocations: [],
+      prunedPlacementIds: ["opener"]
+    });
+    expect([...ids].sort()).toEqual(["spent"]);
   });
 });
