@@ -316,6 +316,19 @@ export interface ReachabilityOptions {
    * required the moment Helmaroc King was crossed off.
    */
   ignoreDefeatedBosses?: boolean;
+  /**
+   * Same question, asked of the dungeon keys: what the seed demanded, not what
+   * is already done.
+   *
+   * A key's pool of possible chests counts a *checked* chest as reached, which
+   * is right for the map - you have been in there, so you have the key. It is
+   * wrong for "what was this boss's path item": a dungeon crossed off end to
+   * end hands over every key on those grounds, and then nothing inside it
+   * measures as required at all. Dragon Roost with a key recorded in the Big
+   * Key Chest is the case that matters - reaching that chest is what the run
+   * turned on, and only Magic (with the Deku Leaf or arrows) gets you there.
+   */
+  ignoreCheckedLocations?: boolean;
 }
 
 function reachabilityCacheKey(items: string[], options: ReachabilityOptions): string {
@@ -736,11 +749,14 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
   // marking a location leaves the inventory (and so the rest of the key)
   // untouched. Upstream has no such cache; it redoes the whole calculation on
   // every tracker change.
-  const markedPoolLocations = [...keyPools.values()]
-    .flatMap((pool) => pool.itemPools.flat())
-    .filter((location) => isLocationMarked(location))
-    .map(normalize);
-  const marksSignature = [...new Set(markedPoolLocations)].sort().join("|");
+  const countChecked = !options.ignoreCheckedLocations;
+  const markedPoolLocations = countChecked
+    ? [...keyPools.values()]
+        .flatMap((pool) => pool.itemPools.flat())
+        .filter((location) => isLocationMarked(location))
+        .map(normalize)
+    : [];
+  const marksSignature = countChecked ? [...new Set(markedPoolLocations)].sort().join("|") : "checks ignored";
 
   const cacheKey = `${reachabilityCacheKey(items, options)}|${sphereOwnDungeonKeyPoolCache.key}|${marksSignature}`;
   const memoised = ownDungeonKeyReachabilityCache.get(cacheKey);
@@ -768,7 +784,7 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
         // now says about getting back.
         const keyIsGuaranteed =
           potentialLocations.length > 0 &&
-          potentialLocations.every((location) => reachable.has(normalize(location)) || isLocationMarked(location));
+          potentialLocations.every((location) => reachable.has(normalize(location)) || (countChecked && isLocationMarked(location)));
         if (!keyIsGuaranteed) break;
         effectiveItems.push(item);
         ownedCount += 1;

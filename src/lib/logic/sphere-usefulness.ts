@@ -98,7 +98,11 @@ async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[
   const maximalInventory = getMaximalSphereLogicInventory();
   const reachabilityOptions = {
     additionalStartAreas: getUnreachableDungeonStartAreas(maximalInventory),
-    ignoreDefeatedBosses: true
+    ignoreDefeatedBosses: true,
+    // And for the same reason, a dungeon checked off end to end does not get
+    // its keys for free here: what it took to get through it is still what the
+    // seed demanded.
+    ignoreCheckedLocations: true
   };
   const withEverything = getSphereReachabilityWithOwnDungeonKeys(maximalInventory, reachabilityOptions);
   // Nothing to measure against - treat every card as required rather than hide

@@ -70,11 +70,16 @@ export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined
 
   const bossDungeon = getAreaFromLocation(bossLocation);
   const dungeonStart = data.sphereWorld?.dungeonStarts?.[normalize(bossDungeon)];
-  const isHardRequiredWith = (options: { additionalStartAreas?: string[] }) => {
-    const fullReachability = getSphereReachabilityWithPlacedDungeonKeys(maximalInventory, options);
+  const isHardRequiredWith = (options: ReachabilityOptions) => {
+    // Checked chests do not hand over the dungeon's keys here: a key recorded
+    // in Dragon Roost's Big Key Chest says the run had to reach that chest,
+    // and crossing the dungeon off afterwards must not erase what reaching it
+    // cost. See ReachabilityOptions.ignoreCheckedLocations.
+    const asked = { ...options, ignoreCheckedLocations: true };
+    const fullReachability = getSphereReachabilityWithPlacedDungeonKeys(maximalInventory, asked);
     return (
       fullReachability.has(normalize(bossLocation)) &&
-      !getSphereReachabilityWithPlacedDungeonKeys(reducedInventory, options).has(normalize(bossLocation))
+      !getSphereReachabilityWithPlacedDungeonKeys(reducedInventory, asked).has(normalize(bossLocation))
     );
   };
   const hardRequired = dungeonStart ? isHardRequiredWith({ additionalStartAreas: [dungeonStart] }) || isHardRequiredWith({}) : isHardRequiredWith({});
@@ -174,10 +179,12 @@ export function getPossiblePathItemKeysForBoss(bossName: string): Set<string> {
 
   // One world to ask in rather than two: the boss's own dungeon is seeded only
   // when there is no way in yet, the fallback isHardRequiredItemForBoss uses.
-  let options: ReachabilityOptions = {};
+  // Asked the same way as the must-have test: a dungeon you have finished still
+  // owes the run whatever it took to get through it.
+  let options: ReachabilityOptions = { ignoreCheckedLocations: true };
   if (!reaches(maximal, options)) {
     const dungeonStart = data.sphereWorld?.dungeonStarts?.[normalize(getAreaFromLocation(bossLocation))];
-    options = dungeonStart ? { additionalStartAreas: [dungeonStart] } : {};
+    options = dungeonStart ? { ...options, additionalStartAreas: [dungeonStart] } : options;
     if (!dungeonStart || !reaches(maximal, options)) {
       sphereSoftBossCandidateCache.set(cacheKey, none);
       return none;
