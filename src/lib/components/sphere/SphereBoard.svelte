@@ -247,7 +247,8 @@
     const sphereLocations = calculation?.sphereLocations;
     const purpleCards = [...pathChainNodeIds];
     let cancelled = false;
-    computeHiddenPlacementIds({ placements, filters, pathChainIds: purpleCards, sphereLocations })
+    const prunedPlacementIds = calculation?.prunedPlacementIds ?? [];
+    computeHiddenPlacementIds({ placements, filters, pathChainIds: purpleCards, sphereLocations, prunedPlacementIds })
       .then((ids) => {
         if (!cancelled) hiddenPlacementIds = ids;
       })

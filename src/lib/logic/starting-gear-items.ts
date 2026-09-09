@@ -90,7 +90,13 @@ export function retreatEffectiveItemStage(itemName: string): void {
  * those never had a location to begin with.
  */
 function syncPlacementsToStage(itemName: string): void {
-  trimSpherePlacementsForItem(itemName, getEffectiveItemStage(itemName));
+  // Only the copies you found can be at a location, so the seed's own are
+  // taken off first - the same accounting getUnplacedAcquiredItems does. Left
+  // in, a seed that starts you with a sword kept a card at the chest you
+  // counted the second one down from: one sword held, one sword on the board,
+  // and the board's is one you no longer say you found.
+  const found = Math.max(0, getEffectiveItemStage(itemName) - getStartingItemStage(itemName));
+  trimSpherePlacementsForItem(itemName, found);
 }
 
 /** Starting-gear entries that map to no grid cell and aren't tracked elsewhere. */
