@@ -24,7 +24,7 @@ import { advanceEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { clearPendingLocationForItemAssignment } from "$lib/state/ui.svelte";
 import { retreatEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { setShardTrackingChecked } from "$lib/logic/shard-tracking";
-import { cycleSmallKeys, getDungeonItems, toggleDungeonFlag } from "$lib/state/dungeon-items.svelte";
+import { cycleSmallKeys, getDungeonItems, getFoundSmallKeys, toggleDungeonFlag } from "$lib/state/dungeon-items.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -88,9 +88,10 @@ export function unacquireItem(itemName: string): void {
     const [, dungeon, kind] = dungeonItem;
     const items = getDungeonItems(dungeon);
     if (kind === "Small Key") {
-      // cycleSmallKeys wraps 0 round to the dungeon's maximum, which would
-      // turn "remove the last key" into "you have them all".
-      if (items.smallKeys > 0) cycleSmallKeys(dungeon, -1);
+      // cycleSmallKeys wraps the bottom round to the dungeon's maximum, which
+      // would turn "remove the last key" into "you have them all". The bottom
+      // is the seed's own keys, which cannot be given up at all.
+      if (getFoundSmallKeys(dungeon) > 0) cycleSmallKeys(dungeon, -1);
       return;
     }
     const flag = kind === "Dungeon Map" ? "map" : kind === "Compass" ? "compass" : "bigKey";

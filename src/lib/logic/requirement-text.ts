@@ -15,18 +15,14 @@ import {
   getEffectiveEntranceMappings,
   getLocationWorldArea
 } from "$lib/logic/entrances";
-import {
-  getEntranceSourcePath,
-  getLocationEntrancePath,
-  getRequiredBossOptions
-} from "$lib/logic/entrance-paths";
+import { getEntranceSourcePath, getLocationEntrancePath } from "$lib/logic/entrance-paths";
 import { data } from "$lib/state/data.svelte";
 import { ui } from "$lib/state/ui.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
 import { getEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { getDungeonItems } from "$lib/state/dungeon-items.svelte";
 import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
-import { DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
+import { DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
 import { getHeldTriforceShardCount, TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
 import {
   getMaximalSphereLogicInventory,
@@ -365,16 +361,17 @@ function getEntrancePath(location: string): string | null {
   return path;
 }
 
+/** Every <Boss>_Required flag off - see getFlattenedRequirements. */
+const NO_REQUIRED_BOSSES: Record<string, boolean> = Object.fromEntries(
+  Object.values(REQUIRED_BOSS_OPTION_KEYS).map((optionKey) => [optionKey, false])
+);
+
 function getFlattenedRequirements(): Record<string, FlatRequirement> {
   // Keyed on the seeded areas rather than the inventory itself: the set only
   // changes when a dungeon is entered for the first time, so flattening still
   // happens about as often as it did before.
   const savewarpStarts = getSavewarpStartAreas(getOwnedInventory());
-  // The marks decide which bosses the run has to beat, and that is part of
-  // what the flattened requirements say, so a mark naming its boss has to
-  // rebuild them the way a recorded entrance does.
-  const requiredBosses = Object.entries(getRequiredBossOptions()).map(([option, required]) => `${option}=${required}`).sort().join("|");
-  const key = `${entranceSignature()}::${savewarpStarts.map(normalize).sort().join("|")}::${requiredBosses}`;
+  const key = `${entranceSignature()}::${savewarpStarts.map(normalize).sort().join("|")}`;
   if (flattenedRequirements && flattenedKey === key) return flattenedRequirements;
   if (!data.sphereLogicLoaded || !data.sphereWorld) return {};
   entrancePathCache.clear();
@@ -383,7 +380,20 @@ function getFlattenedRequirements(): Record<string, FlatRequirement> {
     rules: data.sphereRules,
     macros: data.sphereMacros,
     world: data.sphereWorld,
-    options: { ...data.sphereOptions, ...getRequiredBossOptions() },
+    // No required bosses, which is how the randomizer's own tracker reads this
+    // world: nothing sets the <Boss>_Required flags outside seed generation, so
+    // "All Required Bosses Defeated" is satisfied and Ganondorf's requirement
+    // is the tower's own - eight shards, the sword, the bow, magic and the rest
+    // (gui/tracker.cpp keeps required bosses to itself, as checkboxes, and
+    // simply refuses to call Defeat Ganondorf reachable until they are marked).
+    //
+    // Left in, every item needed to fight the required bosses was listed here
+    // as well - a Dragon Roost boss you have already beaten still contributed
+    // its whole dungeon - and with any dungeon's door still unrecorded the
+    // whole requirement read "impossible". Whether the bosses are down is a
+    // separate question, and the location's own colour still answers it: that
+    // comes from reachability, which does account for them.
+    options: { ...data.sphereOptions, ...NO_REQUIRED_BOSSES },
     entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
     entranceConnections: { ...sphere.entranceConnections },
     chartMappings: {},

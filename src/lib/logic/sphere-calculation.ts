@@ -729,7 +729,20 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
   // ~70 times per location and the answers repeat across locations, so a
   // hover cost ~200ms of re-derivation even with a completely warm inner
   // cache and zero real searches.
-  const cacheKey = `${reachabilityCacheKey(items, options)}|${sphereOwnDungeonKeyPoolCache.key}`;
+  // Which of the pools' own locations are checked decides what gets granted -
+  // a chest you have been to counts as reached - so it belongs in the key.
+  // Without it the memo answered from before the mark: checking Dragon Roost's
+  // Big Key Chest granted nothing until the logic was reloaded, because
+  // marking a location leaves the inventory (and so the rest of the key)
+  // untouched. Upstream has no such cache; it redoes the whole calculation on
+  // every tracker change.
+  const markedPoolLocations = [...keyPools.values()]
+    .flatMap((pool) => pool.itemPools.flat())
+    .filter((location) => isLocationMarked(location))
+    .map(normalize);
+  const marksSignature = [...new Set(markedPoolLocations)].sort().join("|");
+
+  const cacheKey = `${reachabilityCacheKey(items, options)}|${sphereOwnDungeonKeyPoolCache.key}|${marksSignature}`;
   const memoised = ownDungeonKeyReachabilityCache.get(cacheKey);
   if (memoised) return memoised;
 

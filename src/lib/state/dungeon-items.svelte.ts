@@ -103,12 +103,27 @@ export function getDungeonItems(dungeon: string): DungeonItems {
   };
 }
 
+/**
+ * Keys you found rather than started with - the ones that can be sitting at a
+ * location, and so the number of cards the board may hold for this dungeon.
+ */
+export function getFoundSmallKeys(dungeon: string): number {
+  return Math.max(0, getDungeonItems(dungeon).smallKeys - getStartingSmallKeys(dungeon));
+}
+
 export function cycleSmallKeys(dungeon: string, step: 1 | -1): void {
   const max = getMaxSmallKeys(dungeon);
   if (max <= 0) return;
+  // The seed's own keys are yours for good, so the count cycles between them
+  // and the dungeon's maximum rather than down to zero. Stepping below the
+  // floor left a stored 0 underneath a displayed 1 - Dragon Roost, which
+  // starts you with a key, showed the same 1 twice in a row on the way round,
+  // and the click in between changed nothing.
+  const floor = Math.min(getStartingSmallKeys(dungeon), max);
   const entry = entryFor(dungeon);
-  const next = entry.smallKeys + step;
-  entry.smallKeys = next > max ? 0 : next < 0 ? max : next;
+  const shown = Math.max(entry.smallKeys, floor);
+  const next = shown + step;
+  entry.smallKeys = next > max ? floor : next < floor ? max : next;
   saveDungeonItemsState();
 }
 
