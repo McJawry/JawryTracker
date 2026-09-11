@@ -2,15 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The "Paths + required" filter's hiding rule, written down as the tracker's
- * owner specified it: an item is only hidden once the question of what it
- * leads to is settled. While it still opens a location nobody has looked in,
- * the card stays - hiding it would claim to know that nothing needed is down
- * there. Go mode is the one exception: the run is already finishable with what
- * is held, so nothing still in a chest can help beat it.
+ * owner specified it. The playthrough decides: a card it pared out - what the
+ * board labels "Optional" - is hidden, and a card it kept is shown, being part
+ * of how the seed is played even where beating Ganondorf does not turn on it.
+ * Purple path-chain cards are kept either way.
  *
  * The world here is deliberately tiny: two items, one that opens an unchecked
  * location and one whose only location has been checked, and a goal that needs
- * neither of them.
+ * neither of them - so nothing here is "required", and only the playthrough's
+ * verdict decides what goes.
  */
 /** As WWRSphereEngine.normalize writes it - apostrophes drop out. */
 const GOAL = "ganons tower defeat ganondorf";
@@ -86,22 +86,23 @@ describe("paths + required: when a card may be hidden", () => {
     checkedLocations = new Set(["checked chest"]);
   });
 
-  it("keeps an item that still opens somewhere unchecked, even though the run does not need it", async () => {
-    expect(await hidden()).toEqual(["spent"]);
+  it("keeps every card the playthrough kept, needed for the goal or not", async () => {
+    expect(await hidden()).toEqual([]);
   });
 
-  it("hides it once every location it opens has been checked", async () => {
-    checkedLocations = new Set(["checked chest", "unchecked chest"]);
-    expect(await hidden()).toEqual(["opener", "spent"]);
-  });
-
-  it("hides it in go mode, unfinished branch and all", async () => {
+  it("keeps them in go mode with every branch finished - the playthrough went through them", async () => {
     goMode = true;
-    expect(await hidden()).toEqual(["opener", "spent"]);
+    checkedLocations = new Set(["checked chest", "unchecked chest"]);
+    expect(await hidden()).toEqual([]);
   });
 
-  it("hides a card the board calls Optional, unfinished branch and all", async () => {
-    expect(await hidden(["opener"])).toEqual(["opener", "spent"]);
+  it("hides a card the playthrough pared out", async () => {
+    expect(await hidden(["spent"])).toEqual(["spent"]);
+  });
+
+  it("hides an Optional card even while its own branch is unfinished", async () => {
+    // "opener" still opens a chest nobody has checked, and goes anyway.
+    expect(await hidden(["opener"])).toEqual(["opener"]);
   });
 
   it("keeps an Optional card that is on a path chain - those are the other half of the filter", async () => {
@@ -112,6 +113,6 @@ describe("paths + required: when a card may be hidden", () => {
       sphereLocations: [],
       prunedPlacementIds: ["opener"]
     });
-    expect([...ids].sort()).toEqual(["spent"]);
+    expect([...ids].sort()).toEqual([]);
   });
 });
