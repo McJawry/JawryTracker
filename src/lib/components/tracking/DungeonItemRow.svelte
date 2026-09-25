@@ -16,7 +16,7 @@
   } from "$lib/state/dungeon-items.svelte";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { beginItemDrag } from "$lib/logic/item-drag";
-  import { assignPaletteEntryToLocation, needsRemovalChoice, syncDungeonItemPlacements } from "$lib/logic/assignment";
+  import { answerArmedLocation, needsRemovalChoice, syncDungeonItemPlacements } from "$lib/logic/assignment";
   import { ui, openItemCardPicker } from "$lib/state/ui.svelte";
 
   let { dungeon }: { dungeon: string } = $props();
@@ -33,14 +33,15 @@
   /**
    * Completes an armed location if there is one, exactly as the Item Tracker
    * and shard column do - otherwise these icons were the only tracker items
-   * that couldn't be assigned anywhere.
+   * that couldn't be assigned anywhere. The click is the location's either
+   * way, so it never falls through to a count change: a starting key is
+   * refused, and one past the dungeon's last is a copy already held (see
+   * answerArmedLocation). `acquire` only runs for a copy newly found.
    */
-  function assignIfArmed(itemName: string): boolean {
+  function assignIfArmed(itemName: string, acquire: () => void): boolean {
     const pending = ui.pendingLocationForItemAssignment;
     if (!pending) return false;
-    recordTrackerAction();
-    // Disarms the location itself - see assignment.ts.
-    assignPaletteEntryToLocation(itemName, pending);
+    answerArmedLocation(itemName, pending, acquire);
     return true;
   }
 
@@ -62,11 +63,8 @@
   }
 
   function onSmallKey(step: 1 | -1) {
-    if (step === 1 && assignIfArmed(hintNames.smallKey)) {
-      // Placing a key means you have it, so count it too.
-      cycleSmallKeys(dungeon, 1);
-      return;
-    }
+    // Placing a key means you have it, so count it too.
+    if (step === 1 && assignIfArmed(hintNames.smallKey, () => cycleSmallKeys(dungeon, 1))) return;
     const givingUp = step === -1 || items.smallKeys >= maxKeys;
     if (givingUp && removeSmallKey()) return;
     recordTrackerAction();
@@ -80,10 +78,10 @@
 
   function onFlag(flag: "bigKey" | "map" | "compass") {
     const named = { bigKey: hintNames.bigKey, map: hintNames.map, compass: hintNames.compass }[flag];
-    if (assignIfArmed(named)) {
+    const acquire = () => {
       if (!getDungeonItems(dungeon)[flag]) toggleDungeonFlag(dungeon, flag);
-      return;
-    }
+    };
+    if (assignIfArmed(named, acquire)) return;
     if (getDungeonItems(dungeon)[flag] && needsRemovalChoice(named)) {
       openItemCardPicker(named);
       return;

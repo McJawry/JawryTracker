@@ -4376,6 +4376,13 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   opacity: 0.75;
 }
 
+/* Replace mode: where the chosen copy is going. */
+.item-card-picker-target {
+  font-size: 0.62rem;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
 /* ---- Coloured hint notes ---------------------------------------------- */
 
 /* The notes are drawn twice: this layer paints the coloured text, and the

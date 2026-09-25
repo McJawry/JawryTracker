@@ -13,7 +13,7 @@
   import { itemImage } from "$lib/logic/images";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { ui, clearPendingLocationForItemAssignment } from "$lib/state/ui.svelte";
-  import { assignPaletteEntryToLocation } from "$lib/logic/assignment";
+  import { answerArmedLocation } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
 
@@ -42,10 +42,10 @@
 
   function handleClick(chart: string) {
     if (ui.pendingLocationForItemAssignment) {
-      recordTrackerAction();
       // Marks the chart as found at the armed location, exactly as the item
-      // grid does - assignment.ts disarms the location itself.
-      assignPaletteEntryToLocation(chart, ui.pendingLocationForItemAssignment);
+      // grid does - or moves it there, if it was recorded somewhere already.
+      // assignment.ts disarms the location itself.
+      answerArmedLocation(chart, ui.pendingLocationForItemAssignment);
       return;
     }
     recordTrackerAction();

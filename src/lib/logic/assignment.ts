@@ -19,12 +19,23 @@ import {
 } from "$lib/state/sphere.svelte";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { setChecked } from "$lib/state/checked.svelte";
-import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
-import { advanceEffectiveItemStage } from "$lib/logic/starting-gear-items";
-import { clearPendingLocationForItemAssignment } from "$lib/state/ui.svelte";
+import { ITEM_STAGE_TABLES, getItemMaxStage } from "$lib/state/item-tracker.svelte";
+import { advanceEffectiveItemStage, getEffectiveItemStage, getStartingItemStage } from "$lib/logic/starting-gear-items";
+import { clearPendingLocationForItemAssignment, openItemCardPicker } from "$lib/state/ui.svelte";
 import { retreatEffectiveItemStage } from "$lib/logic/starting-gear-items";
-import { setShardTrackingChecked } from "$lib/logic/shard-tracking";
-import { cycleSmallKeys, getDungeonItems, getFoundSmallKeys, toggleDungeonFlag } from "$lib/state/dungeon-items.svelte";
+import { getShardTrackingState, getTriforceShardNumber, setShardTrackingChecked } from "$lib/logic/shard-tracking";
+import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
+import {
+  cycleSmallKeys,
+  getDungeonItems,
+  getFoundSmallKeys,
+  getMaxSmallKeys,
+  getStartingSmallKeys,
+  hasStartingDungeonItem,
+  toggleDungeonFlag
+} from "$lib/state/dungeon-items.svelte";
+import { data } from "$lib/state/data.svelte";
+import { settings } from "$lib/state/settings.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -33,7 +44,38 @@ function isChartName(itemName: string): boolean {
   return /^(treasure|triforce) chart \d+$/i.test(itemName.trim());
 }
 
-export function assignPaletteEntryToLocation(itemName: string, location: string): void {
+/**
+ * Whether the seed has a copy of this item that could be sitting at a
+ * location. One it only ever hands you at the start cannot be: a Big Key in
+ * the starting gear was never in a chest, so recording it at one would put a
+ * find on the board that never happened - and hand the logic a second copy of
+ * a key the seed has one of.
+ *
+ * Asked of every kind of item, each where its starting copies are kept: the
+ * dungeon rows for keys, maps and compasses, the shard column for shards, and
+ * the item grid's stages for the rest. A progressive item with stages still
+ * to find stays findable - a starting sword leaves three more in the seed.
+ */
+export function isFindableItem(itemName: string): boolean {
+  const dungeonItem = /^(.+) (Small Key|Big Key|Boss Key|Dungeon Map|Compass)$/.exec(itemName);
+  if (dungeonItem) {
+    const [, dungeon, kind] = dungeonItem;
+    if (kind === "Small Key") return getMaxSmallKeys(dungeon) > getStartingSmallKeys(dungeon);
+    return !hasStartingDungeonItem(dungeon, kind === "Dungeon Map" ? "map" : kind === "Compass" ? "compass" : "bigKey");
+  }
+
+  const shard = getTriforceShardNumber(itemName);
+  if (shard) {
+    return !settings.startingGearShards.includes(shard) && !data.sphereStartingGear.some((gear) => getTriforceShardNumber(gear) === shard);
+  }
+
+  if (ITEM_STAGE_TABLES[itemName]) return getStartingItemStage(itemName) < getItemMaxStage(itemName);
+  return true;
+}
+
+/** Returns false, recording nothing, for an item the seed never hides anywhere. */
+export function assignPaletteEntryToLocation(itemName: string, location: string): boolean {
+  if (!isFindableItem(itemName)) return false;
   addSpherePlacement(itemName, location);
   setChecked(getLocationCheckedId(location), true);
   // The effective stage, not the raw stored one: the seed's starting gear is a
@@ -50,6 +92,7 @@ export function assignPaletteEntryToLocation(itemName: string, location: string)
   // targets (item grid, shard column, dungeon item row, sphere board)
   // completed the assignment.
   clearPendingLocationForItemAssignment();
+  return true;
 }
 
 /**
@@ -65,6 +108,79 @@ export function placeAcquiredItemAtLocation(itemName: string, location: string):
   addSpherePlacement(itemName, location);
   setChecked(getLocationCheckedId(location), true);
   clearPendingLocationForItemAssignment();
+}
+
+/**
+ * Whether the seed still has a copy of this item you have not found. Once
+ * every findable copy is held, a find at another location cannot be a new one
+ * - Dragon Roost has three keys to find, and a fourth recorded on top of them
+ * wrapped the counter back round to the seed's own key while four cards stayed
+ * on the board. It has to be one of the copies already held.
+ */
+export function hasUndiscoveredCopy(itemName: string): boolean {
+  const dungeonItem = /^(.+) (Small Key|Big Key|Boss Key|Dungeon Map|Compass)$/.exec(itemName);
+  if (dungeonItem) {
+    const [, dungeon, kind] = dungeonItem;
+    if (kind === "Small Key") return getFoundSmallKeys(dungeon) < getMaxSmallKeys(dungeon) - getStartingSmallKeys(dungeon);
+    return !getDungeonItems(dungeon)[kind === "Dungeon Map" ? "map" : kind === "Compass" ? "compass" : "bigKey"];
+  }
+
+  const shard = getTriforceShardNumber(itemName);
+  if (shard) {
+    return !getShardTrackingState(shard).isChecked && !sphere.placements.some((placement) => getTriforceShardNumber(placement.item) === shard);
+  }
+
+  if (isChartName(itemName)) return !isChartAcquired(itemName);
+  if (ITEM_STAGE_TABLES[itemName]) return getEffectiveItemStage(itemName) < getItemMaxStage(itemName);
+  return true;
+}
+
+/**
+ * An armed location answered by clicking an item, from whichever tracker the
+ * click came from. `acquire` is that tracker's own "you now hold one more" -
+ * the key counter, the shard column - for items the grid's stages don't hold.
+ *
+ * - An item the seed only starts you with is refused, and the location stays
+ *   armed: the click is the location's, so it does not fall through to
+ *   anything else either.
+ * - Already recorded at this location, it only disarms it.
+ * - With a copy still to find, it is found here: placed and counted.
+ * - With every copy already held, it is one of those, and which one is the
+ *   user's call - the removal picker asks it, offering the placed copies and
+ *   the ones with no location yet alike.
+ */
+export function answerArmedLocation(itemName: string, location: string, acquire: () => void = () => {}): void {
+  if (!isFindableItem(itemName)) return;
+
+  // Already recorded here: the location is answered, and counting it again
+  // would hold a copy with nowhere left to be.
+  const alreadyHere = sphere.placements.some(
+    (placement) => normalize(placement.location) === normalize(location) && isSameItemFamily(placement.item, itemName)
+  );
+  if (alreadyHere) {
+    clearPendingLocationForItemAssignment();
+    return;
+  }
+
+  if (hasUndiscoveredCopy(itemName)) {
+    recordTrackerAction();
+    assignPaletteEntryToLocation(itemName, location);
+    acquire();
+    return;
+  }
+
+  openItemCardPicker(itemName, location);
+}
+
+/**
+ * The answer to "replace which one?" with a placed copy: that copy was found
+ * here instead, so its old location is unchecked along with losing the card -
+ * the find recorded there is the one being corrected.
+ */
+export function movePlacementToLocation(placement: SpherePlacement, location: string): void {
+  removeSpherePlacement(placement.location);
+  setChecked(getLocationCheckedId(placement.location), false);
+  placeAcquiredItemAtLocation(placement.item, location);
 }
 
 /**
