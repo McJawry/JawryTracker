@@ -678,6 +678,34 @@ export function getMaximalSphereLogicInventory(): string[] {
   return items;
 }
 
+/**
+ * An inventory with an item taken out - all but the copies the seed starts
+ * you with, which no placement can take away.
+ *
+ * This is the "what if this item were not there" question every requirement
+ * test asks, and the starting copies are not part of it: the randomizer works
+ * out its path hints with the starting inventory in hand. Taking those out
+ * too made the tests answer a question about a seed you are not playing. A
+ * Progressive Sword in the starting gear already defeats Forbidden Woods'
+ * Mothulas, but with it stripped the Bombs, the Bow and the Skull Hammer each
+ * looked like a way past them - so Bombs found on a path-hinted island were
+ * taken for Kalle Demos's path item.
+ *
+ * Dungeon keys are left to their own rules (getOwnDungeonKeyPotentialPools):
+ * the maximal inventory counts them per dungeon, not from the starting gear.
+ */
+export function withoutFoundCopies(inventory: string[], itemKey: string): string[] {
+  let startingCopies = data.sphereStartingGear.filter(
+    (gear) => !isDungeonKeyName(gear) && getSphereInventoryItemKey(gear) === itemKey
+  ).length;
+  return inventory.filter((item) => {
+    if (getSphereInventoryItemKey(item) !== itemKey) return true;
+    if (startingCopies <= 0) return false;
+    startingCopies -= 1;
+    return true;
+  });
+}
+
 interface OwnDungeonKeyPool {
   item: string;
   count: number;
@@ -822,7 +850,7 @@ export function isLogicRequiredItemForLocation(
   let sets = cache?.get(cacheKey);
   if (!sets) {
     const maximalInventory = getMaximalSphereLogicInventory();
-    const reducedInventory = maximalInventory.filter((item) => getSphereInventoryItemKey(item) !== itemKey);
+    const reducedInventory = withoutFoundCopies(maximalInventory, itemKey);
     if (reducedInventory.length === maximalInventory.length) {
       sets = { skip: true };
     } else {
