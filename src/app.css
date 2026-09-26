@@ -3016,6 +3016,42 @@ body.stream-mode .empty-state {
   gap: 3px;
 }
 
+/* The misc areas get the same column as the dungeons, so their hinted items
+   sit above their artwork too. */
+.tracking-misc-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Items hinted at a dungeon or misc area, directly above its artwork rather
+   than over it (AreaHintStrip). One row that keeps its height with nothing in
+   it, so hints coming and going never resize the Main Tracker; past four the
+   icons shrink to share the width instead of wrapping. */
+.area-hint-strip {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  width: 76px;
+  height: var(--item-map-icon-size);
+}
+
+.area-hint-strip .map-icon {
+  flex: 0 1 var(--item-map-icon-size);
+  min-width: 0;
+  width: auto;
+  height: var(--item-map-icon-size);
+  font-size: var(--item-map-icon-size);
+}
+
+.area-hint-strip .map-icon img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 /* Small key / big key / map / compass above each dungeon. The bottom margin
    lifts them clear of the boss cell's border below. */
 /* Icons hang from the top of the row (and of their own box) rather than

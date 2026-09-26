@@ -8,6 +8,7 @@
   import { isLocationMarked } from "$lib/logic/locations";
   import { BOSS_LOCATIONS } from "$lib/gameData";
   import TrackerAreaCell from "./TrackerAreaCell.svelte";
+  import AreaHintStrip from "./AreaHintStrip.svelte";
 
   const miscAreas = TRACKED_AREAS.filter((area) => !(area.imageName in REQUIRED_BOSS_OPTION_KEYS));
 
@@ -21,6 +22,9 @@
 
 <div class="tracking-misc-trackers" aria-label="Misc trackers">
   {#each miscAreas as area (area.name)}
-    <TrackerAreaCell areaName={area.name} targetKind="area" background={backgroundFor(area)} />
+    <div class="tracking-misc-entry">
+      <AreaHintStrip areaName={area.name} />
+      <TrackerAreaCell areaName={area.name} targetKind="area" background={backgroundFor(area)} hintIconsOutside />
+    </div>
   {/each}
 </div>

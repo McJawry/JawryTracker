@@ -11,6 +11,7 @@
   import { isLocationMarked } from "$lib/logic/locations";
   import TrackerAreaCell from "./TrackerAreaCell.svelte";
   import DungeonItemRow from "./DungeonItemRow.svelte";
+  import AreaHintStrip from "./AreaHintStrip.svelte";
 
   const bossAreas = TRACKED_AREAS.filter((area) => area.imageName in REQUIRED_BOSS_OPTION_KEYS);
 </script>
@@ -22,7 +23,8 @@
     {@const dead = heartLocation ? isLocationMarked(heartLocation) : false}
     <div class="tracking-boss-entry">
       <DungeonItemRow dungeon={area.name} />
-      <TrackerAreaCell areaName={area.name} targetKind="area" background={trackerBossImage(bossName, dead)} />
+      <AreaHintStrip areaName={area.name} />
+      <TrackerAreaCell areaName={area.name} targetKind="area" background={trackerBossImage(bossName, dead)} hintIconsOutside />
     </div>
   {/each}
 </div>
