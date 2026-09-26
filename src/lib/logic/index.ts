@@ -69,6 +69,11 @@ export interface SphereCalculationInput {
   // than duplicating it.
   items?: string[];
   startingGear?: string[];
+  /**
+   * Held, but from no known point in the run: kept out of the spheres, counted
+   * by the pare-down that decides which cards are Optional. calculate() only.
+   */
+  heldWithoutSphere?: string[];
   options?: Record<string, unknown>;
   entranceMappings?: Record<string, string>;
   entranceConnections?: Record<string, unknown>;
@@ -86,6 +91,8 @@ export interface SphereCalculationResult {
   sphereLocations: string[][];
   dependencies: Record<string, string[]>;
   prunedPlacementIds: string[];
+  /** locationSpheres with input.heldWithoutSphere counted as held - calculate() only. */
+  locationSpheresWithHeld?: Record<string, number>;
   [key: string]: unknown;
 }
 

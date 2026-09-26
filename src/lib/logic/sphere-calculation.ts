@@ -8,8 +8,8 @@ import { WWRSphereEngine, type SphereCalculationInput, type SphereCalculationRes
 import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
-import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-import { TRIFORCE_SHARD_COUNT } from "$lib/logic/shard-tracking";
+import { getUnplacedAcquiredItems, type UnplacedItem } from "$lib/logic/unplaced-items";
+import { TRIFORCE_SHARD_COUNT, isTriforceShardItem } from "$lib/logic/shard-tracking";
 import { getEffectiveEntranceMappings, getEntranceConnection, getEntrancesForArea } from "$lib/logic/entrances";
 // entrance-paths imports getSphereTraversableExitSet from here in turn. The
 // cycle is only ever walked at call time - neither module runs the other's
@@ -144,23 +144,40 @@ function nameGenericCopies(items: string[]): string[] {
 }
 
 /**
- * Everything the player is known to hold that isn't tied to a location: the
- * seed's starting gear, Blue Chu Jelly, and anything acquired on the Item
- * Tracker that hasn't been assigned to a location yet.
+ * An item held with no location recorded whose sphere is still known: a
+ * Triforce shard, whose record *is* the shard column - it never gets a location
+ * by design - and a dungeon key kept to its own dungeon, which the key logic
+ * accounts for from the dungeon rather than from where it was found.
+ */
+function hasKnownSourceWithoutLocation(entry: UnplacedItem): boolean {
+  return isTriforceShardItem(entry.item) || isOwnDungeonKeyForPath(entry.logicItem ?? entry.item);
+}
+
+/**
+ * Everything the player is known to hold from a known point in the run: the
+ * seed's starting gear, Blue Chu Jelly, and the shards and own-dungeon keys
+ * held without a location (see hasKnownSourceWithoutLocation).
  *
- * That last group matters: the Item Tracker is the source of truth for
- * ownership, so without it the logic never learns you picked up a Hookshot
- * unless you also told it *where* - and the map's accessible counts and
- * sphere numbers would never move as you check items off.
+ * Every other item acquired on the Item Tracker without a location is left out
+ * - see getUnknownSourceItems. They used to be here, which counted them as
+ * held from the start: a Farore's Pearl ticked on the tracker put Kalle Demos
+ * in sphere 1 behind a Tower of the Gods door, while the same pearl recorded
+ * at a chest out of logic correctly put him after "Sphere ?".
  */
 function getRawStartingGear(): string[] {
   return [
     ...data.sphereStartingGear,
     // logicItem where the rules name an item differently from the item pool
     // ("<Dungeon> Big Key" vs the pool's "<Dungeon> Boss Key").
-    ...getUnplacedAcquiredItems().map((entry) => entry.logicItem ?? entry.item),
+    ...getUnplacedAcquiredItems()
+      .filter(hasKnownSourceWithoutLocation)
+      .map((entry) => entry.logicItem ?? entry.item),
     ...Array(getSphereBlueChuJellyCount()).fill("Blue Chu Jelly")
   ];
+}
+
+function getRawUnknownSourceItems(): UnplacedItem[] {
+  return getUnplacedAcquiredItems().filter((entry) => !hasKnownSourceWithoutLocation(entry));
 }
 
 /**
@@ -171,18 +188,43 @@ function getRawStartingGear(): string[] {
  * one still in hand - drop a shard on the chest it came from and the logic
  * would otherwise never see it, which is the sphere calculation's whole
  * account of that item. Doing it in one go is also what keeps two copies from
- * claiming the same name.
+ * claiming the same name. The items held from an unknown point take part too,
+ * for the same reason, though they are handed back separately.
  */
-function namedItemInventory(placements: SpherePlacement[]): { gear: string[]; placements: SpherePlacement[] } {
+function namedItemInventory(placements: SpherePlacement[]): {
+  gear: string[];
+  unknownSources: Array<{ id: string; item: string }>;
+  placements: SpherePlacement[];
+} {
   const gear = getRawStartingGear();
-  const named = nameGenericCopies([...gear, ...placements.map((placement) => placement.item)]);
+  const unknown = getRawUnknownSourceItems();
+  const named = nameGenericCopies([
+    ...gear,
+    ...unknown.map((entry) => entry.logicItem ?? entry.item),
+    ...placements.map((placement) => placement.item)
+  ]);
+  const placementOffset = gear.length + unknown.length;
   return {
     gear: named.slice(0, gear.length),
+    unknownSources: unknown.map((entry, index) => ({ id: entry.id, item: named[gear.length + index] })),
     placements: placements.map((placement, index) => {
-      const item = named[gear.length + index];
+      const item = named[placementOffset + index];
       return item === placement.item ? placement : { ...placement, item };
     })
   };
+}
+
+/**
+ * Items held on the trackers with no location, from no known point in the run.
+ *
+ * The sphere board already files their cards under "Sphere ?", and this is
+ * the logic's half of the same statement: they are not starting gear, so what
+ * they open waits on them - "After sphere ?" - exactly as it does behind an
+ * item found out of logic. Ids match the board's cards, so the dependency
+ * lines drawn from them land on those cards.
+ */
+export function getUnknownSourceItems(): Array<{ id: string; item: string }> {
+  return namedItemInventory(sphere.placements).unknownSources;
 }
 
 /**
@@ -216,6 +258,17 @@ export function getSphereLogicStartingGear(): string[] {
  */
 export function getOwnedInventory(): string[] {
   const inventory = namedItemInventory(sphere.placements);
+  return [
+    ...getKnownSourceInventory(inventory),
+    ...inventory.unknownSources.map((source) => source.item)
+  ];
+}
+
+/**
+ * The owned inventory less the items held from an unknown point: what the
+ * sphere calculation may count on, placed items included.
+ */
+function getKnownSourceInventory(inventory = namedItemInventory(sphere.placements)): string[] {
   return [
     ...inventory.gear,
     ...inventory.placements.map((placement) => getDungeonSmallKeyName(placement.item, placement.location) || placement.item)
@@ -269,8 +322,14 @@ function getSeedOptions(): Record<string, unknown> {
 export function getSphereProgressionInput(placements: SpherePlacement[]): SphereCalculationInput {
   return {
     ...getSphereCalculationInput(placements),
+    // Out of the spheres, still in the question of which cards are Optional -
+    // see calculate() in sphere-engine.js.
+    heldWithoutSphere: namedItemInventory(placements).unknownSources.map((source) => source.item),
     options: getSeedOptions(),
-    additionalStartAreas: getSavewarpStartAreas(getOwnedInventory())
+    // Not from the whole inventory: a dungeon only an item of unknown source
+    // gets you into would be seeded here, handing the calculation the way in
+    // that the item was withheld to keep from it.
+    additionalStartAreas: getSavewarpStartAreas(getKnownSourceInventory())
   };
 }
 

@@ -7,10 +7,11 @@
 // produced a hint card and nothing else: the board never learned the item's
 // whereabouts and the sphere numbers never moved.
 //
-// The original's autosaveItemSources stay empty: they come from the
-// autosave-polling feature this port deliberately excludes. Its equivalent
-// here is the Item Tracker, whose acquired-but-unplaced items already reach
-// the logic through getUnplacedAcquiredItems().
+// The original's autosaveItemSources - items the game's save said you held,
+// with nothing saying where from - are unknownSourceItems here, fed by the
+// Item Tracker instead: whatever it says you hold with no location recorded.
+// Like the originals, they are level-0 "Sphere ?" sources, not starting gear
+// (getUnknownSourceItems).
 import { WWRSphereEngine } from "$lib/logic";
 import { MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
 import { hints, type Hint } from "$lib/state/hints.svelte";
@@ -19,7 +20,7 @@ import { data } from "$lib/state/data.svelte";
 import { getShardNumber } from "$lib/logic/images";
 import { getShardTrackingState } from "$lib/logic/shard-tracking";
 import { getAvailableLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
-import { getSphereInventoryItemKey } from "$lib/logic/sphere-calculation";
+import { getSphereInventoryItemKey, getUnknownSourceItems } from "$lib/logic/sphere-calculation";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 
 const normalize = WWRSphereEngine.normalize;
@@ -69,7 +70,8 @@ export interface SphereTrackingKnowledge {
   hintPlacements: SpherePlacement[];
   areaHints: Hint[];
   acquiredShardSources: Array<{ id: string; item: string; number: number }>;
-  autosaveItemSources: Array<{ id: string; item: string; fromAutosave?: boolean }>;
+  /** Held with no location and no known point in the run - see getUnknownSourceItems. */
+  unknownSourceItems: Array<{ id: string; item: string }>;
   pathHints: Hint[];
   barrenHints: Hint[];
 }
@@ -139,7 +141,7 @@ export function getSphereTrackingKnowledge(): SphereTrackingKnowledge {
     placements,
     hintPlacements,
     areaHints,
-    autosaveItemSources: [],
+    unknownSourceItems: getUnknownSourceItems(),
     acquiredShardSources,
     pathHints: hints.filter(
       (hint) =>

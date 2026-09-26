@@ -26,7 +26,13 @@
   const normalize = WWRSphereEngine.normalize;
 
   const knownSphere = $derived(Number.isInteger(sphereNumber));
-  const outOfLogic = $derived(!Number.isInteger(calculation.locationSpheres[normalize(placement.location)]));
+  // Out of logic only if even the items held with no location would not get
+  // you there - behind one of those, the sphere is unknown, not out of logic.
+  const outOfLogic = $derived.by(() => {
+    const locationKey = normalize(placement.location);
+    const withHeld = calculation.locationSpheresWithHeld ?? calculation.locationSpheres;
+    return !Number.isInteger(calculation.locationSpheres[locationKey]) && !Number.isInteger(withHeld[locationKey]);
+  });
   // Shared with the "Paths + required" filter, which hides what this labels.
   const isPruned = $derived(isOptionalPlacement(placement, calculation.prunedPlacementIds || []));
   const cardClass = $derived(
