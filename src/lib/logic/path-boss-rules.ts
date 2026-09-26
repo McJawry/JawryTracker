@@ -103,15 +103,26 @@ export function planPathBossIcons(
   // already in hand, so nothing here is worth searching and no icon is drawn.
   if (!unresolvedBosses.length) return plan;
 
+  // Whether every branch a location hangs off is one of these. A location that
+  // needs two of the area's items sits down both branches, and it is only done
+  // with for a boss once both are: what it holds could still be what ties the
+  // other one to that boss. Private Oasis's upper floor wants the Skull Hammer
+  // and the Cabana Deed - the Hammer answering Helmaroc King says nothing about
+  // whether the Deed does. The area's own locations hang off no branch, and are
+  // searched for everyone.
+  const onlyDown = (location: { branches: Set<string> }, rootIds: string[]) =>
+    location.branches.size > 0 && [...location.branches].every((rootId) => rootIds.includes(rootId));
+
   unresolvedBosses.forEach((bossName) => {
     // A branch whose own item is already known to be required for this boss is
     // not somewhere still being searched for it: that item is the candidate,
     // and whatever else lies down the branch is not what the hint meant. An
     // item required for both bosses therefore clears its branch of both, even
-    // though which boss it belongs to is still open.
+    // though which boss it belongs to is still open - except where a location
+    // down it is down another branch as well (onlyDown).
     const answered = candidatesByBoss.get(bossName) ?? [];
     locations.forEach((location) => {
-      if (answered.some((rootId) => location.branches.has(rootId))) return;
+      if (onlyDown(location, answered)) return;
       add(location.key, bossName);
     });
   });
@@ -119,16 +130,17 @@ export function planPathBossIcons(
   // A boss the matching did settle, but only onto branches that are still
   // open, is not settled firmly: such a branch could yet prove required for
   // another boss too, which would hand this one back to a different branch. So
-  // it keeps its icon everywhere except the branches that answer it - there,
-  // the item that answers it is already in hand. A closed branch settles the
-  // boss for good and stops this.
+  // it keeps its icon everywhere except down the branches that answer it -
+  // there, the item that answers it is already in hand (onlyDown: a location
+  // another branch also leads to keeps it). A closed branch settles the boss
+  // for good and stops this.
   bosses
     .filter((bossName) => !unresolvedBosses.includes(bossName))
     .forEach((bossName) => {
       const resolvers = candidatesByBoss.get(bossName) ?? [];
       if (!resolvers.length || resolvers.some((rootId) => !openRootIds.has(rootId))) return;
       locations.forEach((location) => {
-        if (resolvers.some((rootId) => location.branches.has(rootId))) return;
+        if (onlyDown(location, resolvers)) return;
         add(location.key, bossName);
       });
     });

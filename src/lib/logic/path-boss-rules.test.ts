@@ -82,6 +82,51 @@ describe("multi-boss path hints", () => {
   });
 });
 
+/**
+ * A location that needs items from two of the area's branches is down both of
+ * them - Private Oasis's upper floor wants the Skull Hammer and the Cabana
+ * Deed. It stays a place to search for a boss until every branch it is down
+ * answers that boss: finding what the boss needs there would tie the other
+ * item to it too.
+ */
+describe("a location down two branches", () => {
+  function shared(required: Record<string, string[]>, bosses = TWO) {
+    const rootIds = Object.keys(required);
+    const candidatesByBoss = new Map(bosses.map((boss) => [boss, rootIds.filter((rootId) => required[rootId].includes(boss))]));
+    const locations = [
+      { key: "A only", branches: new Set(["A"]) },
+      { key: "A and B", branches: new Set(["A", "B"]) },
+      { key: "B only", branches: new Set(["B"]) }
+    ];
+    const plan = planPathBossIcons(bosses, candidatesByBoss, locations, new Set(rootIds));
+    return Object.fromEntries(locations.map(({ key }) => [key, [...(plan.get(key) ?? [])].sort()]));
+  }
+
+  it("2: keeps boss 1 on it while B is still unanswered - it is downstream of B too", () => {
+    expect(shared({ A: ["boss1"], B: [] })).toEqual({
+      "A only": ["boss2"],
+      "A and B": ["boss1", "boss2"],
+      "B only": ["boss1", "boss2"]
+    });
+  });
+
+  it("3: keeps both bosses on it while B could still hold either", () => {
+    expect(shared({ A: ["boss1", "boss2"], B: [] })).toEqual({
+      "A only": [],
+      "A and B": ["boss1", "boss2"],
+      "B only": ["boss1", "boss2"]
+    });
+  });
+
+  it("4: drops boss 1 once both of its branches answer it", () => {
+    expect(shared({ A: ["boss1"], B: ["boss1"] })).toEqual({
+      "A only": ["boss2"],
+      "A and B": ["boss2"],
+      "B only": ["boss2"]
+    });
+  });
+});
+
 describe("beyond two bosses and two items", () => {
   const THREE = ["boss1", "boss2", "boss3"];
 
