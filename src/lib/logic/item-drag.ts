@@ -16,6 +16,7 @@ import {
   moveItemDrag,
   endItemDrag,
   openLocationDropList,
+  closeLocationDropList,
   clearPendingLocationForItemAssignment,
   ui
 } from "$lib/state/ui.svelte";
@@ -89,9 +90,20 @@ export function beginItemDrag(itemName: string, event: PointerEvent, onClick: ()
   };
 
   const handleUp = (upEvent: PointerEvent) => {
-    // A release over the open location list is that list's click to handle -
-    // it assigns to the exact location and ends the drag itself.
-    const overDropList = (upEvent.target as HTMLElement | null)?.closest?.(".location-drop-list");
+    const releasedOn = upEvent.target as HTMLElement | null;
+    const overDropList = releasedOn?.closest?.(".location-drop-list");
+    // Released on one of the list's locations: that is the drop. It has to be
+    // landed here - the press began on the item slot, so the browser sends the
+    // release's click to what the two have in common, never to the row, and
+    // the ghost was left hanging until a second click on a location.
+    const location =
+      upEvent.type === "pointerup" ? releasedOn?.closest?.<HTMLElement>(".location-drop-option")?.dataset.location : undefined;
+    if (dragging && overDropList && location) {
+      dropDraggedItemOnLocation(location);
+      closeLocationDropList();
+      cleanup();
+      return;
+    }
     if (dragging && !overDropList) {
       const target = getDropTarget(upEvent.clientX, upEvent.clientY);
       if (target) recordItemHintForArea(itemName, target.areaName);
@@ -101,8 +113,9 @@ export function beginItemDrag(itemName: string, event: PointerEvent, onClick: ()
     // Always detach. These used to be left bound when the release landed on
     // the location list, so a later unrelated pointerup re-entered this
     // handler with a stale `dragging` and dropped a phantom hint wherever the
-    // pointer happened to be. Only ui.itemDrag needs to outlive the release -
-    // the list's own click reads that, not this closure.
+    // pointer happened to be. Released on the list but off its locations - the
+    // title, the filter, an entrance - only ui.itemDrag outlives the release,
+    // and a click on a location lands it (LocationDropList's onToggle).
     cleanup();
     if (dragging && overDropList) armDropListCancel();
   };
