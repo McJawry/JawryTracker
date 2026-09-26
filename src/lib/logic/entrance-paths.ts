@@ -470,16 +470,24 @@ function vanillaBossSectors(): Map<string, string> {
  * which three. Standing still, the island a dungeon sits on is the answer, and
  * it is known the moment the mark goes down.
  *
- * Only when neither pool is shuffled: a shuffled dungeon door means the
- * dungeon on this island is not the vanilla one, and a shuffled boss door
- * means the dungeon here need not hold its own boss.
+ * Only when neither pool that could move it is shuffled: a shuffled dungeon
+ * door means the dungeon on this island is not the vanilla one, and a shuffled
+ * boss door means the dungeon here need not hold its own boss.
+ *
+ * The Forsaken Fortress answers to the boss pool alone. It has no dungeon door
+ * for the dungeon shuffle to move - the entrance table's only door into it is
+ * Helmaroc King's arena, a BOSS entry - so with dungeon entrances shuffled he
+ * is still in the fortress. Treated like the other five, its mark never named
+ * him, one of three marks stayed unresolved, and every boss stayed required -
+ * Jalhalla included, behind an Earth Temple the seed never asks for.
  */
 function vanillaBossOnSector(sector: string): string {
   const options = data.sphereOptions;
-  if (WWRSphereEngine.isShuffleTypeEnabled("DUNGEON", options)) return "";
   if (WWRSphereEngine.isShuffleTypeEnabled("BOSS", options)) return "";
+  const key = sectorKey(sector);
+  if (key !== sectorKey("Forsaken Fortress") && WWRSphereEngine.isShuffleTypeEnabled("DUNGEON", options)) return "";
 
-  const boss = vanillaBossSectors().get(sectorKey(sector));
+  const boss = vanillaBossSectors().get(key);
   return boss ? `${boss} Battle Arena` : "";
 }
 

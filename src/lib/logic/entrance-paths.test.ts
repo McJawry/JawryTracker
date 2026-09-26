@@ -398,6 +398,28 @@ describe("marked sectors", () => {
 });
 
 /**
+ * Dungeon entrance randomizer moves the five dungeons with doors of their own.
+ * The Forsaken Fortress has none - its only door in the entrance table is
+ * Helmaroc King's arena, a boss door - so only the boss pool can move him.
+ */
+describe("the Forsaken Fortress mark", () => {
+  it("names Helmaroc King with only the dungeon doors shuffled", () => {
+    options = { randomize_dungeon_entrances: true };
+    expect(getBossBehindSector("Forsaken Fortress")).toBe("Helmaroc King Battle Arena");
+  });
+
+  it("names nobody once the boss doors are shuffled too", () => {
+    options = { randomize_dungeon_entrances: true, randomize_boss_entrances: true };
+    expect(getBossBehindSector("Forsaken Fortress")).toBe("");
+  });
+
+  it("leaves an island's dungeon unnamed until its door is walked", () => {
+    options = { randomize_dungeon_entrances: true };
+    expect(getBossBehindSector("Dragon Roost Island")).toBe("");
+  });
+});
+
+/**
  * The marker spins to say "the way in is open". It is only open when nothing
  * on the sector is still shut - the boss could be behind any door not yet
  * recorded, including the one you cannot get through.
@@ -479,6 +501,20 @@ describe("which bosses the run has to beat", () => {
       Kalle_Demos_Required: false,
       Gohdan_Required: false,
       Helmaroc_King_Required: false
+    });
+  });
+
+  it("counts the fortress's boss while the dungeon doors are shuffled", () => {
+    setupMarks(["Jalhalla", "Molgera"]);
+    marks.push("Forsaken Fortress");
+    options = { ...options, num_required_dungeons: 3, randomize_dungeon_entrances: true };
+    expect(getRequiredBossOptions()).toEqual({
+      Gohma_Required: false,
+      Jalhalla_Required: true,
+      Molgera_Required: true,
+      Kalle_Demos_Required: false,
+      Gohdan_Required: false,
+      Helmaroc_King_Required: true
     });
   });
 

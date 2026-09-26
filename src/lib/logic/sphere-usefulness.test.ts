@@ -22,6 +22,8 @@ const LOCATION_NEEDS: Record<string, string> = {
 };
 
 let goMode = false;
+/** Which bosses the run has to beat, however the tracker worked it out. */
+let requiredBosses = new Set<string>(["Jalhalla"]);
 let checkedLocations = new Set<string>(["checked chest"]);
 
 /** The engine's normalize, small enough to mirror rather than import (the
@@ -45,6 +47,7 @@ vi.mock("$lib/logic/sphere-calculation", () => ({
   },
   getTraversableExitsWith: () => new Set<string>(),
   getUnreachableDungeonStartAreas: () => [],
+  isBossRequired: (boss: string) => requiredBosses.has(boss),
   withNamedPlacementItems: (placements: unknown[]) => placements
 }));
 
@@ -62,7 +65,7 @@ vi.mock("$lib/state/data.svelte", () => ({
   data: { sphereLogicLoaded: true, sphereWorld: { dungeonStarts: {} }, requiredBosses: new Set<string>() }
 }));
 
-const { computeHiddenPlacementIds } = await import("./sphere-usefulness");
+const { computeHiddenPlacementIds, isOptionalPlacement } = await import("./sphere-usefulness");
 
 const placements = [
   { id: "opener", item: "Opener", location: "Somewhere Else" },
@@ -114,5 +117,30 @@ describe("paths + required: when a card may be hidden", () => {
       prunedPlacementIds: ["opener"]
     });
     expect([...ids].sort()).toEqual([]);
+  });
+});
+
+/**
+ * Jalhalla wants the Mirror Shield, so while he has to be beaten both shields
+ * are the run's and neither is Optional. Once he does not - which a race seed
+ * only says through its marked sectors, its config never listing the bosses -
+ * the earlier shield the playthrough pared out is Optional like any other card.
+ */
+describe("the Optional label on a shield", () => {
+  const shield = { id: "shield", item: "Progressive Shield", location: "Islet of Steel - Interior Chest" };
+
+  it("is never worn while Jalhalla is required", () => {
+    requiredBosses = new Set(["Jalhalla"]);
+    expect(isOptionalPlacement(shield, ["shield"])).toBe(false);
+  });
+
+  it("is worn by a pared-out shield once he is not", () => {
+    requiredBosses = new Set(["Gohma", "Kalle Demos", "Helmaroc King"]);
+    expect(isOptionalPlacement(shield, ["shield"])).toBe(true);
+  });
+
+  it("is not worn by the shield the playthrough kept", () => {
+    requiredBosses = new Set(["Gohma", "Kalle Demos", "Helmaroc King"]);
+    expect(isOptionalPlacement(shield, [])).toBe(false);
   });
 });

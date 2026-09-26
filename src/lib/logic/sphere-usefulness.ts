@@ -40,6 +40,7 @@ import {
   getSphereReachabilityWithOwnDungeonKeys,
   getTraversableExitsWith,
   getUnreachableDungeonStartAreas,
+  isBossRequired,
   withNamedPlacementItems
 } from "$lib/logic/sphere-calculation";
 import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
@@ -62,10 +63,11 @@ const GOAL_LOCATION = "Ganon's Tower - Defeat Ganondorf";
  */
 export function isOptionalPlacement(placement: SpherePlacement, prunedPlacementIds: Iterable<string>): boolean {
   const itemKey = normalize(placement.item);
-  const jalhallaRequired = !data.requiredBosses.size || data.requiredBosses.has(normalize("Jalhalla"));
+  // Jalhalla wants the Mirror Shield, so both shields are needed while he is -
+  // decided exactly as the calculation that did the paring decides it.
   const mandatoryUpgrade =
     ["progressive sword", "progressive bow", "progressive picto box"].includes(itemKey) ||
-    (itemKey === "progressive shield" && jalhallaRequired);
+    (itemKey === "progressive shield" && isBossRequired("Jalhalla"));
   if (mandatoryUpgrade) return false;
   return [...prunedPlacementIds].includes(placement.id);
 }

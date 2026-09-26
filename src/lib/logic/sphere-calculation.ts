@@ -5,7 +5,7 @@
 // getSphereCalculationInput, getSphereLogicStartingGear,
 // calculateSphereProgression, getSphereBlueChuJellyCount).
 import { WWRSphereEngine, type SphereCalculationInput, type SphereCalculationResult } from "$lib/logic";
-import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
+import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
 import { getUnplacedAcquiredItems, type UnplacedItem } from "$lib/logic/unplaced-items";
@@ -307,6 +307,18 @@ export function getSphereCalculationInput(placements: SpherePlacement[], include
  */
 function getSeedOptions(): Record<string, unknown> {
   return { ...data.sphereOptions, ...getRequiredBossOptions() };
+}
+
+/**
+ * Whether the run has to beat this boss, asked the way the sphere calculation
+ * asks it: the config's list where it has one, otherwise the sector marks once
+ * they name every required boss. Anything deciding what the calculation's
+ * answer means has to use this - reading the config alone called Jalhalla
+ * required in every race seed, whose configs never list them.
+ */
+export function isBossRequired(bossName: string): boolean {
+  const optionKey = Object.entries(REQUIRED_BOSS_OPTION_KEYS).find(([boss]) => normalize(boss) === normalize(bossName))?.[1];
+  return optionKey ? Boolean(getSeedOptions()[optionKey]) : false;
 }
 
 /**
