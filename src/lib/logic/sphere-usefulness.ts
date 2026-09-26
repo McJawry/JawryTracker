@@ -19,8 +19,11 @@
  *                      with the run already finishable from what is held, no
  *                      unopened chest can hold something that helps beat it,
  *                      so an unfinished branch stops being a reason to keep a
- *                      card. A card the board labels "Optional" - pared out of
- *                      the minimal playthrough - is hidden either way.
+ *                      card. The playthrough then has the last word: a card it
+ *                      pared out - the ones the board labels "Optional" - is
+ *                      hidden whatever the rules above said, and a card it kept
+ *                      is shown, being part of how this seed is played even
+ *                      where beating Ganondorf does not turn on it.
  *
  * The requirement walk seeds the start area of any dungeon nothing can walk to
  * - under entrance randomisation an unrecorded door seals a dungeon off
@@ -37,6 +40,7 @@ import {
   getSphereReachabilityWithOwnDungeonKeys,
   getTraversableExitsWith,
   getUnreachableDungeonStartAreas,
+  isBossRequired,
   withNamedPlacementItems
 } from "$lib/logic/sphere-calculation";
 import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
@@ -59,10 +63,11 @@ const GOAL_LOCATION = "Ganon's Tower - Defeat Ganondorf";
  */
 export function isOptionalPlacement(placement: SpherePlacement, prunedPlacementIds: Iterable<string>): boolean {
   const itemKey = normalize(placement.item);
-  const jalhallaRequired = !data.requiredBosses.size || data.requiredBosses.has(normalize("Jalhalla"));
+  // Jalhalla wants the Mirror Shield, so both shields are needed while he is -
+  // decided exactly as the calculation that did the paring decides it.
   const mandatoryUpgrade =
     ["progressive sword", "progressive bow", "progressive picto box"].includes(itemKey) ||
-    (itemKey === "progressive shield" && jalhallaRequired);
+    (itemKey === "progressive shield" && isBossRequired("Jalhalla"));
   if (mandatoryUpgrade) return false;
   return [...prunedPlacementIds].includes(placement.id);
 }
@@ -282,15 +287,23 @@ export async function computeHiddenPlacementIds({
     (await getRequiredAndUnfinishedPlacementIds(placements, sphereLocations)).forEach((id) => visible.add(id));
   }
 
-  // A card the board itself calls Optional is not something the run needs, so
-  // it goes whatever the rules above made of it - an unfinished branch below an
-  // item the playthrough pared out cannot make that item wanted again. Purple
-  // cards stay: those are the other half of this filter.
-  if (filters.pathsAndRequired && [...prunedPlacementIds].length) {
+  // The playthrough has the last word. A card it pared out is labelled Optional
+  // and goes, whatever the rules above made of it - an unfinished branch below
+  // an item the playthrough dropped cannot make that item wanted again. A card
+  // it kept stays, for the mirror of the same reason: the run went through that
+  // chest, so it is part of how this seed is played even when beating Ganondorf
+  // does not turn on it. Purple cards stay either way - they are the other half
+  // of this filter - and dungeon keys are left to the Show keys toggle, which
+  // owns them.
+  if (filters.pathsAndRequired) {
     const purple = new Set(pathChainIds);
     placements.forEach((placement) => {
-      if (purple.has(placement.id)) return;
-      if (isOptionalPlacement(placement, prunedPlacementIds)) visible.delete(placement.id);
+      if (isDungeonKeyItem(placement.item)) return;
+      if (!isOptionalPlacement(placement, prunedPlacementIds)) {
+        visible.add(placement.id);
+        return;
+      }
+      if (!purple.has(placement.id)) visible.delete(placement.id);
     });
   }
 

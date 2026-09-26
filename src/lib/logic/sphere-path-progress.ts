@@ -21,6 +21,7 @@ import {
   getSphereCalculationInput,
   getSphereLogicStartingGear,
   getSphereReachabilityWithOwnDungeonKeys,
+  getUnknownSourceItems,
   isOwnDungeonKeyForPath
 } from "$lib/logic/sphere-calculation";
 
@@ -93,7 +94,7 @@ export function getPathBossProgressEntries(
       level: 0
     })),
     ...knowledge.acquiredShardSources.map((source) => ({ id: source.id, item: source.item, level: 0 })),
-    ...knowledge.autosaveItemSources.map((source) => ({ id: source.id, item: source.item, level: 0 }))
+    ...knowledge.unknownSourceItems.map((source) => ({ id: source.id, item: source.item, level: 0 }))
   ].filter((source) => !isOwnDungeonKeyForPath(source.item));
 
   const maxLevel = Math.max(0, ...relativeSources.map((source) => source.level));
@@ -307,7 +308,7 @@ export function getPathLogicalItems(
   knowledge.placements.forEach((placement) => sourceItems.set(placement.id, placement.item));
   knowledge.areaHints.forEach((hint) => sourceItems.set(`sphere-area-hint-${hint.lineNumber}`, hint.left.name));
   knowledge.acquiredShardSources.forEach((source) => sourceItems.set(source.id, source.item));
-  knowledge.autosaveItemSources.forEach((source) => sourceItems.set(source.id, source.item));
+  knowledge.unknownSourceItems.forEach((source) => sourceItems.set(source.id, source.item));
 
   return [...new Set(progress.logicalIds ?? [])]
     .map((id) => ({ id, item: sourceItems.get(id) }))
@@ -460,7 +461,11 @@ function withholdingBlocksGoal(
   if (cached !== undefined) return cached;
 
   const remaining = knowledge.placements.filter((placement) => placement.id !== placementId);
-  const result = WWRSphereEngine.calculate(getSphereCalculationInput(remaining, false));
+  const input = getSphereCalculationInput(remaining, false);
+  // Everything known, which includes what is held with no location: the
+  // spheres withhold those, but this asks about the seed, not about spheres.
+  const heldWithoutLocation = getUnknownSourceItems().map((source) => source.item);
+  const result = WWRSphereEngine.calculate({ ...input, startingGear: [...(input.startingGear ?? []), ...heldWithoutLocation] });
   const blocked = !Number.isInteger(result.locationSpheres[bossKey]);
   cache.set(cacheKey, blocked);
   return blocked;
@@ -491,7 +496,10 @@ export function narrowCandidatesToGoal(
   if (!bossLocation) return candidates;
 
   const bossKey = normalize(bossLocation);
-  if (!Number.isInteger(calculation.locationSpheres[bossKey])) return candidates;
+  // Withholding nothing: is the boss reachable with everything known at all?
+  // Asked the same way as the test below rather than of the spheres, which
+  // hold back items with no location.
+  if (withholdingBlocksGoal("", bossKey, knowledge, calculation)) return candidates;
 
   const placementIds = new Set(knowledge.placements.map((placement) => placement.id));
   const gating = candidates.filter((candidate) => (

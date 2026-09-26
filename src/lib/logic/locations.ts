@@ -121,8 +121,17 @@ export function getAreaLocationChoices(areaName: string, targetKind: "sector" | 
     if (sectorArea !== areaName) possibleAreas.length = 0;
     possibleAreas.unshift(sectorArea);
   } else if (targetKind === "area") {
-    const trackedArea = TRACKED_AREAS.find((area) => normalize(area.name) === normalize(areaName));
-    if (trackedArea) possibleAreas.push(...trackedArea.matchNames);
+    // Found by either spelling, and answered with all of them. The location
+    // pool calls the sea "Great Sea" while the world's own hint region is "The
+    // Great Sea", so a hint that resolved to the pool's name matched none of
+    // the region's locations: "sea to kalle" named an area with nothing in it,
+    // and the tree it should have grown never had a root to grow from.
+    const trackedArea = TRACKED_AREAS.find(
+      (area) =>
+        normalize(area.name) === normalize(areaName) ||
+        area.matchNames.some((match) => normalize(match) === normalize(areaName))
+    );
+    if (trackedArea) possibleAreas.push(trackedArea.name, ...trackedArea.matchNames);
   }
 
   const areaKeys = unique(possibleAreas).map(normalize);

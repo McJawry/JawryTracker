@@ -23,7 +23,7 @@
   } from "$lib/state/ui.svelte";
   import { sphere, saveSphereState } from "$lib/state/sphere.svelte";
   import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
-  import { assignPaletteEntryToLocation, needsRemovalChoice } from "$lib/logic/assignment";
+  import { answerArmedLocation, isFindableItem, needsRemovalChoice } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { getHeldTriforceShardCount, getShardTrackingState } from "$lib/logic/shard-tracking";
@@ -124,9 +124,9 @@
       return;
     }
     if (ui.pendingLocationForItemAssignment) {
-      recordTrackerAction();
-      // Disarms the location itself - see assignment.ts.
-      assignPaletteEntryToLocation(itemName, ui.pendingLocationForItemAssignment);
+      // Refused for starting gear, and one of the held copies once they are
+      // all found - see answerArmedLocation. It disarms the location itself.
+      answerArmedLocation(itemName, ui.pendingLocationForItemAssignment);
       return;
     }
     recordTrackerAction();
@@ -175,7 +175,7 @@
     <ChartMenu />
   {/if}
   {#if ui.itemCardPicker}
-    <ItemCardPicker item={ui.itemCardPicker} onClose={closeItemCardPicker} />
+    <ItemCardPicker item={ui.itemCardPicker} target={ui.itemCardPickerTarget} onClose={closeItemCardPicker} />
   {/if}
   {#each paletteEntries as entry (entry.row + ":" + entry.column)}
     {#if entry.kind === "pearl-cluster"}
@@ -184,7 +184,7 @@
           <button
             type="button"
             class="item-palette-slot tracking-item-slot {pearl.className}"
-            class:glow={ui.pendingLocationForItemAssignment !== null && hoveredItem === pearl.itemName}
+            class:glow={ui.pendingLocationForItemAssignment !== null && hoveredItem === pearl.itemName && isFindableItem(pearl.itemName)}
             title={pearl.itemName}
             onpointerdown={(event) => beginItemDrag(pearl.itemName, event, () => handleLeftClick(pearl.itemName))}
             oncontextmenu={(event) => handleRightClick(event, pearl.itemName)}
@@ -202,7 +202,7 @@
         type="button"
         class="item-palette-slot tracking-item-slot"
         class:large
-        class:glow={ui.pendingLocationForItemAssignment !== null && hoveredItem === itemName}
+        class:glow={ui.pendingLocationForItemAssignment !== null && hoveredItem === itemName && isFindableItem(itemName)}
         style="grid-column: {entry.column} / span {large ? 2 : 1}; grid-row: {entry.row} / span {large ? 2 : 1}"
         title={itemName}
         onpointerdown={(event) =>

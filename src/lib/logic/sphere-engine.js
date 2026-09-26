@@ -1345,12 +1345,25 @@
       initial.prunedPlacementIds = [];
       return initial;
     }
+    // Items held from no known point in the run (input.heldWithoutSphere) sit
+    // out the spheres - what they open waits on them - but not the pare-down,
+    // which asks whether the seed can be beaten without a card, given what is
+    // held. Left out of it too, one unplaced Deku Leaf could put Ganondorf out
+    // of reach and no card anywhere would read Optional. The inventory-keyed
+    // reachability cache serves both runs.
+    const heldWithoutSphere = input.heldWithoutSphere || [];
+    const pruneInput = heldWithoutSphere.length
+      ? { ...input, startingGear: [...(input.startingGear || []), ...heldWithoutSphere] }
+      : input;
+    const pruneInitial = heldWithoutSphere.length
+      ? calculateCore({ ...pruneInput, includeDependencies: false, reachabilityCache })
+      : initial;
     const goalLocation = normalize("Ganon's Tower - Defeat Ganondorf");
-    const goalIsReachable = Number.isInteger(initial.locationSpheres[goalLocation]);
+    const goalIsReachable = Number.isInteger(pruneInitial.locationSpheres[goalLocation]);
     const baselineTargets = new Set(goalIsReachable
       ? [goalLocation]
       : placements
-        .filter((placement) => Number.isInteger(initial.locationSpheres[normalize(placement.location)]))
+        .filter((placement) => Number.isInteger(pruneInitial.locationSpheres[normalize(placement.location)]))
         .map((placement) => normalize(placement.location)));
     const duplicateCounts = new Map();
     placements.forEach((placement) => {
@@ -1366,7 +1379,7 @@
     let activePlacements = [...placements];
     const prunedPlacementIds = new Set();
     const candidates = placements
-      .filter((placement) => !placement.fromHint && Number.isInteger(initial.placementSpheres[placement.id]))
+      .filter((placement) => !placement.fromHint && Number.isInteger(pruneInitial.placementSpheres[placement.id]))
       .filter((placement) => {
         const itemKey = getInventoryItemKey(placement.item, placement.location);
         if (/(?:small|big|boss) key$/.test(itemKey) || normalize(placement.item) === "game beatable") return false;
@@ -1386,7 +1399,7 @@
         if (itemKey === "progressive shield" && Boolean(getOptionValue(input.options || {}, "Jalhalla Required").value)) return false;
         return goalIsReachable || (duplicateCounts.get(itemKey) || 0) > 1;
       })
-      .sort((first, second) => initial.placementSpheres[first.id] - initial.placementSpheres[second.id]);
+      .sort((first, second) => pruneInitial.placementSpheres[first.id] - pruneInitial.placementSpheres[second.id]);
 
     candidates.forEach((candidate) => {
       const itemKey = getInventoryItemKey(candidate.item, candidate.location);
@@ -1406,7 +1419,7 @@
       }
 
       const withoutCandidate = activePlacements.filter((placement) => placement.id !== candidate.id);
-      const test = calculateCore({ ...input, placements: withoutCandidate, includeDependencies: false, reachabilityCache });
+      const test = calculateCore({ ...pruneInput, placements: withoutCandidate, includeDependencies: false, reachabilityCache });
       if (![...baselineTargets].every((locationKey) => Number.isInteger(test.locationSpheres[locationKey]))) return;
       activePlacements = withoutCandidate;
       prunedPlacementIds.add(candidate.id);
@@ -1437,6 +1450,10 @@
     });
 
     result.prunedPlacementIds = [...prunedPlacementIds];
+    // Where everything would sit with the held items counted: a card with no
+    // sphere that is reachable here is waiting on one of them, not out of
+    // logic. The same as locationSpheres when nothing is held that way.
+    result.locationSpheresWithHeld = pruneInitial.locationSpheres;
     return result;
   }
 

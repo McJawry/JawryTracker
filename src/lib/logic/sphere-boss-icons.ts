@@ -18,6 +18,7 @@ import {
   getSphereReachabilityWithPlacedDungeonKeys,
   isOwnDungeonKeyForPath,
   placedOwnDungeonKeySignature,
+  withoutFoundCopies,
   type ReachabilityOptions
 } from "$lib/logic/sphere-calculation";
 import { pathHintAreaKey } from "$lib/logic/sphere-path-progress";
@@ -62,7 +63,9 @@ export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined
   if (cached !== undefined) return cached;
 
   const maximalInventory = getMaximalSphereLogicInventory();
-  const reducedInventory = maximalInventory.filter((item) => getSphereInventoryItemKey(item) !== itemKey);
+  // The copies the seed starts with stay: those are never where a path item
+  // came from. Nothing left to take away means this cannot be one.
+  const reducedInventory = withoutFoundCopies(maximalInventory, itemKey);
   if (reducedInventory.length === maximalInventory.length) {
     sphereHardBossRequirementCache.set(cacheKey, false);
     return false;
@@ -195,11 +198,13 @@ export function getPossiblePathItemKeysForBoss(bossName: string): Set<string> {
     maximal.some((item) => getSphereInventoryItemKey(item) === key)
   );
   const copiesOf = (key: string) => maximal.filter((item) => getSphereInventoryItemKey(item) === key);
-  const outsideTheDungeon = maximal.filter((item) => !universe.includes(getSphereInventoryItemKey(item)));
-  const cannotDoWithout = universe.filter(
-    (key) => !reaches(maximal.filter((item) => getSphereInventoryItemKey(item) !== key), options)
-  );
-  const floor = [...outsideTheDungeon, ...cannotDoWithout.flatMap(copiesOf)];
+  // Stripping an item leaves whatever the seed starts you with - a starting
+  // Sword still defeats the Mothulas, so nothing that could stand in for it
+  // there is ever what the boss turns on.
+  const cannotDoWithout = universe.filter((key) => !reaches(withoutFoundCopies(maximal, key), options));
+  const floor = universe
+    .filter((key) => !cannotDoWithout.includes(key))
+    .reduce((inventory, key) => withoutFoundCopies(inventory, key), maximal);
 
   const candidates = new Set<string>();
   // Nothing optional stands in the way, so nothing optional can be the path
@@ -209,7 +214,8 @@ export function getPossiblePathItemKeysForBoss(bossName: string): Set<string> {
       if (cannotDoWithout.includes(key)) return;
       const copies = copiesOf(key);
       if (!copies.length || isOwnDungeonKeyForPath(copies[0])) return;
-      if (reaches([...floor, ...copies], options)) candidates.add(key);
+      const restored = [...floor.filter((item) => getSphereInventoryItemKey(item) !== key), ...copies];
+      if (reaches(restored, options)) candidates.add(key);
     });
   }
   sphereSoftBossCandidateCache.set(cacheKey, candidates);

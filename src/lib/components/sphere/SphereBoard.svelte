@@ -9,11 +9,9 @@
   // "Paths" column when nothing reaches it yet (sphere-path-progress.ts).
   //
   // Still deferred: SVG dependency-line drawing between columns, and the
-  // candidate-item row under each path card. The original's acquired-shard,
-  // area-hint and autosave nodes are also not rendered here - the knowledge
-  // sources that feed them (acquiredShardSources/areaHints/
-  // autosaveItemSources) are still empty in this port, so those nodes would
-  // have nothing to show.
+  // candidate-item row under each path card. The original's autosave nodes
+  // are the unplaced-item cards in the "Sphere ?" column here (the knowledge
+  // calls them unknownSourceItems).
   import { WWRSphereEngine } from "$lib/logic";
   import type { SpherePlacement } from "$lib/state/sphere.svelte";
   import { data } from "$lib/state/data.svelte";

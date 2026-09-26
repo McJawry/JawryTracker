@@ -18,7 +18,7 @@
   import { DUNGEON_DRAG_MIME } from "./dungeon-drag";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { beginItemDrag } from "$lib/logic/item-drag";
-  import { assignPaletteEntryToLocation } from "$lib/logic/assignment";
+  import { answerArmedLocation } from "$lib/logic/assignment";
 
 
   const shards = $derived(
@@ -40,18 +40,19 @@
   // click does - right-clicking a location then clicking a shard previously
   // just toggled the shard and left the location armed.
   function onShardClick(number: number, isChecked: boolean) {
-    recordTrackerAction();
     const pending = ui.pendingLocationForItemAssignment;
     if (pending) {
-      assignPaletteEntryToLocation(`Triforce Shard ${number}`, pending);
       // Placing a shard means you found it, so it also has to read as
       // acquired. Shard ownership lives in the checked-state tracking that
       // both the shard column and the item grid's triforce cell read - the
       // generic item-stage advance inside assignPaletteEntryToLocation writes
-      // a "Triforce Shard N" key neither of them looks at.
-      setShardTrackingChecked(number, true);
+      // a "Triforce Shard N" key neither of them looks at. A starting shard is
+      // refused, and one already found is moved rather than found twice - see
+      // answerArmedLocation.
+      answerArmedLocation(`Triforce Shard ${number}`, pending, () => setShardTrackingChecked(number, true));
       return;
     }
+    recordTrackerAction();
     setShardTrackingChecked(number, !isChecked);
   }
 

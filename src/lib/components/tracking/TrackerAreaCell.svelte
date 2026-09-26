@@ -38,7 +38,8 @@
     fontSize = "0.68rem",
     acceptsEntranceDrop = false,
     entranceBadges = [],
-    onEntranceBadgeClear
+    onEntranceBadgeClear,
+    hintIconsOutside = false
   }: {
     areaName: string;
     targetKind: "sector" | "area";
@@ -49,6 +50,8 @@
     acceptsEntranceDrop?: boolean;
     entranceBadges?: Array<{ name: string; abbreviation: string }>;
     onEntranceBadgeClear?: (dungeonName: string) => void;
+    /** The row draws this area's hint icons above the cell instead (AreaHintStrip). */
+    hintIconsOutside?: boolean;
   } = $props();
 
   const accessibility = $derived(getAreaAccessibility(areaName, targetKind));
@@ -65,6 +68,7 @@
   // Preserves the parsed-hint icon overlays SeaGrid.svelte/AreaStrip.svelte
   // used to show, now on the unified TrackerAreaCell.
   const hintIcons = $derived.by(() => {
+    if (hintIconsOutside) return [];
     if (targetKind === "sector") return getSectorHints(areaName);
     const trackedArea = TRACKED_AREAS.find((area) => area.name === areaName);
     return trackedArea ? getAreaHints(trackedArea) : [];

@@ -94,6 +94,11 @@ export const ui: {
   hoveredRowName: string;
   /** Item whose copies are being offered for removal, if any. */
   itemCardPicker: string | null;
+  /**
+   * Set when the picker asks which copy to *replace* rather than remove: the
+   * armed location a held copy is being moved to. See answerArmedLocation.
+   */
+  itemCardPickerTarget: string | null;
 } = $state({
   dataStatus: "Loading data...",
   locationDropList: null,
@@ -104,7 +109,8 @@ export const ui: {
   markStartingMode: readMarkStartingMode(),
   highlightSectorMode: false,
   hoveredRowName: "",
-  itemCardPicker: null
+  itemCardPicker: null,
+  itemCardPickerTarget: null
 });
 
 /**
@@ -228,12 +234,14 @@ export function reloadPendingLocationFromStorage(): void {
   ui.pendingLocationForItemAssignment = readPendingLocation();
 }
 
-export function openItemCardPicker(itemName: string): void {
+export function openItemCardPicker(itemName: string, target: string | null = null): void {
   ui.itemCardPicker = itemName;
+  ui.itemCardPickerTarget = target;
 }
 
 export function closeItemCardPicker(): void {
   ui.itemCardPicker = null;
+  ui.itemCardPickerTarget = null;
 }
 
 export function showHoveredRowName(name: string): void {

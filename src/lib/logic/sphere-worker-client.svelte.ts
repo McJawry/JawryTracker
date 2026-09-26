@@ -59,7 +59,7 @@ function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
     pathHints: knowledge.pathHints.map((hint) => [hint.lineNumber, hint.left.name, hint.right.name]),
     barrenHints: knowledge.barrenHints.map((hint) => [hint.lineNumber, hint.left.name]),
     acquiredShards: knowledge.acquiredShardSources.map((source) => source.number),
-    autosaveItems: knowledge.autosaveItemSources.map((source) => source.item),
+    unknownSourceItems: knowledge.unknownSourceItems.map((source) => source.item),
     startingGear: data.sphereStartingGear,
     // Assigning a dungeon to an island changes what is reachable, and it does
     // it without touching placements, items or checks - so without this the

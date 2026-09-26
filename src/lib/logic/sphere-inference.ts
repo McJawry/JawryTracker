@@ -1,16 +1,17 @@
 // Ported from dev/app/app.js (getResolvedProgressiveUpgradeProviders,
 // inferRelativeUnknownSpheres) - including this session's fix: the
-// dependencySources.forEach loop only runs when availableLocations or
+// sources.forEach loop only runs when availableLocations or
 // unresolvedPlacements is non-empty, since every write inside it is gated by
 // one of those two and was previously wasting a full reachability
 // computation per distinct pruned/unresolved item on every update even when
 // nothing could consume the result.
 //
-// knowledge.acquiredShardSources/autosaveItemSources/areaHints are always
-// empty in this port's simplified getSphereTrackingKnowledge(), and
-// placement.fromHint is always false (no hint-derived placements yet), which
-// safely drops the original's getShardTrackingState() checkbox-UI branch -
-// it's unreachable given placement.fromHint is always false.
+// knowledge.unknownSourceItems are the original's autosaveItemSources, fed by
+// the Item Tracker. Unlike those they are dependency sources too: the board
+// gives each one a card, so what it opens can hang off it the way it hangs off
+// an item found out of logic. The original's getShardTrackingState()
+// checkbox-UI branch is still dropped - it is only reached for fromHint
+// placements, which never carry shards here.
 import { WWRSphereEngine } from "$lib/logic";
 import type { SphereCalculationResult } from "$lib/logic";
 import { data } from "$lib/state/data.svelte";
@@ -144,17 +145,28 @@ export interface RelativeUnknownResult {
 
 export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, calculation: SphereCalculationResult): RelativeUnknownResult {
   const prunedPlacementIds = new Set(calculation.prunedPlacementIds || []);
-  const unresolvedPlacements = knowledge.placements.filter(
-    (placement) => !Number.isInteger(calculation.placementSpheres[placement.id]) && !prunedPlacementIds.has(placement.id)
+  // An Optional card is normally left out: it has a sphere, and a numbered
+  // column - which the board picks by the location's sphere - to sit in. Not
+  // always, though: the pare-down counts items held with no location and the
+  // spheres do not, so a card only such an item opens can be Optional with no
+  // sphere at all. It used to fall out of both kinds of column and off the
+  // board; it is unresolved like any other card with nowhere to go.
+  const hasNumberedColumn = (placement: SpherePlacement) =>
+    Number.isInteger(calculation.placementSpheres[placement.id]) ||
+    Number.isInteger(calculation.locationSpheres[normalize(placement.location)]);
+  const unresolvedPlacements = knowledge.placements.filter((placement) =>
+    prunedPlacementIds.has(placement.id) ? !hasNumberedColumn(placement) : !Number.isInteger(calculation.placementSpheres[placement.id])
   );
-  const prunedPlacements = knowledge.placements.filter((placement) => prunedPlacementIds.has(placement.id) && !placement.fromHint);
+  const prunedPlacements = knowledge.placements.filter(
+    (placement) => prunedPlacementIds.has(placement.id) && hasNumberedColumn(placement) && !placement.fromHint
+  );
   const areaSources = knowledge.areaHints.map((hint) => ({ id: `sphere-area-hint-${hint.lineNumber}`, item: hint.left.name }));
-  const sources: Array<{ id: string; item: string; location?: string; fromHint?: boolean; fromAutosave?: boolean }> = [
+  const sources: Array<{ id: string; item: string; location?: string; fromHint?: boolean }> = [
     ...unresolvedPlacements,
     ...prunedPlacements,
     ...areaSources,
     ...knowledge.acquiredShardSources,
-    ...knowledge.autosaveItemSources
+    ...knowledge.unknownSourceItems
   ];
   const placementLevels = new Map<string, number>(unresolvedPlacements.map((placement) => [placement.id, 0]));
   const dependencies = new Map<string, string[]>(unresolvedPlacements.map((placement) => [placement.id, []]));
@@ -180,15 +192,15 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
   const reducedReachability = new Map<string, Set<string>>();
   const getReachableLocations = getSphereReachableLocationSet;
 
-  const acquiredUnknownSources = [
+  const acquiredUnknownSources: Array<{ item: string; location?: string }> = [
     ...unresolvedPlacements.filter((placement) => !placement.fromHint),
     ...prunedPlacements,
     ...knowledge.acquiredShardSources,
-    ...knowledge.autosaveItemSources
+    ...knowledge.unknownSourceItems
   ];
   const reachableWithAcquiredItems = getSphereReachabilityWithOwnDungeonKeys([
     ...knownItems,
-    ...acquiredUnknownSources.map((source) => getDungeonSmallKeyName(source.item, "location" in source ? source.location : "") || source.item)
+    ...acquiredUnknownSources.map((source) => getDungeonSmallKeyName(source.item, source.location ?? "") || source.item)
   ]);
   const occupiedLocationKeys = new Set(knowledge.placements.map((placement) => normalize(placement.location)));
   const availableLocations = getAvailableLocations().filter((location) => {
@@ -202,10 +214,9 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
   });
   const availableDependencies = new Map<string, string[]>(availableLocations.map((location) => [normalize(location), []]));
 
-  const dependencySources = sources.filter((source) => !source.fromAutosave);
   const requiredItemCache = new Map();
   if (availableLocations.length || unresolvedPlacements.length) {
-    dependencySources.forEach((source) => {
+    sources.forEach((source) => {
       const itemKey = normalize(source.item);
       if (!reachableByItem.has(itemKey)) {
         reachableByItem.set(itemKey, getReachableLocations([...knownItems, source.item]));
