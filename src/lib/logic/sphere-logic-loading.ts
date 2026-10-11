@@ -19,9 +19,16 @@ export { getLocationAreaKey, getLocationAlias, scoreEquivalentLocationName } fro
 function mapSphereRulesToLocationPool(logicLocations: ParsedLogicLocationEntry[]): {
   rules: Record<string, unknown>;
   locationAreas: Record<string, string>;
+  locationLogicNames: Record<string, string>;
 } {
   const rules: Record<string, unknown> = {};
   const locationAreas: Record<string, string> = {};
+  // Which logic location each tracker location turned out to be. Anything the
+  // logic itself keys by its own names has to be asked under this one: the
+  // flattened requirements did not know "Five Eye Reef - Destroy Cannons and
+  // Gunboats", the tracker's older name for "Destroy Cannons", so its tooltip
+  // said no logic was loaded while its colour was worked out fine.
+  const locationLogicNames: Record<string, string> = {};
   const sourceByKey = new Map(logicLocations.map((entry) => [normalize(entry.name), entry]));
   const sourceByArea = new Map<string, ParsedLogicLocationEntry[]>();
   logicLocations.forEach((entry) => {
@@ -45,11 +52,12 @@ function mapSphereRulesToLocationPool(logicLocations: ParsedLogicLocationEntry[]
     if (source) {
       const key = normalize(location);
       rules[key] = source.need;
+      locationLogicNames[key] = normalize(source.name);
       if (source.area) locationAreas[key] = normalize(source.area);
     }
   });
 
-  return { rules, locationAreas };
+  return { rules, locationAreas, locationLogicNames };
 }
 
 // Ported from getSyncedStartingIsland() (dev/app/app.js:4865).
@@ -125,7 +133,9 @@ export function applySphereLogic(
   const mapped = mapSphereRulesToLocationPool(parsed.locations);
   data.sphereRules = mapped.rules;
   data.sphereMacros = parsed.macros;
-  data.sphereWorld = parsed.world ? { ...parsed.world, locationAreas: mapped.locationAreas } : null;
+  data.sphereWorld = parsed.world
+    ? { ...parsed.world, locationAreas: mapped.locationAreas, locationLogicNames: mapped.locationLogicNames }
+    : null;
   data.sphereOptions = WWRSphereEngine.parseConfig(configText);
   data.sphereStartingIsland = getSyncedStartingIsland(configText);
   data.requiredBosses = new Set(getYamlListSection(configText, "required_bosses").map(normalize));

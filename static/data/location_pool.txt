@@ -89,7 +89,9 @@
         - Outset Island - Jabun's Cave Chest
         - Outset Island - Mesa's House Chest
         - Outset Island - Orca Give 10 Knight's Crests
+        - Outset Island - Orca Hit 500 Times
         - Outset Island - Savage Labyrinth Floor 30
+        - Outset Island - Savage Labyrinth Floor 50
         - Outset Island - Sunken Treasure
         - Outset Island - Under Link's House
         - Overlook Island - Cave Chest
@@ -172,6 +174,10 @@
         - Windfall Island - House of Wealth Chest
         - Windfall Island - Ivan Catch Killer Bees
         - Windfall Island - Kamo Full Moon Picture
+        - Windfall Island - Kane Decorate Postman Statue
+        - Windfall Island - Kane Decorate Shop Guru
+        - Windfall Island - Kane Decorate Six Flags
+        - Windfall Island - Kane Decorate Six Idols
         - Windfall Island - Kreeb Light the Lighthouse
         - Windfall Island - Lenzo Become Assistant
         - Windfall Island - Lenzo Bring Forest Firefly
@@ -277,6 +283,7 @@
         - Great Sea - Beedle Shop 20 Rupee Item
         - Great Sea - Cyclos
         - Great Sea - Ghost Ship Chest
+        - Great Sea - Goron Trading Reward
         - Great Sea - Salvage Corp Gift
         - Great Sea - Withered Trees
         - Ganon's Tower - Defeat Ganondorf

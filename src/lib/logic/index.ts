@@ -37,6 +37,8 @@ export interface SphereWorld {
   startArea: string;
   shuffleEntrances?: EntranceTableEntry[];
   shuffleEntranceByEdge?: Record<string, { entry: EntranceTableEntry; side: EntranceSide }>;
+  /** Tracker location key -> the logic location it was matched to (sphere-logic-loading). */
+  locationLogicNames?: Record<string, string>;
   [key: string]: unknown;
 }
 

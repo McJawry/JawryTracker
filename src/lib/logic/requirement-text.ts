@@ -514,7 +514,10 @@ function getEntrancePathSteps(location: string): string[] {
 
 export function getLocationRequirements(location: string): LocationRequirements {
   const entrancePath = getEntrancePathSteps(location);
-  const requirement = getFlattenedRequirements()[normalize(location)];
+  // Flattened under the logic's own names, which a renamed location does not
+  // share - see locationLogicNames.
+  const locationKey = normalize(location);
+  const requirement = getFlattenedRequirements()[data.sphereWorld?.locationLogicNames?.[locationKey] ?? locationKey];
 
   // No entry at all: the logic isn't loaded, or this location isn't in the seed.
   if (!requirement) return { entrancePath, terms: [], unknown: true };
