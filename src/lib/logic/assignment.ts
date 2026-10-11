@@ -23,7 +23,7 @@ import { ITEM_STAGE_TABLES, getItemMaxStage } from "$lib/state/item-tracker.svel
 import { advanceEffectiveItemStage, getEffectiveItemStage, getStartingItemStage } from "$lib/logic/starting-gear-items";
 import { clearPendingLocationForItemAssignment, openItemCardPicker } from "$lib/state/ui.svelte";
 import { retreatEffectiveItemStage } from "$lib/logic/starting-gear-items";
-import { getShardTrackingState, getTriforceShardNumber, setShardTrackingChecked } from "$lib/logic/shard-tracking";
+import { getShardTrackingState, getTriforceShardNumber, isStartingShard, setShardTrackingChecked } from "$lib/logic/shard-tracking";
 import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
 import {
   cycleSmallKeys,
@@ -34,8 +34,6 @@ import {
   hasStartingDungeonItem,
   toggleDungeonFlag
 } from "$lib/state/dungeon-items.svelte";
-import { data } from "$lib/state/data.svelte";
-import { settings } from "$lib/state/settings.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -66,7 +64,7 @@ export function isFindableItem(itemName: string): boolean {
 
   const shard = getTriforceShardNumber(itemName);
   if (shard) {
-    return !settings.startingGearShards.includes(shard) && !data.sphereStartingGear.some((gear) => getTriforceShardNumber(gear) === shard);
+    return !isStartingShard(shard);
   }
 
   if (ITEM_STAGE_TABLES[itemName]) return getStartingItemStage(itemName) < getItemMaxStage(itemName);

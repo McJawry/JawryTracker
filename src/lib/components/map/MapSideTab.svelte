@@ -8,7 +8,7 @@
   // input methods that don't drag well - SeaGrid.svelte's handleSectorClick/
   // handleSectorDrop complete either one.
   import { itemImage, miscImage } from "$lib/logic/images";
-  import { getShardTrackingState, setShardTrackingChecked } from "$lib/logic/shard-tracking";
+  import { getShardTrackingState, isStartingShard, setShardTrackingChecked } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { checked } from "$lib/state/checked.svelte";
   import { sphere } from "$lib/state/sphere.svelte";
@@ -25,7 +25,7 @@
     Array.from({ length: 8 }, (_, index) => {
       const number = index + 1;
       const trackingState = getShardTrackingState(number);
-      return { number, ...trackingState, isStartingGear: settings.startingGearShards.includes(number) };
+      return { number, ...trackingState, isStartingGear: isStartingShard(number) };
     })
   );
 

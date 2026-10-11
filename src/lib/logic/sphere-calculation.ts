@@ -403,8 +403,19 @@ export interface ReachabilityOptions {
 }
 
 function reachabilityCacheKey(items: string[], options: ReachabilityOptions): string {
+  return JSON.stringify({ items: items.map(normalize).sort(), context: getReachabilityContextKey(options) });
+}
+
+/**
+ * Everything besides the inventory that decides what is reachable: entrances,
+ * marks, beaten bosses. Any cache whose answers come from reachability has to
+ * key on this, or it goes on answering for a world that has since changed -
+ * the path-boss caches keyed on the seed options alone, so recording
+ * Headstone Island -> Forbidden Woods left the board showing icons for the
+ * old world until the window was reloaded.
+ */
+export function getReachabilityContextKey(options: ReachabilityOptions = {}): string {
   return JSON.stringify({
-    items: items.map(normalize).sort(),
     additionalStartAreas: (options.additionalStartAreas || []).map(normalize).sort(),
     startingIsland: normalize(data.sphereStartingIsland),
     entranceMappings: Object.entries(getEffectiveEntranceMappings())
@@ -799,7 +810,9 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
 
   const cacheKey = JSON.stringify({
     locations: getAvailableLocations(),
-    manualEntrances: getEffectiveEntranceMappings(),
+    // Recorded entrances, marks and beaten bosses as well as the badges: the
+    // pools are worked out from what can be reached.
+    context: getReachabilityContextKey(),
     smallKeysOwnDungeon,
     bigKeysOwnDungeon
   });

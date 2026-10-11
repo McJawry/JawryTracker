@@ -46,6 +46,20 @@ export function setShardTrackingChecked(number: number, isChecked: boolean): voi
 /** Eight shards make the Triforce of Courage, and there are no more than that. */
 export const TRIFORCE_SHARD_COUNT = 8;
 
+/**
+ * Whether the run starts with this shard: it is in the seed's starting gear,
+ * or it was marked as starting by hand in the shard column.
+ *
+ * The seed's half used to come only from settings.startingGearShards, which
+ * just a folder Sync writes - so a config that arrived any other way (an
+ * autosave loaded, the saved config replayed at startup) left the Triforce
+ * and the shard column showing no starting shards at all, while the logic,
+ * which reads the starting gear itself, counted them all along.
+ */
+export function isStartingShard(number: number): boolean {
+  return settings.startingGearShards.includes(number) || data.sphereStartingGear.some((gear) => getTriforceShardNumber(gear) === number);
+}
+
 /** Whether an item is a Triforce shard at all, numbered or generic. */
 export function isTriforceShardItem(item: string): boolean {
   return /^triforce shard( [1-8])?$/.test(WWRSphereEngine.normalize(item));

@@ -18,7 +18,7 @@ import { WWRSphereEngine } from "$lib/logic";
 import { REQUIRED_BOSS_OPTION_KEYS, TRACKED_AREAS } from "$lib/gameData";
 import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
 import { getEffectiveItemStage, getStartingItemStage } from "$lib/logic/starting-gear-items";
-import { getShardTrackingState } from "$lib/logic/shard-tracking";
+import { getShardTrackingState, isStartingShard } from "$lib/logic/shard-tracking";
 import { getAcquiredCharts } from "$lib/logic/chart-tracking";
 import {
   getDungeonItems,
@@ -26,7 +26,6 @@ import {
   hasKeyItems,
   hasStartingDungeonItem
 } from "$lib/state/dungeon-items.svelte";
-import { settings } from "$lib/state/settings.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
 
 const normalize = WWRSphereEngine.normalize;
@@ -88,7 +87,7 @@ export function getUnplacedAcquiredItems(): UnplacedItem[] {
   // Ones crossed out there are the seed's starting gear, so they're excluded
   // for the same reason starting gear is above.
   for (let number = 1; number <= 8; number += 1) {
-    if (settings.startingGearShards.includes(number)) continue;
+    if (isStartingShard(number)) continue;
     if (!getShardTrackingState(number).isChecked) continue;
     push(`Triforce Shard ${number}`, 1);
   }

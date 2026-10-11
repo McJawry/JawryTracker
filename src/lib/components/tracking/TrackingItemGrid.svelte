@@ -26,7 +26,7 @@
   import { answerArmedLocation, isFindableItem, needsRemovalChoice } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
-  import { getHeldTriforceShardCount, getShardTrackingState } from "$lib/logic/shard-tracking";
+  import { getHeldTriforceShardCount, getShardTrackingState, isStartingShard } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
   import { itemImage } from "$lib/logic/images";
@@ -66,7 +66,7 @@
   // tinted red to mark where it came from.
   const ownedShards = $derived(
     Array.from({ length: 8 }, (_, index) => index + 1)
-      .map((number) => ({ number, starting: settings.startingGearShards.includes(number) }))
+      .map((number) => ({ number, starting: isStartingShard(number) }))
       .filter(({ number, starting }) => starting || getShardTrackingState(number).isChecked)
   );
   const allShards = $derived(ownedShards.length === 8);
