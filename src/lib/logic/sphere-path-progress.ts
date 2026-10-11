@@ -15,7 +15,7 @@ import { WWRSphereEngine, type SphereCalculationResult } from "$lib/logic";
 import type { Hint } from "$lib/state/hints.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
-import { getBossLocation } from "$lib/logic/sphere-boss-icons";
+import { answersPathBoss, getBossLocation } from "$lib/logic/sphere-boss-icons";
 import { getPathHintAreaLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
 import {
   getSphereCalculationInput,
@@ -184,7 +184,14 @@ export function getPathHintSourceIds(
   calculation: SphereCalculationResult,
   relativeUnknown: RelativeUnknownResult
 ): string[] {
-  if (progress.kind === "unknown") return [];
+  // Nothing reaches the boss yet, so there is no chain to trace back from it -
+  // the card's own confirmed candidates are its sources, every one of them.
+  // Several are drawn dashed (sphere-edges.ts): any of them may be the item.
+  if (progress.kind === "unknown") {
+    return getPathHintCandidates(hint, knowledge, calculation, relativeUnknown)
+      .filter((candidate) => candidate.confirmed)
+      .map((candidate) => candidate.id);
+  }
 
   const placementsById = new Map(knowledge.placements.map((placement) => [placement.id, placement]));
   const dependenciesFor = (sourceId: string): string[] => {
@@ -328,6 +335,15 @@ export function getPathLogicalItems(
  * (dev/app/app.js:3945). Items already used as a dependency somewhere are
  * "confirmed" and, when any exist, they alone are offered - an item the logic
  * has never needed is a much weaker guess.
+ *
+ * An item that answers the hint's boss (answersPathBoss: the boss cannot be
+ * reached without it, or it is one the boss could turn on) is always offered,
+ * confirmed, whether or not anything depends on it. Left to the dependency
+ * test alone, a Progressive Shield Jalhalla cannot be beaten without dropped
+ * off its card, because nothing reachable yet needed the first shield - while
+ * a Ghost Ship Chart stayed on for opening the Ghost Ship's chest. It does not
+ * push the other candidates off: being required does not make it certain to
+ * be the location the hint was drawn from.
  */
 function buildPathHintCandidates(
   hint: Hint,
@@ -350,7 +366,10 @@ function buildPathHintCandidates(
     ...Object.values(calculation.dependencies).flat(),
     ...[...relativeUnknown.dependencies.values()].flat()
   ]);
-  const confirmed = exactCandidates.filter((placement) => usedDependencies.has(placement.id));
+  const answering = new Set(
+    exactCandidates.filter((placement) => answersPathBoss(placement, hint.right.name)).map((placement) => placement.id)
+  );
+  const confirmed = exactCandidates.filter((placement) => usedDependencies.has(placement.id) || answering.has(placement.id));
   const selectedExact = confirmed.length ? confirmed : exactCandidates;
 
   const areaHintCandidates = knowledge.areaHints
@@ -373,7 +392,7 @@ function buildPathHintCandidates(
       lineNumber: placement.lineNumber ?? null,
       sphere: calculation.placementSpheres[placement.id],
       relativeLevel: relativeUnknown.placementLevels.get(placement.id),
-      confirmed: usedDependencies.has(placement.id)
+      confirmed: usedDependencies.has(placement.id) || answering.has(placement.id)
     })),
     ...areaHintCandidates.map((candidate) => ({
       ...candidate,
