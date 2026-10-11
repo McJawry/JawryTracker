@@ -1450,6 +1450,10 @@
     });
 
     result.prunedPlacementIds = [...prunedPlacementIds];
+    // Whether the pare-down asked about Ganondorf. Until he can be reached it
+    // can only drop spare duplicate copies, so every other card is "kept" by
+    // default rather than by any judgement - see computeHiddenPlacementIds.
+    result.prunedAgainstGoal = goalIsReachable;
     // Where everything would sit with the held items counted: a card with no
     // sphere that is reachable here is waiting on one of them, not out of
     // logic. The same as locationSpheres when nothing is held that way.

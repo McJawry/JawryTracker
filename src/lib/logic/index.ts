@@ -93,6 +93,8 @@ export interface SphereCalculationResult {
   sphereLocations: string[][];
   dependencies: Record<string, string[]>;
   prunedPlacementIds: string[];
+  /** Whether the pare-down was run against Defeat Ganondorf (only once he is reachable) - calculate() only. */
+  prunedAgainstGoal?: boolean;
   /** locationSpheres with input.heldWithoutSphere counted as held - calculate() only. */
   locationSpheresWithHeld?: Record<string, number>;
   [key: string]: unknown;

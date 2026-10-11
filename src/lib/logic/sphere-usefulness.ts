@@ -19,11 +19,14 @@
  *                      with the run already finishable from what is held, no
  *                      unopened chest can hold something that helps beat it,
  *                      so an unfinished branch stops being a reason to keep a
- *                      card. The playthrough then has the last word: a card it
- *                      pared out - the ones the board labels "Optional" - is
- *                      hidden whatever the rules above said, and a card it kept
- *                      is shown, being part of how this seed is played even
- *                      where beating Ganondorf does not turn on it.
+ *                      card. A card the playthrough pared out - the ones the
+ *                      board labels "Optional" - is hidden whatever the rules
+ *                      above said. Once the playthrough was pared against
+ *                      Ganondorf, a card it kept is shown as well, being part
+ *                      of how this seed is played even where beating him does
+ *                      not turn on it. Before that, "kept" is only the default
+ *                      for anything with a single copy, and the rules above
+ *                      decide.
  *
  * The requirement walk seeds the start area of any dungeon nothing can walk to
  * - under entrance randomisation an unrecorded door seals a dungeon off
@@ -60,13 +63,18 @@ const GOAL_LOCATION = "Ganon's Tower - Defeat Ganondorf";
  *
  * Shared with SpherePlacementNode, which draws the label, so what is said and
  * what is hidden cannot drift apart.
+ *
+ * The Picto Box is not on that list. The pare-down drops it on purpose, as the
+ * randomizer's own playthrough does - the earlier of two copies, or both when
+ * Ganondorf needs neither - and overruling it here kept two Picto Boxes that
+ * lead nowhere on the "Paths + required" board of a finished run.
  */
 export function isOptionalPlacement(placement: SpherePlacement, prunedPlacementIds: Iterable<string>): boolean {
   const itemKey = normalize(placement.item);
   // Jalhalla wants the Mirror Shield, so both shields are needed while he is -
   // decided exactly as the calculation that did the paring decides it.
   const mandatoryUpgrade =
-    ["progressive sword", "progressive bow", "progressive picto box"].includes(itemKey) ||
+    ["progressive sword", "progressive bow"].includes(itemKey) ||
     (itemKey === "progressive shield" && isBossRequired("Jalhalla"));
   if (mandatoryUpgrade) return false;
   return [...prunedPlacementIds].includes(placement.id);
@@ -264,6 +272,9 @@ export interface HiddenPlacementsInput {
   sphereLocations?: string[][];
   /** calculation.prunedPlacementIds - the cards labelled "Optional". */
   prunedPlacementIds?: string[];
+  /** calculation.prunedAgainstGoal - whether "kept" was a judgement about
+   *  beating Ganondorf, or just the default before he can be reached. */
+  playthroughFinished?: boolean;
 }
 
 /**
@@ -275,7 +286,8 @@ export async function computeHiddenPlacementIds({
   filters,
   pathChainIds = [],
   sphereLocations = [],
-  prunedPlacementIds = []
+  prunedPlacementIds = [],
+  playthroughFinished = false
 }: HiddenPlacementsInput): Promise<Set<string>> {
   const hidden = new Set<string>();
   if (!placements.length || !data.sphereLogicLoaded || !isSphereFilterActive(filters)) return hidden;
@@ -287,20 +299,26 @@ export async function computeHiddenPlacementIds({
     (await getRequiredAndUnfinishedPlacementIds(placements, sphereLocations)).forEach((id) => visible.add(id));
   }
 
-  // The playthrough has the last word. A card it pared out is labelled Optional
-  // and goes, whatever the rules above made of it - an unfinished branch below
-  // an item the playthrough dropped cannot make that item wanted again. A card
-  // it kept stays, for the mirror of the same reason: the run went through that
-  // chest, so it is part of how this seed is played even when beating Ganondorf
-  // does not turn on it. Purple cards stay either way - they are the other half
-  // of this filter - and dungeon keys are left to the Show keys toggle, which
-  // owns them.
+  // The playthrough has the last word on what it pared out: a card labelled
+  // Optional goes, whatever the rules above made of it - an unfinished branch
+  // below an item the playthrough dropped cannot make that item wanted again.
+  //
+  // On what it kept, only once that verdict was about beating Ganondorf. Then a
+  // kept card stays, for the mirror of the same reason: the run went through
+  // that chest, so it is part of how this seed is played even when beating him
+  // does not turn on it. Before he can be reached the pare-down only drops
+  // spare duplicates, so "kept" is just what every other card is by default -
+  // and treated as a verdict it showed nearly the whole board, an Empty Bottle
+  // that opens nothing included. The rules above decide those.
+  //
+  // Purple cards stay either way - they are the other half of this filter -
+  // and dungeon keys are left to the Show keys toggle, which owns them.
   if (filters.pathsAndRequired) {
     const purple = new Set(pathChainIds);
     placements.forEach((placement) => {
       if (isDungeonKeyItem(placement.item)) return;
       if (!isOptionalPlacement(placement, prunedPlacementIds)) {
-        visible.add(placement.id);
+        if (playthroughFinished) visible.add(placement.id);
         return;
       }
       if (!purple.has(placement.id)) visible.delete(placement.id);

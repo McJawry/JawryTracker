@@ -246,7 +246,8 @@
     const purpleCards = [...pathChainNodeIds];
     let cancelled = false;
     const prunedPlacementIds = calculation?.prunedPlacementIds ?? [];
-    computeHiddenPlacementIds({ placements, filters, pathChainIds: purpleCards, sphereLocations, prunedPlacementIds })
+    const playthroughFinished = Boolean(calculation?.prunedAgainstGoal);
+    computeHiddenPlacementIds({ placements, filters, pathChainIds: purpleCards, sphereLocations, prunedPlacementIds, playthroughFinished })
       .then((ids) => {
         if (!cancelled) hiddenPlacementIds = ids;
       })
