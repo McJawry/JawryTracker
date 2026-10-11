@@ -7,6 +7,7 @@
   import { hints, hintNotes, saveHintNotes } from "$lib/state/hints.svelte";
   import { resetDungeonItemsState } from "$lib/state/dungeon-items.svelte";
   import { resetItemTrackerState } from "$lib/state/item-tracker.svelte";
+  import { data } from "$lib/state/data.svelte";
   import { openPopoutWindow } from "$lib/tauri/popout-window";
   import { HIDEABLE_SECTIONS, SECTION_META } from "$lib/section-meta";
   import { markDocked, markUndocked, undockedState } from "$lib/state/undocked.svelte";
@@ -47,9 +48,13 @@
     // "items", and leaving them behind carried the last run's inventory into
     // the new one, where it kept feeding the sphere logic.
     resetDungeonItemsState();
-    // A fresh run is exactly when the seed's starting items get entered, so
-    // arm the mode rather than making the user find the button.
-    setMarkStartingMode(true);
+    // A fresh run is exactly when the seed's random starting items get
+    // entered, so arm the mode rather than making the user find the button -
+    // but only for a seed that hands any out (Start With Random Item, or its
+    // sliding-item twin). The rest of the starting gear comes from the config
+    // by itself. With no config synced there is no telling, so it is armed.
+    const hasConfig = Boolean(settings.randoConfigText?.trim());
+    setMarkStartingMode(!hasConfig || data.randomStartingItemCount > 0);
   }
 
   // Every panel keeps a button here whether it is open or not, so the control
