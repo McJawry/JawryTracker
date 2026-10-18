@@ -9,8 +9,7 @@
   // dispatch belongs in $effect, not $derived.
   import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
   import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
-  import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
-  import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
+  import { getAvailableLocations, isLocationAccessible, isLocationMarked } from "$lib/logic/locations";
   import { hasShuffledEntrances } from "$lib/logic/entrances";
   import { openAllEntrancesList, openAllLocationsList } from "$lib/state/ui.svelte";
 
@@ -24,18 +23,18 @@
   const checkedCount = $derived(totalLocations.filter((location) => isLocationMarked(location)).length);
   // Reachable AND not yet checked. Counting every reachable location - as
   // this used to - meant "Accessible" included locations already ticked off,
-  // so it disagreed with the sphere board's "Available" heading and with the
-  // map cells' accessible/remaining fractions by exactly the checked count.
-  const accessibleCount = $derived.by(() => {
-    const calculation = sphereAnalysisCache.calculation;
-    if (!calculation) return 0;
-    const reachable = new Set(calculation.sphereLocations.flat());
-    let count = 0;
-    reachable.forEach((location) => {
-      if (!isLocationMarked(location)) count += 1;
-    });
-    return count;
-  });
+  // so it disagreed with the map cells' accessible/remaining fractions by
+  // exactly the checked count.
+  //
+  // Reachable by the same test that colours the map and fills each cell's
+  // fraction (isLocationAccessible), so this is the number of blue locations.
+  // It used to count the sphere calculation's locations instead, which read 0
+  // with the calculation switched off - there are no spheres then, though the
+  // map is still coloured - and fell short of the map whenever an item was held
+  // that the spheres hold back (found out of logic, or never placed).
+  const accessibleCount = $derived(
+    totalLocations.filter((location) => !isLocationMarked(location) && isLocationAccessible(location)).length
+  );
   const remainingCount = $derived(totalLocations.length - checkedCount);
 </script>
 
