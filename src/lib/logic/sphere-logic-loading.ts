@@ -8,6 +8,7 @@ import { getYamlListSection } from "$lib/logic/yaml-helpers";
 import { getLocationAreaKey, getLocationAlias, scoreEquivalentLocationName } from "$lib/logic/location-names";
 import { buildFilteredLocationData } from "$lib/logic/location-filtering";
 import { data } from "$lib/state/data.svelte";
+import { rawTable } from "$lib/state/raw-table";
 import { sphere } from "$lib/state/sphere.svelte";
 import { bumpSphereLogicRevision, invalidateSphereAnalysis } from "$lib/logic/sphere-worker-client.svelte";
 
@@ -131,10 +132,11 @@ export function applySphereLogic(
 
   const parsed = WWRSphereEngine.parseLogicData(itemLocationText, macroText, locationDataText, entranceTableText);
   const mapped = mapSphereRulesToLocationPool(parsed.locations);
-  data.sphereRules = mapped.rules;
-  data.sphereMacros = parsed.macros;
+  // Kept out of Svelte's deep proxying - see raw-table.ts.
+  data.sphereRules = rawTable(mapped.rules);
+  data.sphereMacros = rawTable(parsed.macros);
   data.sphereWorld = parsed.world
-    ? { ...parsed.world, locationAreas: mapped.locationAreas, locationLogicNames: mapped.locationLogicNames }
+    ? rawTable({ ...parsed.world, locationAreas: mapped.locationAreas, locationLogicNames: mapped.locationLogicNames })
     : null;
   data.sphereOptions = WWRSphereEngine.parseConfig(configText);
   data.sphereStartingIsland = getSyncedStartingIsland(configText);

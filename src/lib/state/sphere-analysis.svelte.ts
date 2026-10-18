@@ -1,5 +1,6 @@
 import type { SphereCalculationResult } from "$lib/logic";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
+import type { SphereBoardDerived } from "$lib/logic/sphere-board-analysis";
 
 export interface SphereAnalysisCache {
   key: string;
@@ -8,7 +9,7 @@ export interface SphereAnalysisCache {
   /**
    * Locations reachable without relying on any acquired-but-unassigned item.
    * A location outside this set has an indeterminate sphere - see
-   * computeCertainLocationKeys() in sphere-worker-client.
+   * computeCertainLocationKeys() in sphere-board-analysis.
    */
   certainLocationKeys: Set<string> | null;
   /**
@@ -17,25 +18,41 @@ export interface SphereAnalysisCache {
    * placed item until its own location is reachable - correct for spheres, but
    * wrong for the map, which should answer "can I get in there with what I
    * have?". An item picked up out of logic left every location behind it
-   * showing red. See computeInventoryReachableKeys() in sphere-worker-client.
+   * showing red. See computeInventoryReachableKeys() in sphere-board-analysis.
    */
   inventoryReachableKeys: Set<string> | null;
   /**
    * Everything needed to finish the run is in hand - see computeGoMode() in
-   * sphere-worker-client. Kept beside the other derived sets because it is the
+   * sphere-board-analysis. Kept beside the other derived sets because it is the
    * same reachability question asked once more with a different inventory.
    */
   goMode: boolean;
+  /**
+   * What only a Sphere Board shows - boss icons, path cards, the Filters
+   * menu's walk - worked out in the worker beside the rest, so the board only
+   * has to lay it out. Null in a window with no board.
+   */
+  board: SphereBoardDerived | null;
   pending: boolean;
   dependenciesReady: boolean;
 }
 
 function emptyCache(): SphereAnalysisCache {
-  return { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, goMode: false, pending: false, dependenciesReady: false };
+  return {
+    key: "",
+    calculation: null,
+    relativeUnknown: null,
+    certainLocationKeys: null,
+    inventoryReachableKeys: null,
+    goMode: false,
+    board: null,
+    pending: false,
+    dependenciesReady: false
+  };
 }
 
 // Reactive - any Svelte component reading this re-renders automatically when
-// it changes, which is what lets finishSphereDependencyAnalysis() in
+// it changes, which is what lets finishSphereAnalysis() in
 // sphere-worker-client.ts just assign to it instead of the original's
 // imperative renderSphereBoard() call.
 export const sphereAnalysisCache: SphereAnalysisCache = $state(emptyCache());

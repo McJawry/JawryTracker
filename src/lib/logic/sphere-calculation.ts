@@ -19,6 +19,7 @@ import { getDefeatedBossEvents, getRequiredBossOptions } from "$lib/logic/entran
 import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
+import { memoizeOnStateEpoch, memoizeOnStateEpochBy } from "$lib/logic/state-epoch";
 
 const normalize = WWRSphereEngine.normalize;
 const keyDungeonNames = DUNGEON_ENTRANCE_TRACKERS.map((dungeon) => dungeon.name).filter((name) => name !== "Forsaken Fortress");
@@ -191,7 +192,10 @@ function getRawUnknownSourceItems(): UnplacedItem[] {
  * claiming the same name. The items held from an unknown point take part too,
  * for the same reason, though they are handed back separately.
  */
-function namedItemInventory(placements: SpherePlacement[]): {
+// Per analysis job in the worker (state-epoch.ts), by the placements asked about.
+const namedItemInventory = memoizeOnStateEpochBy(computeNamedItemInventory);
+
+function computeNamedItemInventory(placements: SpherePlacement[]): {
   gear: string[];
   unknownSources: Array<{ id: string; item: string }>;
   placements: SpherePlacement[];
@@ -305,9 +309,7 @@ export function getSphereCalculationInput(placements: SpherePlacement[], include
  * bosses is Ganon's Tower's final staircase, which is neither a shuffled door
  * nor a dungeon a savewarp can reach.
  */
-function getSeedOptions(): Record<string, unknown> {
-  return { ...data.sphereOptions, ...getRequiredBossOptions() };
-}
+const getSeedOptions = memoizeOnStateEpoch((): Record<string, unknown> => ({ ...data.sphereOptions, ...getRequiredBossOptions() }));
 
 /**
  * Whether the run has to beat this boss, asked the way the sphere calculation
@@ -415,6 +417,16 @@ function reachabilityCacheKey(items: string[], options: ReachabilityOptions): st
  * old world until the window was reloaded.
  */
 export function getReachabilityContextKey(options: ReachabilityOptions = {}): string {
+  return reachabilityContextKey(options);
+}
+
+// Asked on every reachability lookup, and of the options only these two count.
+const reachabilityContextKey = memoizeOnStateEpochBy(
+  computeReachabilityContextKey,
+  (options: ReachabilityOptions) => `${(options.additionalStartAreas || []).join("|")}#${options.ignoreDefeatedBosses ? 1 : 0}`
+);
+
+function computeReachabilityContextKey(options: ReachabilityOptions): string {
   return JSON.stringify({
     additionalStartAreas: (options.additionalStartAreas || []).map(normalize).sort(),
     startingIsland: normalize(data.sphereStartingIsland),
@@ -448,6 +460,7 @@ export function getReachabilityContextKey(options: ReachabilityOptions = {}): st
  */
 const savewarpStartCache = new Map<string, string[]>();
 
+
 export function getSavewarpStartAreas(items: string[]): string[] {
   const world = data.sphereWorld;
   const starts = world?.dungeonStarts ?? {};
@@ -457,7 +470,15 @@ export function getSavewarpStartAreas(items: string[]): string[] {
   const cacheKey = reachabilityCacheKey(items, {});
   const cached = savewarpStartCache.get(cacheKey);
   if (cached) return cached;
-  savewarpStartCache.clear();
+  // Bounded the same way as the reachability cache, not wiped on every miss.
+  // Every reachability question asks this first, and the requirement tests
+  // alternate between inventories - everything, then everything but one item -
+  // so a single entry was evicted on nearly every call and rebuilt with up to
+  // seven world walks each time.
+  if (savewarpStartCache.size >= REACHABILITY_CACHE_LIMIT) {
+    const oldest = savewarpStartCache.keys().next().value;
+    if (oldest !== undefined) savewarpStartCache.delete(oldest);
+  }
 
   // Only the starts you could not otherwise walk to. Seeding one you can
   // already reach changes no reachability at all, but it does hide the way in:
@@ -466,9 +487,10 @@ export function getSavewarpStartAreas(items: string[]): string[] {
   // of the Bombs that got you there.
   let baseline: Set<string> | null = null;
   let seeded: string[] = [];
+  const worldInput = getSphereCalculationInput([], false);
   for (let pass = 0; pass <= dungeonCount; pass += 1) {
     const areas = WWRSphereEngine.getAccessibleAreas({
-      ...getSphereCalculationInput([], false),
+      ...worldInput,
       items,
       additionalStartAreas: seeded
     });
@@ -605,6 +627,18 @@ export function isSphereAreaAccessible(areaName: string): boolean {
 }
 
 const sphereExitCache = new Map<string, Set<string>>();
+
+/**
+ * Drops every reachability answer this module keeps. Their keys cover the
+ * inventory and the world's recorded state but not the logic itself, so a
+ * logic reload has to clear them all - in the window and in the worker alike.
+ */
+export function clearReachabilityCaches(): void {
+  sphereReachabilityCache.clear();
+  savewarpStartCache.clear();
+  sphereAreaCache.clear();
+  sphereExitCache.clear();
+}
 
 /**
  * Every door currently openable, as one set. Callers asking about a single

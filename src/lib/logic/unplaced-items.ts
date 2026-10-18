@@ -27,6 +27,7 @@ import {
   hasStartingDungeonItem
 } from "$lib/state/dungeon-items.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
+import { memoizeOnStateEpoch } from "$lib/logic/state-epoch";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -60,7 +61,11 @@ function makeId(item: string, copy: number): string {
   return `unplaced-${normalize(item).replace(/ /g, "-")}-${copy}`;
 }
 
-export function getUnplacedAcquiredItems(): UnplacedItem[] {
+// Once per analysis job in the worker (state-epoch.ts): the inventory and the
+// sphere input are built from this, and they are asked for constantly.
+export const getUnplacedAcquiredItems = memoizeOnStateEpoch(computeUnplacedAcquiredItems);
+
+function computeUnplacedAcquiredItems(): UnplacedItem[] {
   const placedCounts = countPlaced();
   const unplaced: UnplacedItem[] = [];
 

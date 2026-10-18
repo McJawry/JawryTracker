@@ -167,8 +167,8 @@ export function getSphereHintAreaLocations(areaName: string): string[] {
  * Whether everything needed to finish the run is in hand.
  *
  * Computed beside the other reachability sets (computeGoMode in
- * sphere-worker-client) because it needs an inventory this module cannot build
- * without closing an import cycle.
+ * sphere-board-analysis) because it needs an inventory this module cannot
+ * build without closing an import cycle.
  */
 export function isGoMode(): boolean {
   return sphereAnalysisCache.goMode;

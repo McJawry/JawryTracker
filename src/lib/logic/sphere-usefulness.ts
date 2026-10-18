@@ -93,8 +93,12 @@ function isDungeonKeyItem(item: string): boolean {
  * clamped - to 4ms once nested, and to a full second in a background window -
  * which turns a few hundred yields into minutes, so this uses a MessageChannel
  * (never clamped) and only falls back to setTimeout where one is unavailable.
+ *
+ * In the analysis worker there is no page to keep painting, and nothing else
+ * is waiting on the thread - so it carries straight on.
  */
 function yieldToBrowser(): Promise<void> {
+  if (typeof document === "undefined") return Promise.resolve();
   const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
   if (scheduler?.yield) return scheduler.yield();
   if (typeof MessageChannel === "undefined") return new Promise((resolve) => setTimeout(resolve, 0));
@@ -120,7 +124,7 @@ function yieldToBrowser(): Promise<void> {
  * walk itself is only set lookups: "how many copies of K does location L need"
  * is the first count whose set contains L.
  */
-async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[], sphereLocations: string[][]): Promise<Set<string>> {
+export async function getRequiredAndUnfinishedPlacementIds(placements: SpherePlacement[], sphereLocations: string[][]): Promise<Set<string>> {
   const required = new Set<string>();
   // What the seed demands, not what is left to do: a boss already crossed off
   // is credited as beaten everywhere else, and that excuses whatever it took
@@ -281,14 +285,29 @@ export interface HiddenPlacementsInput {
  * Placement ids the Filters menu hides. Runs in chunks and yields between
  * them, so the sweep never freezes the board.
  */
-export async function computeHiddenPlacementIds({
+export async function computeHiddenPlacementIds(input: HiddenPlacementsInput): Promise<Set<string>> {
+  if (!input.placements.length || !data.sphereLogicLoaded || !isSphereFilterActive(input.filters)) return new Set();
+  const requiredIds = input.filters.pathsAndRequired
+    ? await getRequiredAndUnfinishedPlacementIds(input.placements, input.sphereLocations ?? [])
+    : new Set<string>();
+  return combineHiddenPlacementIds({ ...input, requiredIds });
+}
+
+/**
+ * The cheap half of computeHiddenPlacementIds: everything but the requirement
+ * walk, given its answer. Split out so the board can do this part itself, on
+ * every redraw of the purple chain, while the walk - a reachability pass per
+ * item - runs with the rest of the analysis in the worker.
+ */
+export function combineHiddenPlacementIds({
   placements,
   filters,
   pathChainIds = [],
   sphereLocations = [],
   prunedPlacementIds = [],
-  playthroughFinished = false
-}: HiddenPlacementsInput): Promise<Set<string>> {
+  playthroughFinished = false,
+  requiredIds
+}: HiddenPlacementsInput & { requiredIds: Iterable<string> }): Set<string> {
   const hidden = new Set<string>();
   if (!placements.length || !data.sphereLogicLoaded || !isSphereFilterActive(filters)) return hidden;
 
@@ -296,7 +315,7 @@ export async function computeHiddenPlacementIds({
   const visible = new Set(pathChainIds);
 
   if (filters.pathsAndRequired) {
-    (await getRequiredAndUnfinishedPlacementIds(placements, sphereLocations)).forEach((id) => visible.add(id));
+    for (const id of requiredIds) visible.add(id);
   }
 
   // The playthrough has the last word on what it pared out: a card labelled

@@ -22,6 +22,7 @@ import { getShardTrackingState } from "$lib/logic/shard-tracking";
 import { getAvailableLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
 import { getSphereInventoryItemKey, getUnknownSourceItems } from "$lib/logic/sphere-calculation";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+import { memoizeOnStateEpoch } from "$lib/logic/state-epoch";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -76,7 +77,11 @@ export interface SphereTrackingKnowledge {
   barrenHints: Hint[];
 }
 
-export function getSphereTrackingKnowledge(): SphereTrackingKnowledge {
+// Once per analysis job in the worker (state-epoch.ts), where every stage of
+// the analysis starts from it.
+export const getSphereTrackingKnowledge = memoizeOnStateEpoch(computeSphereTrackingKnowledge);
+
+function computeSphereTrackingKnowledge(): SphereTrackingKnowledge {
   const occupiedLocations = new Set(sphere.placements.map((placement) => normalize(placement.location)));
   const availableLocations = new Set(getAvailableLocations().map(normalize));
   const unmatchedObtained = [...sphere.placements];

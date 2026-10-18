@@ -8,14 +8,7 @@
   // the path item ("candidates").
   import { bossImage, itemImage, getItemNumberBadge } from "$lib/logic/images";
   import { removeHintLine } from "$lib/state/hints.svelte";
-  import {
-    getPathSphereLabel,
-    getPathHintCandidates,
-    getPathLogicalItems,
-    type PathCandidate,
-    type PathProgressEntry
-  } from "$lib/logic/sphere-path-progress";
-  import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
+  import { getPathSphereLabel, type PathCandidate, type PathProgressEntry } from "$lib/logic/sphere-path-progress";
   import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
 
   let { entry, sourceIds = [] }: { entry: PathProgressEntry; sourceIds?: string[] } = $props();
@@ -27,15 +20,9 @@
   const area = $derived(areaNames.map((name) => name.replace(" Sector", "")).join(" and "));
   const solved = $derived(entry.progress.kind !== "unknown");
 
-  const displayedItems = $derived.by((): PathCandidate[] => {
-    const calculation = sphereAnalysisCache.calculation;
-    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
-    if (!calculation || !relativeUnknown) return [];
-    const knowledge = getSphereTrackingKnowledge();
-    return solved
-      ? getPathLogicalItems(entry.progress, knowledge, calculation, relativeUnknown)
-      : getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown);
-  });
+  // Linked items once solved, candidates until then - worked out in the
+  // analysis worker with the rest of the board (sphere-board-analysis.ts).
+  const displayedItems = $derived<PathCandidate[]>(sphereAnalysisCache.board?.pathItems.get(entry.hint.lineNumber) ?? []);
 
   // Every confirmed candidate becomes a graph edge - an unconfirmed guess
   // shouldn't draw a line as if it were established. None is singled out:
