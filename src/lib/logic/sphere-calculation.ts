@@ -339,6 +339,8 @@ export function getSphereProgressionInput(placements: SpherePlacement[]): Sphere
     // Out of the spheres, still in the question of which cards are Optional -
     // see calculate() in sphere-engine.js.
     heldWithoutSphere: namedItemInventory(placements).unknownSources.map((source) => source.item),
+    // What a copy that looks spare might still be opening - see calculate().
+    uncheckedLocations: getAvailableLocations().filter((location) => !isLocationMarked(location)),
     options: getSeedOptions(),
     // Not from the whole inventory: a dungeon only an item of unknown source
     // gets you into would be seeded here, handing the calculation the way in

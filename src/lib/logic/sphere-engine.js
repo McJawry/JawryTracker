@@ -1420,11 +1420,22 @@
       : initial;
     const goalLocation = normalize("Ganon's Tower - Defeat Ganondorf");
     const goalIsReachable = Number.isInteger(pruneInitial.locationSpheres[goalLocation]);
+    // Until Ganondorf can be reached there is no "is the seed still beatable"
+    // to ask, so a duplicate copy is spare only if everything still reachable
+    // without it: every recorded card, and every location not yet checked.
+    // Recorded cards alone called the Kreeb Picto Box Optional while the photo
+    // checks it opened were still unchecked - and with the other copy out of
+    // logic, it was the only Picto Box the logic had.
     const baselineTargets = new Set(goalIsReachable
       ? [goalLocation]
-      : placements
-        .filter((placement) => Number.isInteger(pruneInitial.locationSpheres[normalize(placement.location)]))
-        .map((placement) => normalize(placement.location)));
+      : [
+        ...placements
+          .filter((placement) => Number.isInteger(pruneInitial.locationSpheres[normalize(placement.location)]))
+          .map((placement) => normalize(placement.location)),
+        ...(input.uncheckedLocations || [])
+          .map(normalize)
+          .filter((locationKey) => Number.isInteger(pruneInitial.locationSpheres[locationKey]))
+      ]);
     const duplicateCounts = new Map();
     placements.forEach((placement) => {
       const itemKey = getInventoryItemKey(placement.item, placement.location);

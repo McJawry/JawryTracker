@@ -76,6 +76,12 @@ export interface SphereCalculationInput {
    * by the pare-down that decides which cards are Optional. calculate() only.
    */
   heldWithoutSphere?: string[];
+  /**
+   * Locations nobody has checked yet. Until Ganondorf can be reached, a spare
+   * copy is only Optional if these all stay reachable without it - what is in
+   * them could still be on the path. calculate() only.
+   */
+  uncheckedLocations?: string[];
   options?: Record<string, unknown>;
   entranceMappings?: Record<string, string>;
   entranceConnections?: Record<string, unknown>;
