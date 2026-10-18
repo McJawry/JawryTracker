@@ -9,6 +9,7 @@
   import { getSectionLogicalWidth } from "./section-scaling.svelte";
   import { settings } from "$lib/state/settings.svelte";
   import PopoutZoomSlider from "./PopoutZoomSlider.svelte";
+  import SphereLoadingSpinner from "./SphereLoadingSpinner.svelte";
   import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { loadReferenceData } from "$lib/logic/data-loading";
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
@@ -105,6 +106,11 @@
          a third of the header's height. On a laptop at 200% display scaling
          the whole logical desktop is only 540px tall, so that mattered. -->
     <header class="popout-header">
+      <!-- Only the Main Tracker runs a sphere analysis of its own among these;
+           the Sphere Board has its own shell (PopoutSphereShell). -->
+      {#if sectionId === "main-tracker"}
+        <SphereLoadingSpinner />
+      {/if}
       <PopoutZoomSlider {sectionId} {autoScale} />
     </header>
     <!-- Same width/zoom wrapper DockableSection uses, but scaled to the
@@ -142,11 +148,17 @@
 
   .popout-header {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     padding: 2px 8px;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
     color: var(--ink);
+  }
+
+  /* Left end of the header, the slider staying where it is on the right. */
+  .popout-header :global(.sphere-loading-spinner) {
+    margin-right: auto;
   }
 
   .popout-section-content {

@@ -488,6 +488,43 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   width: 110px;
 }
 
+/* Sphere analysis in progress (SphereLoadingSpinner). Full 32px, but the
+   negative margins leave it the 18px of layout height a title-bar button has,
+   so the header or title bar it sits in is no taller than without it: the
+   popout shell sizes its content around a fixed header height. */
+.sphere-loading-spinner {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  margin: -7px 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sphere-loading-spinner.active {
+  visibility: visible;
+  animation: sphere-loading-spin 1s linear infinite;
+}
+
+/* Docked: the Sphere Board's spinner leads its Filters + Scale group, and the
+   Main Tracker's hugs the section name rather than floating mid-bar. */
+.dockable-titlebar-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dockable-titlebar > .sphere-loading-spinner {
+  margin-right: auto;
+}
+
+@keyframes sphere-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .sphere-zoom-value {
   min-width: 34px;
   text-align: right;

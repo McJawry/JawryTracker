@@ -24,6 +24,7 @@
   import { getSectionContentStyle, getSectionLogicalWidth, getSectionScale } from "./section-scaling.svelte";
   import { SECTION_DRAG_MIME } from "./section-drag";
   import SphereZoomSlider from "./SphereZoomSlider.svelte";
+  import SphereLoadingSpinner from "./SphereLoadingSpinner.svelte";
   import SphereFilterMenu from "./SphereFilterMenu.svelte";
 
   let { sectionId }: { sectionId: string } = $props();
@@ -144,12 +145,18 @@
   >
     <div class="dockable-titlebar" draggable={titlebarDraggable} ondragstart={handleDragStart}>
       <span class="dockable-titlebar-name">{def.title}</span>
+      <!-- The Main Tracker has no scale slider docked, so its spinner sits by
+           the name instead; the Sphere Board's leads its own controls. -->
+      {#if sectionId === "main-tracker"}
+        <SphereLoadingSpinner />
+      {/if}
       {#if def.fillContent}
         <span
           class="dockable-titlebar-control"
           onpointerenter={() => (titlebarDraggable = false)}
           onpointerleave={() => (titlebarDraggable = true)}
         >
+          <SphereLoadingSpinner />
           <SphereFilterMenu />
           <SphereZoomSlider />
         </span>
