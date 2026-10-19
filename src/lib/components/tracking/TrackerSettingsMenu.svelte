@@ -49,18 +49,26 @@
   {#if open}
     <div class="tracker-settings-panel">
       <label class="tracker-settings-option">
-        <input type="checkbox" bind:checked={settings.genericTriforceShards} onchange={saveSettings} />
-        <span>
-          <strong>Generic Triforce shards</strong>
-          <em>Click the Triforce to count shards without tracking which is which.</em>
-        </span>
-      </label>
-
-      <label class="tracker-settings-option">
         <input type="checkbox" bind:checked={settings.sphereCalculation} onchange={saveSettings} />
         <span>
           <strong>Sphere calculation</strong>
           <em>Off: no sphere numbers and no Sphere Board. Items you have placed at locations are kept either way.</em>
+        </span>
+      </label>
+
+      <label class="tracker-settings-option">
+        <input type="checkbox" bind:checked={settings.rightClickClearsDependentLocations} onchange={saveSettings} />
+        <span>
+          <strong>Right click clears dependent locations</strong>
+          <em>Right-clicking an area to clear it also checks what depends on it elsewhere.</em>
+        </span>
+      </label>
+
+      <label class="tracker-settings-option">
+        <input type="checkbox" bind:checked={settings.genericTriforceShards} onchange={saveSettings} />
+        <span>
+          <strong>Generic Triforce shards</strong>
+          <em>Click the Triforce to count shards without tracking which is which.</em>
         </span>
       </label>
 
@@ -71,6 +79,8 @@
           <em>Show the icon of the item recorded at a location beside its name.</em>
         </span>
       </label>
+
+      <hr class="tracker-settings-divider" />
 
       <label class="tracker-settings-option tracker-settings-slider">
         <span>

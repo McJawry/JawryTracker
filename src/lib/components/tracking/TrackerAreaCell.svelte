@@ -11,8 +11,7 @@
   // purple when the pending location is one of its own. The real tracker's
   // right-click-clears-the-area is not implemented here, flagged to the user
   // as a deliberate divergence.
-  import { getAreaAccessibility, getAreaLocationChoices, getLocationCheckedId } from "$lib/logic/locations";
-  import { setChecked } from "$lib/state/checked.svelte";
+  import { clearLocations, getAreaAccessibility, getAreaLocationChoices } from "$lib/logic/locations";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import {
     openLocationDropList,
@@ -130,7 +129,7 @@
     const locations = getAreaLocationChoices(areaName, targetKind);
     if (!locations.length) return;
     recordTrackerAction();
-    locations.forEach((location) => setChecked(getLocationCheckedId(location), true));
+    clearLocations(locations, { withDependents: true });
   }
 
   let dragOver = $state(false);

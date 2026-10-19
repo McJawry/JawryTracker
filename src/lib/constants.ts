@@ -101,6 +101,14 @@ export interface Settings {
   /** Show the icon of whatever item is recorded at a location, in the lists. */
   showPlacedItemIcons: boolean;
   /**
+   * Right-clicking an area to clear it also checks the locations elsewhere
+   * that hang on the cleared ones - the letters a beaten boss sends, Mrs.
+   * Marie's rewards behind Ivan's bees. Based on the randomizer tracker's
+   * "Clear All Includes Dependent Locations", and on by default as it is there,
+   * but only for the right-click: the list's Clear All button never does it.
+   */
+  rightClickClearsDependentLocations: boolean;
+  /**
    * Size of the requirement tooltip, as a percentage. Its own setting rather
    * than following the panel scale: the tooltip is drawn against the window
    * rather than inside a panel, so on a small screen with large system text it
@@ -197,6 +205,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chartSortByNumber: true,
   sphereCalculation: true,
   showPlacedItemIcons: true,
+  rightClickClearsDependentLocations: true,
   tooltipScale: 100,
   streamMode: false,
   parsedHintsFilters: true,

@@ -6,7 +6,7 @@ import { WWRSphereEngine, type ParsedLogicLocationEntry } from "$lib/logic";
 import { IMPLICIT_STARTING_GEAR, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
 import { getYamlListSection } from "$lib/logic/yaml-helpers";
 import { getLocationAreaKey, getLocationAlias, scoreEquivalentLocationName } from "$lib/logic/location-names";
-import { buildFilteredLocationData } from "$lib/logic/location-filtering";
+import { buildFilteredLocationData, parseOutsideDependentLocations } from "$lib/logic/location-filtering";
 import { data } from "$lib/state/data.svelte";
 import { rawTable } from "$lib/state/raw-table";
 import { sphere } from "$lib/state/sphere.svelte";
@@ -127,8 +127,11 @@ export function applySphereLogic(
     data.randomStartingItemCount = 0;
     data.filteredLocationKeys = null;
     data.locationOrder = null;
+    data.outsideDependentLocations = {};
     return;
   }
+
+  data.outsideDependentLocations = parseOutsideDependentLocations(locationDataText);
 
   const parsed = WWRSphereEngine.parseLogicData(itemLocationText, macroText, locationDataText, entranceTableText);
   const mapped = mapSphereRulesToLocationPool(parsed.locations);

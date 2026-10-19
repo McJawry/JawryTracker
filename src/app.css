@@ -4613,6 +4613,14 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: var(--muted);
 }
 
+/* Between the switches and the slider - the same rule the folder row below
+   draws above itself. */
+.tracker-settings-divider {
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
 /* The shard count on the finished Triforce, when shards are counted
    generically rather than by number. */
 .triforce-stack .triforce-count {

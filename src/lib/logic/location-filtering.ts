@@ -44,6 +44,44 @@ function emptyCategoryMap(): CategoryMap {
   return { byKey: new Map(), byArea: new Map(), orderByLocation: new Map(), nextOrder: 0, size: 0 };
 }
 
+/**
+ * location_data.yaml's "Outside Dependent Locations": for each location that
+ * has some, the checks elsewhere that only open once it is done. Keyed by the
+ * normalized location, as the YAML names it - which for these is the pool's
+ * own name.
+ */
+export function parseOutsideDependentLocations(text: string): Record<string, string[]> {
+  const dependents: Record<string, string[]> = {};
+  let name = "";
+  let section = "";
+  String(text || "").split(/\r?\n/).forEach((rawLine) => {
+    const line = rawLine.replace(/\s+#.*$/, "");
+    if (!line.trim()) return;
+    const indent = line.match(/^\s*/)![0].length;
+    const clean = line.trim();
+    if (indent === 0 && /^-\s+Names\s*:/i.test(clean)) {
+      name = "";
+      section = "names";
+      return;
+    }
+    if (indent === 2) {
+      section = normalize(clean.replace(/:.*$/, ""));
+      return;
+    }
+    if (indent !== 4) return;
+    if (section === "names" && !name) {
+      const english = clean.match(/^English\s*:\s*(.+)$/i);
+      if (english) name = cleanYamlValue(english[1]);
+    } else if (section === "outside dependent locations" && name) {
+      const item = clean.match(/^-\s*(.+)$/);
+      if (!item) return;
+      const key = normalize(name);
+      (dependents[key] ??= []).push(cleanYamlValue(item[1]));
+    }
+  });
+  return dependents;
+}
+
 // A location's name can differ between the app's pool and location_data.yaml
 // by word order or a generic filler word, so each entry is indexed under an
 // exact key plus word-sorted and generic-word-stripped variants.

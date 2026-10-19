@@ -147,6 +147,35 @@ export function getLocationMarkedTitle(location: string): string {
   return "Left-click to check; right-click to assign an item.";
 }
 
+/**
+ * Clear All - the location list's button and right-clicking an area both end
+ * up here.
+ *
+ * Right-clicking an area can bring the checks elsewhere that hang on the
+ * cleared ones along (`withDependents`), with rightClickClearsDependentLocations
+ * on, as the randomizer tracker does it: clearing Forbidden Woods also checks
+ * Orca's letter, which Kalle Demos's defeat sends. The list's Clear All button
+ * never does. Only ones in this seed's pool - the rest are not on the tracker
+ * to check.
+ *
+ * Only for what this clear actually checks off. A heart container already
+ * checked beforehand - by hand, or by a "no" line - was not cleared here, so
+ * clearing the rest of its dungeon later leaves its letter alone.
+ */
+export function clearLocations(locations: string[], { withDependents = false }: { withDependents?: boolean } = {}): void {
+  const cleared = [...locations];
+  if (withDependents && settings.rightClickClearsDependentLocations) {
+    const pool = new Map(getAvailableLocations().map((location) => [normalize(location), location]));
+    locations.filter((location) => !isLocationMarked(location)).forEach((location) => {
+      (data.outsideDependentLocations[normalize(location)] ?? []).forEach((dependent) => {
+        const inPool = pool.get(normalize(dependent));
+        if (inPool) cleared.push(inPool);
+      });
+    });
+  }
+  unique(cleared).forEach((location) => setChecked(getLocationCheckedId(location), true));
+}
+
 export function toggleLocationChecked(location: string): void {
   // The note decides this one: ticking it by hand as well would leave it
   // checked after the line is gone, without anything showing why.

@@ -11,7 +11,6 @@
   import {
     getAllListedLocations,
     getAreaLocationChoices,
-    getLocationCheckedId,
     getLocationMarkedTitle,
     getLocationSphereLabel,
     isLocationAccessible,
@@ -33,8 +32,7 @@
     type TrackerEntrance
   } from "$lib/logic/entrances";
   import { isSphereExitTraversable } from "$lib/logic/sphere-calculation";
-  import { setChecked } from "$lib/state/checked.svelte";
-  import { toggleLocationChecked } from "$lib/logic/locations";
+  import { clearLocations, toggleLocationChecked } from "$lib/logic/locations";
   import { trackerAreaImage } from "$lib/logic/tracker-images";
   import { itemImage } from "$lib/logic/images";
   import { WWRSphereEngine } from "$lib/logic";
@@ -162,7 +160,7 @@
 
   function clearAll() {
     recordTrackerAction();
-    locations.forEach((location) => setChecked(getLocationCheckedId(location), true));
+    clearLocations(locations);
   }
 
   function onToggle(location: string) {
