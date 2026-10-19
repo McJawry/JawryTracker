@@ -139,6 +139,8 @@ interface WWRSphereEngineApi {
     startingIsland: string;
     additionalStartAreas?: string[];
   }): Record<string, unknown>;
+  /** Every inventory key some rule, macro, event or exit asks for, canonical and normalized. */
+  collectReferencedItemKeys(rules: Record<string, unknown>, macros: Record<string, unknown>, world: unknown): Set<string>;
   /** Whether a seed's settings shuffle the given entrance type. */
   isShuffleTypeEnabled(type: string, options: Record<string, unknown>): boolean;
   /** Normalized dungeon name -> the sector it sits on with vanilla entrances. */

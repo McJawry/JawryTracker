@@ -2087,6 +2087,10 @@
     compileExpression,
     classifyAtom,
     flattenRequirements,
+    // Exposed for the path cards (logic/sphere-path-progress.ts): an item in a
+    // path-hinted area is a candidate for its path item if any rule asks for
+    // it - the same list the Optional pare-down skips resimulating against.
+    collectReferencedItemKeys,
     // Exposed for the entrance tracker (logic/entrances.ts) for the same
     // reason: which entrance types a seed shuffles is a logic question, and a
     // second copy of the rule in the UI would be free to disagree with the one
