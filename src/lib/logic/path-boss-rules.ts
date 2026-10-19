@@ -181,3 +181,23 @@ function getUnresolvedPathBosses(bosses: string[], candidates: Map<string, strin
   const paired = maxMatching(bosses);
   return bosses.filter((bossName) => maxMatching(bosses.filter((other) => other !== bossName)) === paired);
 }
+
+/**
+ * Rule 9: a boss the spheres already place in a numbered sphere has no path
+ * item left to find, so none of its icons are drawn anywhere.
+ *
+ * In sphere N the boss is reachable with what spheres 0 to N-1 hand over, so
+ * every item it cannot be reached without is already recorded - nothing still
+ * unchecked can be its path item, in a higher sphere or a lower one. Applied
+ * last, over whatever the other rules drew, so it also catches a case they
+ * get wrong: a location three spheres past the boss still wearing its icon.
+ */
+export function withoutSettledBosses(icons: Map<string, string[]>, settledBosses: Set<string>): Map<string, string[]> {
+  if (!settledBosses.size) return icons;
+  const kept = new Map<string, string[]>();
+  icons.forEach((bosses, location) => {
+    const remaining = bosses.filter((bossName) => !settledBosses.has(bossName));
+    if (remaining.length) kept.set(location, remaining);
+  });
+  return kept;
+}

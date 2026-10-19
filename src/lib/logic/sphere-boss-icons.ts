@@ -27,7 +27,7 @@ import { data } from "$lib/state/data.svelte";
 import type { SpherePlacement } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
-import { buildAreaBranchModel, planPathBossIcons } from "$lib/logic/path-boss-rules";
+import { buildAreaBranchModel, planPathBossIcons, withoutSettledBosses } from "$lib/logic/path-boss-rules";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -340,5 +340,13 @@ export function buildPathBossLocationIcons(
     plan.forEach((bossNames, location) => bossNames.forEach((bossName) => addBoss(location, bossName)));
   });
 
-  return bossesByLocation;
+  // Rule 9 (path-boss-rules.ts): a boss already in a numbered sphere - the same
+  // test that puts its path card in that sphere's column - is searched for
+  // nowhere.
+  const settledBosses = new Set(
+    knowledge.pathHints
+      .map((hint) => hint.right.name)
+      .filter((bossName) => Number.isInteger(calculation.locationSpheres[normalize(getBossLocation(bossName))]))
+  );
+  return withoutSettledBosses(bossesByLocation, settledBosses);
 }
