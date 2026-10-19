@@ -232,7 +232,10 @@
   onauxclick={(event) => event.button === 3 && event.preventDefault()}
 />
 
-{#if allLocations.length || entrances.length}
+<!-- A sector with nothing to list still opens when it has Ho Ho or Blue Chu
+     markers: this list is the only place they can be marked, and a sector the
+     seed leaves no checks in would otherwise keep them unmarkable all run. -->
+{#if allLocations.length || entrances.length || markerIcons.length}
   <div class="location-drop-list" oncontextmenu={handleContextMenu}>
     <!-- The area's own artwork, half-transparent, so you can still tell
          which sector you're inside while reading the list. -->
@@ -255,7 +258,7 @@
           {/each}
         </div>
       {/if}
-      {#if view === "locations" && !showingEverything}
+      {#if view === "locations" && !showingEverything && allLocations.length}
         <button type="button" class="location-drop-action" onclick={clearAll}>Clear All</button>
       {/if}
     </div>
@@ -270,6 +273,9 @@
     {/if}
 
     {#if view === "locations"}
+      {#if !allLocations.length && !showingEverything}
+        <p class="location-drop-empty">No locations to check here.</p>
+      {/if}
       <div class="location-drop-columns" style="--location-column-count: {columnCount}">
         {#each columns as column, columnIndex (columnIndex)}
           <div class="location-drop-column">

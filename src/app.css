@@ -1012,6 +1012,17 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   text-decoration: underline;
 }
 
+.location-drop-empty {
+  position: relative;
+  z-index: 1;
+  margin: 6px 2px;
+  /* Full ink rather than muted: it sits over the sector's artwork, where grey
+     all but disappeared. */
+  color: #000;
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
 .location-drop-columns {
   display: grid;
   grid-template-columns: repeat(var(--location-column-count), minmax(0, 1fr));
