@@ -4,7 +4,7 @@
   import { ui, setMarkStartingMode } from "$lib/state/ui.svelte";
   import { checked, saveChecked } from "$lib/state/checked.svelte";
   import { sphere, resetSphereState } from "$lib/state/sphere.svelte";
-  import { hints, hintNotes, saveHintNotes } from "$lib/state/hints.svelte";
+  import { hintNotes, saveHintNotes, setHints } from "$lib/state/hints.svelte";
   import { resetDungeonItemsState } from "$lib/state/dungeon-items.svelte";
   import { resetItemTrackerState } from "$lib/state/item-tracker.svelte";
   import { data } from "$lib/state/data.svelte";
@@ -39,7 +39,7 @@
 
     hintNotes.value = "";
     saveHintNotes();
-    hints.length = 0;
+    setHints([]);
     Object.keys(checked).forEach((key) => delete checked[key]);
     saveChecked();
     resetSphereState();

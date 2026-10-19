@@ -21,6 +21,8 @@ import { data } from "$lib/state/data.svelte";
 import { checked, setChecked } from "$lib/state/checked.svelte";
 import { settings } from "$lib/state/settings.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
+import { hints, hintsRevision } from "$lib/state/hints.svelte";
+import { sphere } from "$lib/state/sphere.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -97,16 +99,58 @@ export function isLocationLocallyChecked(location: string): boolean {
   return Boolean(checked[getLocationCheckedId(location)]);
 }
 
+const NO_NOTE_CHECKS = new Set<string>();
+let noteCheckCache: { revision: number; available: string[]; hasLines: boolean; doors: string; keys: Set<string> } | null = null;
+
+/**
+ * Every location a "no" line in the hint notes checks off, normalized.
+ *
+ * Worked out from the lines each time they change rather than written into
+ * the checked state, so deleting the line unchecks them again - and so they
+ * can be told apart from a check made by hand. An area's checks are the ones
+ * its list on the map shows, which can grow as entrances are recorded, so the
+ * recorded entrances are part of what this is kept against.
+ */
+export function getNoteCheckedLocationKeys(): Set<string> {
+  const revision = hintsRevision.value;
+  const available = getAvailableLocations();
+  const sameLines = noteCheckCache?.revision === revision && noteCheckCache.available === available;
+  // No "no" lines at all: nothing to check off, whatever the entrances say.
+  if (sameLines && !noteCheckCache!.hasLines) return NO_NOTE_CHECKS;
+  const doors = JSON.stringify([sphere.entranceConnections, sphere.entranceMappings]);
+  if (sameLines && noteCheckCache!.doors === doors) return noteCheckCache!.keys;
+
+  const lines = hints.filter((hint) => hint.type === "no" && !hint.needsReview);
+  const keys = new Set<string>();
+  lines.forEach((hint) => {
+    (hint.checks ?? []).forEach((check) => {
+      const locations = check.kind === "location" ? [check.name] : getSphereHintAreaLocations(check.name);
+      locations.forEach((location) => keys.add(normalize(location)));
+    });
+  });
+  noteCheckCache = { revision, available, hasLines: lines.length > 0, doors, keys: keys.size ? keys : NO_NOTE_CHECKS };
+  return noteCheckCache.keys;
+}
+
+/** Checked off by a "no" line in the hint notes. */
+export function isLocationCheckedByNote(location: string): boolean {
+  return getNoteCheckedLocationKeys().has(normalize(location));
+}
+
 export function isLocationMarked(location: string): boolean {
-  return isLocationLocallyChecked(location);
+  return isLocationLocallyChecked(location) || isLocationCheckedByNote(location);
 }
 
 export function getLocationMarkedTitle(location: string): string {
+  if (isLocationCheckedByNote(location)) return 'Checked by a "no" line in the hint notes - remove the line to uncheck it. Right-click to assign an item.';
   if (isLocationLocallyChecked(location)) return "Checked locally. Left-click to uncheck; right-click to assign an item.";
   return "Left-click to check; right-click to assign an item.";
 }
 
 export function toggleLocationChecked(location: string): void {
+  // The note decides this one: ticking it by hand as well would leave it
+  // checked after the line is gone, without anything showing why.
+  if (isLocationCheckedByNote(location)) return;
   const id = getLocationCheckedId(location);
   setChecked(id, !checked[id]);
 }

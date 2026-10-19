@@ -1,7 +1,7 @@
 import { STORAGE_KEY } from "$lib/constants";
 import type { RequirementAlias } from "$lib/gameData";
 
-export type HintType = "path" | "item" | "location" | "barren" | "needs-review";
+export type HintType = "path" | "item" | "location" | "barren" | "no" | "needs-review";
 export type HintSideKind = "text" | "item" | "boss";
 
 export interface HintSide {
@@ -28,11 +28,30 @@ export interface Hint {
   mapTarget: string | null;
   requirement: RequirementAlias | null;
   needsReview: boolean;
+  /**
+   * What a "no" line checks off: whole areas, or single locations. Kept as
+   * names and resolved to locations when asked (locations.ts), so an area's
+   * checks keep up with entrances found after the line was written.
+   */
+  checks?: Array<{ kind: "area" | "location"; name: string }>;
 }
 
 export type HintFilter = "all" | "path" | "item" | "location" | "needs-review";
 
 export const hints: Hint[] = $state([]);
+
+/**
+ * Moves every time the hint list is replaced. Lets questions asked of every
+ * location - "is this checked by a no line?" - tell the hints have not changed
+ * without walking them again, while still being reactive to them.
+ */
+export const hintsRevision: { value: number } = $state({ value: 0 });
+
+/** The one way the hint list is replaced. */
+export function setHints(next: Hint[]): void {
+  hints.splice(0, hints.length, ...next);
+  hintsRevision.value += 1;
+}
 export const filter: { value: HintFilter } = $state({ value: "all" });
 export const hintNotes: { value: string } = $state({ value: localStorage.getItem(STORAGE_KEY) || "" });
 export const saveStatus: { value: string } = $state({ value: "Saved locally" });
@@ -79,7 +98,7 @@ export function registerHintsParser(parser: (text: string) => Hint[]): void {
 // Ported from updateFromInput() (dev/app/app.js:5758) - the hint-notes half;
 // renderGrid()/resizeHintInput() are handled by Svelte's own reactivity.
 export function updateHintsFromNotes(options: { recordHistory?: boolean; save?: boolean } = {}): void {
-  if (hintsParser) hints.splice(0, hints.length, ...hintsParser(hintNotes.value));
+  if (hintsParser) setHints(hintsParser(hintNotes.value));
   // `save: false` is for re-parsing notes that came *from* storage. Writing
   // them straight back would fire a storage event in every other window, each
   // of which would write back in turn - with several windows open that echo

@@ -8,7 +8,7 @@ import type { Settings } from "$lib/constants";
 import { checked } from "$lib/state/checked.svelte";
 import { data, type ReferenceData } from "$lib/state/data.svelte";
 import { dungeonItemsState, type DungeonItems } from "$lib/state/dungeon-items.svelte";
-import { hints, type Hint } from "$lib/state/hints.svelte";
+import { setHints, type Hint } from "$lib/state/hints.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { rawTable } from "$lib/state/raw-table";
 import { settings } from "$lib/state/settings.svelte";
@@ -45,7 +45,7 @@ export function hydrateWorkerState(snapshot: WorkerStateSnapshot): void {
   Object.assign(sphere, snapshot.sphere);
   replaceRecord(itemTrackerState, snapshot.itemTrackerState);
   replaceRecord(dungeonItemsState, snapshot.dungeonItemsState);
-  hints.splice(0, hints.length, ...snapshot.hints);
+  setHints(snapshot.hints);
   Object.assign(settings, snapshot.settings);
 
   const tables = new Set<string>(LOGIC_TABLE_FIELDS);

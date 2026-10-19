@@ -15,6 +15,7 @@
     getLocationMarkedTitle,
     getLocationSphereLabel,
     isLocationAccessible,
+    isLocationCheckedByNote,
     isLocationMarked
   } from "$lib/logic/locations";
   import {
@@ -284,6 +285,7 @@
                 type="button"
                 class="location-drop-option"
                 class:rando-marked={isLocationMarked(location)}
+                class:note-marked={isLocationCheckedByNote(location)}
                 class:inaccessible={!isLocationAccessible(location)}
                 class:pulsing={ui.pendingLocationForItemAssignment === location}
                 data-location={location}

@@ -21,10 +21,10 @@
   );
 
   const statusClass = $derived(
-    hint.needsReview ? "review" : hint.type === "path" ? "path" : hint.type === "barren" ? "neutral" : hint.requirement ? hint.requirement.key : "neutral"
+    hint.needsReview ? "review" : hint.type === "path" ? "path" : hint.type === "barren" || hint.type === "no" ? "neutral" : hint.requirement ? hint.requirement.key : "neutral"
   );
   const statusText = $derived(
-    hint.needsReview ? "Review" : hint.type === "path" ? "Path" : hint.type === "barren" ? "Foolish" : hint.requirement ? hint.requirement.label : labelForType(hint.type)
+    hint.needsReview ? "Review" : hint.type === "path" ? "Path" : hint.type === "barren" ? "Foolish" : hint.type === "no" ? "Checked" : hint.requirement ? hint.requirement.label : labelForType(hint.type)
   );
 
   /**

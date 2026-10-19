@@ -1066,6 +1066,13 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   text-decoration: line-through;
 }
 
+/* Checked off by a "no" line in the hint notes rather than by hand - the same
+   struck-through row, in its own colour so the two can be told apart. Two
+   classes deep to outrank the .inaccessible colour. */
+.location-drop-option.rando-marked.note-marked {
+  color: #175a69;
+}
+
 /* A settled entrance - recorded or implied by its coupled partner - goes
    black, so the red and blue ones left are exactly the ones still to find.
    Two classes deep to outrank the .inaccessible colour above. */
@@ -4537,6 +4544,11 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 
 .notes-highlight .hint-line.path {
   color: #6b21a8;
+}
+
+/* "no <area or location>" - checks things off, so it stands out. */
+.notes-highlight .hint-line.no {
+  color: #d01414;
 }
 
 /* The Sync button's warning: config.yaml has moved on since the last sync.

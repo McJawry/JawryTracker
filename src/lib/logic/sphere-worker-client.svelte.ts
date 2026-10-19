@@ -30,6 +30,7 @@ import { sphere } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import { getSphereBlueChuJellyCount } from "$lib/logic/sphere-calculation";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+import { getNoteCheckedLocationKeys } from "$lib/logic/locations";
 import { clearRequirementCache } from "$lib/logic/requirement-text";
 import { clearSphereLogicCaches, computeSphereAnalysis, type SphereAnalysisResult } from "$lib/logic/sphere-board-analysis";
 import { LOGIC_TABLE_FIELDS, type WorkerStateSnapshot } from "$lib/logic/sphere-worker-state";
@@ -98,6 +99,9 @@ function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge, board: boolean
     markedLocations: Object.keys(checked)
       .filter((key) => key.startsWith("sphere-location-checked:") && checked[key])
       .sort(),
+    // Checked off by a "no" line in the hint notes, which never touches the
+    // checked state above.
+    noteCheckedLocations: [...getNoteCheckedLocationKeys()].sort(),
     // Marking a sector says a required boss is behind a door there, which
     // decides which bosses the run has to beat at all - so it moves the
     // spheres without touching a placement, a check or an entrance.

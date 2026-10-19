@@ -33,6 +33,7 @@
     // Path and location hints are told apart by their kind; only an item hint
     // carries a requirement, and there the tag is the more useful thing to see
     // at a glance, so it decides the colour.
+    if (hint.type === "no") return "hint-line no";
     if (hint.type === "path") return "hint-line path";
     if (hint.type === "location") return "hint-line location";
     if (hint.type !== "item") return "";
