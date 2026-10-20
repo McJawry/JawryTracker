@@ -14,6 +14,7 @@ import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getPathHintAreaLocations, isLocationMarked } from "$lib/logic/locations";
 import {
   getMaximalSphereLogicInventory,
+  getReachabilityContextKey,
   getSphereInventoryItemKey,
   getSphereReachabilityWithPlacedDungeonKeys,
   isOwnDungeonKeyForPath,
@@ -26,7 +27,7 @@ import { data } from "$lib/state/data.svelte";
 import type { SpherePlacement } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
-import { buildAreaBranchModel, planPathBossIcons } from "$lib/logic/path-boss-rules";
+import { buildAreaBranchModel, planPathBossIcons, withoutSettledBosses } from "$lib/logic/path-boss-rules";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -45,20 +46,34 @@ export function clearHardBossRequirementCache(): void {
   sphereSoftBossCandidateCache.clear();
 }
 
+/**
+ * The world both caches below answer for. They outlive every tracker change
+ * short of a logic reload, so everything their answers turn on has to be in
+ * here: the seed's options, the recorded entrances, marks and beaten bosses
+ * (getReachabilityContextKey), and the starting gear - a random starting item
+ * marked or unmarked changes which copies can be taken away. Keyed on the
+ * options alone, recording Headstone Island -> Forbidden Woods left the board
+ * drawing icons for the world before it until the window was reloaded.
+ */
+function bossAnswerWorldKey(): string {
+  return JSON.stringify({
+    options: data.sphereOptions,
+    entrances: Object.entries(data.sphereWorld?.dungeonStarts || {}).sort(([a], [b]) => a.localeCompare(b)),
+    context: getReachabilityContextKey(),
+    startingGear: data.sphereStartingGear.map(normalize).sort()
+  });
+}
+
 export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined, bossName: string): boolean {
   if (!placement || isOwnDungeonKeyForPath(placement.item)) return false;
   const bossLocation = getBossLocation(bossName);
   const itemKey = getSphereInventoryItemKey(placement.item, placement.location);
   if (!bossLocation || !itemKey) return false;
 
-  const logicKey = JSON.stringify({
-    options: data.sphereOptions,
-    entrances: Object.entries(data.sphereWorld?.dungeonStarts || {}).sort(([a], [b]) => a.localeCompare(b))
-  });
   // Recorded keys are part of the answer now, so they are part of the key -
   // and this cache outlives a placement change, which only clears on a logic
   // reload.
-  const cacheKey = `${logicKey}|${placedOwnDungeonKeySignature()}|${normalize(bossName)}|${itemKey}`;
+  const cacheKey = `${bossAnswerWorldKey()}|${placedOwnDungeonKeySignature()}|${normalize(bossName)}|${itemKey}`;
   const cached = sphereHardBossRequirementCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -111,6 +126,13 @@ export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined
  * Only the dungeon's own items are stripped, so the journey to its door keeps
  * everything it needs, and only items the dungeon's logic actually names are
  * tested - a dozen or so rather than the whole pool.
+ *
+ * A way through can need two of them together, and then neither completes the
+ * dungeon alone: the Forsaken Fortress is the Hookshot, or the Deku Leaf and
+ * Magic. Given back one at a time, only the Hookshot ever counted, so a Leaf or
+ * Magic found in the area hinted at Helmaroc King settled nothing. Pairs of the
+ * items that fail alone are tried as well, and a pair that completes it makes
+ * both candidates.
  */
 const sphereSoftBossCandidateCache = new Map<string, Set<string>>();
 
@@ -166,11 +188,7 @@ function getBossDungeonItemKeys(bossLocation: string): Set<string> {
 export function getPossiblePathItemKeysForBoss(bossName: string): Set<string> {
   const bossLocation = getBossLocation(bossName);
   if (!bossLocation) return new Set();
-  const logicKey = JSON.stringify({
-    options: data.sphereOptions,
-    entrances: Object.entries(data.sphereWorld?.dungeonStarts || {}).sort(([a], [b]) => a.localeCompare(b))
-  });
-  const cacheKey = `${logicKey}|${placedOwnDungeonKeySignature()}|${normalize(bossName)}`;
+  const cacheKey = `${bossAnswerWorldKey()}|${placedOwnDungeonKeySignature()}|${normalize(bossName)}`;
   const cached = sphereSoftBossCandidateCache.get(cacheKey);
   if (cached) return cached;
 
@@ -210,12 +228,26 @@ export function getPossiblePathItemKeysForBoss(bossName: string): Set<string> {
   // Nothing optional stands in the way, so nothing optional can be the path
   // item either.
   if (!reaches(floor, options)) {
-    universe.forEach((key) => {
-      if (cannotDoWithout.includes(key)) return;
-      const copies = copiesOf(key);
-      if (!copies.length || isOwnDungeonKeyForPath(copies[0])) return;
-      const restored = [...floor.filter((item) => getSphereInventoryItemKey(item) !== key), ...copies];
-      if (reaches(restored, options)) candidates.add(key);
+    const optional = universe.filter((key) => !cannotDoWithout.includes(key) && copiesOf(key).length);
+    // Own-dungeon keys can be half of a pair, but are never anyone's path item.
+    const canBePathItem = (key: string) => !isOwnDungeonKeyForPath(copiesOf(key)[0]);
+    const restoring = (keys: string[]) => [
+      ...floor.filter((item) => !keys.includes(getSphereInventoryItemKey(item))),
+      ...keys.flatMap(copiesOf)
+    ];
+    const alone = new Set(optional.filter((key) => reaches(restoring([key]), options)));
+    alone.forEach((key) => {
+      if (canBePathItem(key)) candidates.add(key);
+    });
+    // Only pairs of items that fail alone: with one that works by itself, the
+    // other is along for the ride.
+    const notAlone = optional.filter((key) => !alone.has(key));
+    notAlone.forEach((key, index) => {
+      notAlone.slice(index + 1).forEach((other) => {
+        if (!reaches(restoring([key, other]), options)) return;
+        if (canBePathItem(key)) candidates.add(key);
+        if (canBePathItem(other)) candidates.add(other);
+      });
     });
   }
   sphereSoftBossCandidateCache.set(cacheKey, candidates);
@@ -329,5 +361,13 @@ export function buildPathBossLocationIcons(
     plan.forEach((bossNames, location) => bossNames.forEach((bossName) => addBoss(location, bossName)));
   });
 
-  return bossesByLocation;
+  // Rule 9 (path-boss-rules.ts): a boss already in a numbered sphere - the same
+  // test that puts its path card in that sphere's column - is searched for
+  // nowhere.
+  const settledBosses = new Set(
+    knowledge.pathHints
+      .map((hint) => hint.right.name)
+      .filter((bossName) => Number.isInteger(calculation.locationSpheres[normalize(getBossLocation(bossName))]))
+  );
+  return withoutSettledBosses(bossesByLocation, settledBosses);
 }

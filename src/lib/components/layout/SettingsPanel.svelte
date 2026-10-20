@@ -18,7 +18,14 @@
     importPortablePreferences,
     type PresetEntry
   } from "$lib/tauri/preference-presets";
-  import { saveColorPreset, loadColorPreset, resetColorsToDefaults } from "$lib/tauri/color-presets";
+  import {
+    BUILT_IN_COLOR_PRESETS,
+    applyColorScheme,
+    isColorSchemeInUse,
+    saveColorPreset,
+    loadColorPreset,
+    resetColorsToDefaults
+  } from "$lib/tauri/color-presets";
   import {
     listRunSaves,
     saveRunAs,
@@ -39,16 +46,16 @@
     saveSettings();
   }
 
-  // Colour inputs fire `input` continuously while dragging but `change` only
+  // Color inputs fire `input` continuously while dragging but `change` only
   // on commit. Saving on change alone meant the storage event other windows
   // listen on didn't fire until the picker closed, so only this window
-  // recoloured live. Throttled to one write per frame - each write broadcasts.
-  let colourWriteQueued = false;
+  // recolored live. Throttled to one write per frame - each write broadcasts.
+  let colorWriteQueued = false;
   function updateLive() {
-    if (colourWriteQueued) return;
-    colourWriteQueued = true;
+    if (colorWriteQueued) return;
+    colorWriteQueued = true;
     requestAnimationFrame(() => {
-      colourWriteQueued = false;
+      colorWriteQueued = false;
       saveSettings();
     });
   }
@@ -114,7 +121,7 @@
     presetStatus = (await resetLayoutToDefaults()).message;
   }
 
-  // Colour presets are their own files under presets/colors, listed and
+  // Color presets are their own files under presets/colors, listed and
   // saved independently of the layout ones.
   let colorStatus = $state("");
   let colorName = $state("");
@@ -155,16 +162,28 @@
     colorStatus = (await loadColorPreset(selectedColor, colorLocation)).message;
   }
 
+  // The presets that ship with the app, picked and loaded the same way as the
+  // custom ones. The list starts on whichever is in use. No status line: a
+  // built-in cannot fail to load, and the colors change in front of you.
+  let selectedBuiltIn = $state(
+    BUILT_IN_COLOR_PRESETS.find((preset) => isColorSchemeInUse(preset.scheme))?.name ?? BUILT_IN_COLOR_PRESETS[0].name
+  );
+
+  function loadBuiltInColors() {
+    const preset = BUILT_IN_COLOR_PRESETS.find((candidate) => candidate.name === selectedBuiltIn);
+    if (preset) applyColorScheme(preset.scheme);
+  }
+
   async function deleteColors() {
-    if (!selectedColor || !confirm(`Delete colour preset "${selectedColor}"?`)) return;
+    if (!selectedColor || !confirm(`Delete color preset "${selectedColor}"?`)) return;
     colorStatus = (await deletePreferencePreset(selectedColor, colorLocation, "colors")).message;
     await refreshColorPresets();
   }
 
   function resetColors() {
-    if (!confirm("Reset page background, panel colour and stream backdrop to defaults?")) return;
+    if (!confirm("Reset page background, panel color and stream backdrop to defaults?")) return;
     resetColorsToDefaults();
-    colorStatus = "Colours reset to defaults.";
+    colorStatus = "Colors reset to defaults.";
   }
 
   // The run itself (not preferences) mirrors to data/autosave.json; these are
@@ -325,8 +344,21 @@
   {/if}
 
   {#if activeTab === "appearance"}
+  <!-- The ones that ship with the app. Nothing to delete, so only Load. -->
   <fieldset class="settings-group">
-    <legend>Colour presets</legend>
+    <legend>Presets</legend>
+    <div class="setting-row">
+      <select class="preset-select" bind:value={selectedBuiltIn}>
+        {#each BUILT_IN_COLOR_PRESETS as preset (preset.name)}
+          <option value={preset.name}>{preset.name}</option>
+        {/each}
+      </select>
+      <button class="tool-button" type="button" onclick={loadBuiltInColors}>Load</button>
+    </div>
+  </fieldset>
+
+  <fieldset class="settings-group">
+    <legend>Custom Color Presets</legend>
 
     <label class="setting-control">
       <span>Folder</span>
@@ -342,7 +374,7 @@
     </p>
 
     <div class="setting-row">
-      <button class="tool-button" type="button" onclick={resetColors}>Reset colours to default</button>
+      <button class="tool-button" type="button" onclick={resetColors}>Reset colors to default</button>
     </div>
 
     <div class="setting-row">
@@ -352,7 +384,7 @@
             <option value={preset.name}>{preset.name}</option>
           {/each}
         {:else}
-          <option value="">No colour presets here</option>
+          <option value="">No color presets here</option>
         {/if}
       </select>
       <button class="tool-button" type="button" disabled={!selectedColor} onclick={loadColors}>Load</button>
@@ -362,11 +394,11 @@
       <input
         class="preset-name"
         type="text"
-        placeholder="New colour preset name"
+        placeholder="New color preset name"
         bind:value={colorName}
         onkeydown={(event) => event.key === "Enter" && saveColors()}
       />
-      <button class="tool-button" type="button" disabled={!colorName.trim()} onclick={saveColors}>Save colours</button>
+      <button class="tool-button" type="button" disabled={!colorName.trim()} onclick={saveColors}>Save colors</button>
     </div>
     {#if colorStatus}<p class="setting-status">{colorStatus}</p>{/if}
   </fieldset>

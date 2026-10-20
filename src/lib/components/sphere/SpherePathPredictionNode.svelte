@@ -8,16 +8,7 @@
   // the path item ("candidates").
   import { bossImage, itemImage, getItemNumberBadge } from "$lib/logic/images";
   import { removeHintLine } from "$lib/state/hints.svelte";
-  import {
-    getPathSphereLabel,
-    getPathHintCandidates,
-    getPathLogicalItems,
-    selectLatestPathCandidates,
-    countPathHintsForArea,
-    type PathCandidate,
-    type PathProgressEntry
-  } from "$lib/logic/sphere-path-progress";
-  import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
+  import { getPathSphereLabel, type PathCandidate, type PathProgressEntry } from "$lib/logic/sphere-path-progress";
   import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
 
   let { entry, sourceIds = [] }: { entry: PathProgressEntry; sourceIds?: string[] } = $props();
@@ -29,35 +20,19 @@
   const area = $derived(areaNames.map((name) => name.replace(" Sector", "")).join(" and "));
   const solved = $derived(entry.progress.kind !== "unknown");
 
-  const displayedItems = $derived.by((): PathCandidate[] => {
-    const calculation = sphereAnalysisCache.calculation;
-    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
-    if (!calculation || !relativeUnknown) return [];
-    const knowledge = getSphereTrackingKnowledge();
-    return solved
-      ? getPathLogicalItems(entry.progress, knowledge, calculation, relativeUnknown)
-      : getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown);
-  });
+  // Linked items once solved, candidates until then - worked out in the
+  // analysis worker with the rest of the board (sphere-board-analysis.ts).
+  const displayedItems = $derived<PathCandidate[]>(sphereAnalysisCache.board?.pathItems.get(entry.hint.lineNumber) ?? []);
 
-  // How many bosses this one area is the path to.
-  const areaPathHintCount = $derived.by(() => {
-    if (!sphereAnalysisCache.calculation) return 1;
-    return countPathHintsForArea(entry.hint, getSphereTrackingKnowledge());
-  });
-
-  // Only the confirmed, furthest-along candidates become graph edges - an
-  // unconfirmed guess shouldn't draw a line as if it were established.
-  //
-  // Narrowing to the single furthest-along candidate is only sound for an area
-  // hinted at one boss. Every hinted boss gets its own path item, so an area
-  // on the path to two of them holds two distinct ones - collapsing both cards
-  // onto the same item claimed one Power Bracelets was the path to Gohdan and
-  // Molgera at once. With several hints on an area, every confirmed candidate
-  // stays in play.
+  // Every confirmed candidate becomes a graph edge - an unconfirmed guess
+  // shouldn't draw a line as if it were established. None is singled out:
+  // which one the hint was drawn from is exactly what is not known, so they
+  // are all linked, and drawn dashed when there are several (sphere-edges.ts).
+  // Linking only the furthest-along one left a Ghost Ship Chart on Jalhalla's
+  // card with no line to it, and collapsed two bosses' cards onto one item.
   const linkedItems = $derived.by(() => {
     if (solved) return displayedItems;
-    const confirmed = displayedItems.filter((item) => item.confirmed);
-    return areaPathHintCount > 1 ? confirmed : selectLatestPathCandidates(confirmed);
+    return displayedItems.filter((item) => item.confirmed);
   });
 
   function candidateTitle(candidate: PathCandidate): string {

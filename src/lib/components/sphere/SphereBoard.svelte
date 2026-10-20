@@ -17,20 +17,13 @@
   import { data } from "$lib/state/data.svelte";
   import { settings } from "$lib/state/settings.svelte";
   import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
-  import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
+  import { getSphereBoardAnalysis, registerSphereBoardViewer } from "$lib/logic/sphere-worker-client.svelte";
   import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
-  import { buildPathBossLocationIcons } from "$lib/logic/sphere-boss-icons";
   import { isLocationMarked } from "$lib/logic/locations";
   import { getAreaFromLocation } from "$lib/logic/data-loading";
   import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-  import { computeHiddenPlacementIds, isSphereFilterActive } from "$lib/logic/sphere-usefulness";
-  import {
-    getPathBossProgressEntries,
-    pathHintAreaKey,
-    getPathHintCandidates,
-    getPathHintSourceIds,
-    type PathProgressEntry
-  } from "$lib/logic/sphere-path-progress";
+  import { combineHiddenPlacementIds, isSphereFilterActive } from "$lib/logic/sphere-usefulness";
+  import type { PathProgressEntry } from "$lib/logic/sphere-path-progress";
   import SpherePlacementNode from "./SpherePlacementNode.svelte";
   import SphereAreaGroup from "./SphereAreaGroup.svelte";
   import SphereUnplacedItemNode from "./SphereUnplacedItemNode.svelte";
@@ -55,15 +48,20 @@
     getSphereBoardAnalysis(knowledge);
   });
 
+  // Asks this window's analysis to include the board's half - boss icons, path
+  // cards, the Filters menu's walk - which a window without a board skips.
+  $effect(() => registerSphereBoardViewer());
+
   const calculation = $derived(sphereAnalysisCache.calculation);
 
   const placementByLocation = $derived(new Map(knowledge.placements.map((placement) => [normalize(placement.location), placement])));
 
-  const pathBossIconsByLocation = $derived(
-    sphereAnalysisCache.dependenciesReady && calculation
-      ? buildPathBossLocationIcons(knowledge, calculation, sphereAnalysisCache.relativeUnknown!)
-      : new Map<string, string[]>()
-  );
+  // Everything below that comes from the logic was worked out in the analysis
+  // worker beside the calculation (sphere-board-analysis.ts); the board only
+  // lays it out. Until a run lands it shows the previous one's, the same as the
+  // calculation it belongs to.
+  const boardAnalysis = $derived(sphereAnalysisCache.board);
+  const pathBossIconsByLocation = $derived(boardAnalysis?.pathBossIcons ?? new Map<string, string[]>());
 
   interface SphereColumnData {
     sphereNumber: number;
@@ -157,11 +155,7 @@
     };
   });
 
-  const pathProgress = $derived.by((): PathProgressEntry[] => {
-    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
-    if (!calculation || !relativeUnknown || !knowledge.pathHints.length) return [];
-    return getPathBossProgressEntries(knowledge, calculation, relativeUnknown);
-  });
+  const pathProgress = $derived<PathProgressEntry[]>(calculation ? (boardAnalysis?.pathProgress ?? []) : []);
 
   const pathsBySphere = $derived.by(() => {
     const map = new Map<number, PathProgressEntry[]>();
@@ -189,71 +183,35 @@
 
   // Which cards each path hint's purple chain runs back from, keyed by hint
   // line so the card components can publish it as data-path-source-ids.
-  const pathSourceIds = $derived.by(() => {
-    const relativeUnknown = sphereAnalysisCache.relativeUnknown;
-    const map = new Map<number, string[]>();
-    if (!calculation || !relativeUnknown) return map;
-    pathProgress.forEach((entry) => {
-      map.set(entry.hint.lineNumber, getPathHintSourceIds(entry.hint, entry.progress, knowledge, calculation, relativeUnknown));
-    });
+  const pathSourceIds = $derived(boardAnalysis?.pathSourceIds ?? new Map<number, string[]>());
 
-    // Two hints on one area can never name the same location - the randomizer
-    // marks a location hasBeenHinted the moment it is used (Hints.cpp). So if
-    // the dependency graph hands two cards the same source, that answer is
-    // provably wrong, whatever the graph thinks. It happens whenever the
-    // recorded placements are too incomplete to order the area's items: a
-    // circular set has nothing unlocking anything, so every card falls back to
-    // the same lone ancestor.
-    //
-    // Widening both to every candidate in the area is the honest reading, and
-    // several sources per card draw dashed (sphere-edges.ts) rather than
-    // asserting one item feeds both bosses.
-    const byArea = new Map<string, PathProgressEntry[]>();
-    pathProgress.forEach((entry) => {
-      const areaKey = pathHintAreaKey(entry.hint);
-      if (!byArea.has(areaKey)) byArea.set(areaKey, []);
-      byArea.get(areaKey)!.push(entry);
-    });
-
-    byArea.forEach((entries) => {
-      if (entries.length < 2) return;
-      const signatures = entries.map((entry) => (map.get(entry.hint.lineNumber) ?? []).join("|"));
-      if (new Set(signatures).size === signatures.length) return;
-      entries.forEach((entry) => {
-        const widened = getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown).map((candidate) => candidate.id);
-        if (widened.length > 1) map.set(entry.hint.lineNumber, widened);
-      });
-    });
-
-    return map;
-  });
-
-  // Filters menu: cards to hide. The requirement walk runs a reachability pass
-  // per item, so it happens off the render path in an effect and yields
-  // between them - the board keeps painting while it works, and simply shows
-  // every card until the result lands.
-  let hiddenPlacementIds = $state(new Set<string>());
+  // Filters menu: cards to hide. The requirement walk - a reachability pass
+  // per item - came back from the worker with the rest of the analysis; what
+  // is left is set arithmetic against the purple chain, cheap enough to redo
+  // whenever the chain is redrawn.
+  //
+  // A card placed since that walk ran has not been judged yet, so it stays in
+  // view until the next result lands - and with no walk yet, every card does.
   // Published by drawSphereEdges - the cards it painted purple.
   let pathChainNodeIds = $state(new Set<string>());
-  $effect(() => {
-    const filters = { ...settings.sphereFilters };
-    if (!isSphereFilterActive(filters)) {
-      hiddenPlacementIds = new Set();
-      return;
-    }
-    const placements = knowledge.placements;
-    const sphereLocations = calculation?.sphereLocations;
-    const purpleCards = [...pathChainNodeIds];
-    let cancelled = false;
-    const prunedPlacementIds = calculation?.prunedPlacementIds ?? [];
-    computeHiddenPlacementIds({ placements, filters, pathChainIds: purpleCards, sphereLocations, prunedPlacementIds })
-      .then((ids) => {
-        if (!cancelled) hiddenPlacementIds = ids;
-      })
-      .catch((error) => console.error(error));
-    return () => {
-      cancelled = true;
-    };
+  const hiddenPlacementIds = $derived.by((): Set<string> => {
+    const filters = settings.sphereFilters;
+    if (!isSphereFilterActive(filters)) return new Set();
+    const requiredIds = boardAnalysis?.requiredPlacementIds;
+    if (filters.pathsAndRequired && !requiredIds) return new Set();
+    const evaluated = boardAnalysis?.evaluatedPlacementIds;
+    const placements = filters.pathsAndRequired && evaluated
+      ? knowledge.placements.filter((placement) => evaluated.has(placement.id))
+      : knowledge.placements;
+    return combineHiddenPlacementIds({
+      placements,
+      filters,
+      pathChainIds: [...pathChainNodeIds],
+      sphereLocations: calculation?.sphereLocations,
+      prunedPlacementIds: calculation?.prunedPlacementIds ?? [],
+      playthroughFinished: Boolean(calculation?.prunedAgainstGoal),
+      requiredIds: requiredIds ?? []
+    });
   });
 
   const sphereColumns = $derived.by((): SphereColumnData[] => {

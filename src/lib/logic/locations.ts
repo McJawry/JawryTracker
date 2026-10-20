@@ -21,6 +21,8 @@ import { data } from "$lib/state/data.svelte";
 import { checked, setChecked } from "$lib/state/checked.svelte";
 import { settings } from "$lib/state/settings.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
+import { hints, hintsRevision } from "$lib/state/hints.svelte";
+import { sphere } from "$lib/state/sphere.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -97,16 +99,87 @@ export function isLocationLocallyChecked(location: string): boolean {
   return Boolean(checked[getLocationCheckedId(location)]);
 }
 
+const NO_NOTE_CHECKS = new Set<string>();
+let noteCheckCache: { revision: number; available: string[]; hasLines: boolean; doors: string; keys: Set<string> } | null = null;
+
+/**
+ * Every location a "no" line in the hint notes checks off, normalized.
+ *
+ * Worked out from the lines each time they change rather than written into
+ * the checked state, so deleting the line unchecks them again - and so they
+ * can be told apart from a check made by hand. An area's checks are the ones
+ * its list on the map shows, which can grow as entrances are recorded, so the
+ * recorded entrances are part of what this is kept against.
+ */
+export function getNoteCheckedLocationKeys(): Set<string> {
+  const revision = hintsRevision.value;
+  const available = getAvailableLocations();
+  const sameLines = noteCheckCache?.revision === revision && noteCheckCache.available === available;
+  // No "no" lines at all: nothing to check off, whatever the entrances say.
+  if (sameLines && !noteCheckCache!.hasLines) return NO_NOTE_CHECKS;
+  const doors = JSON.stringify([sphere.entranceConnections, sphere.entranceMappings]);
+  if (sameLines && noteCheckCache!.doors === doors) return noteCheckCache!.keys;
+
+  const lines = hints.filter((hint) => hint.type === "no" && !hint.needsReview);
+  const keys = new Set<string>();
+  lines.forEach((hint) => {
+    (hint.checks ?? []).forEach((check) => {
+      const locations = check.kind === "location" ? [check.name] : getSphereHintAreaLocations(check.name);
+      locations.forEach((location) => keys.add(normalize(location)));
+    });
+  });
+  noteCheckCache = { revision, available, hasLines: lines.length > 0, doors, keys: keys.size ? keys : NO_NOTE_CHECKS };
+  return noteCheckCache.keys;
+}
+
+/** Checked off by a "no" line in the hint notes. */
+export function isLocationCheckedByNote(location: string): boolean {
+  return getNoteCheckedLocationKeys().has(normalize(location));
+}
+
 export function isLocationMarked(location: string): boolean {
-  return isLocationLocallyChecked(location);
+  return isLocationLocallyChecked(location) || isLocationCheckedByNote(location);
 }
 
 export function getLocationMarkedTitle(location: string): string {
+  if (isLocationCheckedByNote(location)) return 'Checked by a "no" line in the hint notes - remove the line to uncheck it. Right-click to assign an item.';
   if (isLocationLocallyChecked(location)) return "Checked locally. Left-click to uncheck; right-click to assign an item.";
   return "Left-click to check; right-click to assign an item.";
 }
 
+/**
+ * Clear All - the location list's button and right-clicking an area both end
+ * up here.
+ *
+ * Right-clicking an area can bring the checks elsewhere that hang on the
+ * cleared ones along (`withDependents`), with rightClickClearsDependentLocations
+ * on, as the randomizer tracker does it: clearing Forbidden Woods also checks
+ * Orca's letter, which Kalle Demos's defeat sends. The list's Clear All button
+ * never does. Only ones in this seed's pool - the rest are not on the tracker
+ * to check.
+ *
+ * Only for what this clear actually checks off. A heart container already
+ * checked beforehand - by hand, or by a "no" line - was not cleared here, so
+ * clearing the rest of its dungeon later leaves its letter alone.
+ */
+export function clearLocations(locations: string[], { withDependents = false }: { withDependents?: boolean } = {}): void {
+  const cleared = [...locations];
+  if (withDependents && settings.rightClickClearsDependentLocations) {
+    const pool = new Map(getAvailableLocations().map((location) => [normalize(location), location]));
+    locations.filter((location) => !isLocationMarked(location)).forEach((location) => {
+      (data.outsideDependentLocations[normalize(location)] ?? []).forEach((dependent) => {
+        const inPool = pool.get(normalize(dependent));
+        if (inPool) cleared.push(inPool);
+      });
+    });
+  }
+  unique(cleared).forEach((location) => setChecked(getLocationCheckedId(location), true));
+}
+
 export function toggleLocationChecked(location: string): void {
+  // The note decides this one: ticking it by hand as well would leave it
+  // checked after the line is gone, without anything showing why.
+  if (isLocationCheckedByNote(location)) return;
   const id = getLocationCheckedId(location);
   setChecked(id, !checked[id]);
 }
@@ -167,8 +240,8 @@ export function getSphereHintAreaLocations(areaName: string): string[] {
  * Whether everything needed to finish the run is in hand.
  *
  * Computed beside the other reachability sets (computeGoMode in
- * sphere-worker-client) because it needs an inventory this module cannot build
- * without closing an import cycle.
+ * sphere-board-analysis) because it needs an inventory this module cannot
+ * build without closing an import cycle.
  */
 export function isGoMode(): boolean {
   return sphereAnalysisCache.goMode;
@@ -200,7 +273,7 @@ export function getLocationSphereLabel(location: string): string {
 
   const sphereNumber = getLocationSphere(location);
   // No determinate sphere, but you can still walk in there with what you're
-  // holding - "-" would read as unreachable and contradict the colour.
+  // holding - "-" would read as unreachable and contradict the color.
   if (sphereNumber === null) return isLocationAccessible(location) ? "?" : "-";
 
   const certain = sphereAnalysisCache.certainLocationKeys;
@@ -209,7 +282,7 @@ export function getLocationSphereLabel(location: string): string {
 }
 
 /**
- * Whether the held inventory opens this location, used to colour the location
+ * Whether the held inventory opens this location, used to color the location
  * list and drive the map's area fractions.
  *
  * Deliberately NOT the sphere calculation's reachable set: that withholds a
@@ -267,7 +340,7 @@ export function getAreaAccessibility(areaName: string, targetKind: "sector" | "a
 
   // Same inventory-based question the location list asks - see
   // isLocationAccessible. Keeping the cell fractions on the sphere-propagated
-  // set would have them disagree with the colours inside the cell's own list.
+  // set would have them disagree with the colors inside the cell's own list.
   const accessible = remainingLocations.filter((location) => isLocationAccessible(location)).length;
 
   const colorClass: AreaAccessibility["colorClass"] = remaining === 0 && accessible === 0 ? "done" : accessible === 0 ? "stuck" : "open";

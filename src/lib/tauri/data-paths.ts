@@ -58,12 +58,12 @@ export async function getDataRoot(location: PresetLocation): Promise<string> {
 }
 
 /**
- * Presets are split by kind so a colour scheme and a panel layout can be
- * swapped independently - picking a new colour scheme shouldn't move every
+ * Presets are split by kind so a color scheme and a panel layout can be
+ * swapped independently - picking a new color scheme shouldn't move every
  * panel, and vice versa.
  *
  * Each kind gets its own subfolder. Layout presets used to sit loose in
- * `presets/` alongside the colours folder; they now have `presets/Layout/`,
+ * `presets/` alongside the colors folder; they now have `presets/Layout/`,
  * and anything left in the old place is moved across on first use (see
  * migrateLooseLayoutPresets).
  */

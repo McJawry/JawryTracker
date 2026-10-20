@@ -8,6 +8,7 @@
   import SphereBoard from "./SphereBoard.svelte";
   import SphereZoomSlider from "$lib/components/layout/SphereZoomSlider.svelte";
   import SphereFilterMenu from "$lib/components/layout/SphereFilterMenu.svelte";
+  import SphereLoadingSpinner from "$lib/components/layout/SphereLoadingSpinner.svelte";
   import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { data } from "$lib/state/data.svelte";
   import { ui } from "$lib/state/ui.svelte";
@@ -45,8 +46,11 @@
        zoom slider right, so the slider lines up with where it is in every
        other popout. -->
   <header class="popout-header">
-    <span class="popout-status">
-      {data.sphereLogicLoaded ? (data.sphereRules && Object.keys(data.sphereRules).length ? "Sphere logic ready" : "Sphere logic loading") : "Loading sphere logic..."}
+    <span class="popout-header-start">
+      <SphereLoadingSpinner />
+      <span class="popout-status">
+        {data.sphereLogicLoaded ? (data.sphereRules && Object.keys(data.sphereRules).length ? "Sphere logic ready" : "Sphere logic loading") : "Loading sphere logic..."}
+      </span>
     </span>
     <SphereFilterMenu />
     <SphereZoomSlider />
@@ -90,6 +94,12 @@
     border-bottom: 1px solid var(--line);
     background: var(--panel);
     color: var(--ink);
+  }
+
+  .popout-header-start {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .popout-status {

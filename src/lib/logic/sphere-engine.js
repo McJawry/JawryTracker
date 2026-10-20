@@ -74,13 +74,29 @@
   };
   const DUNGEON_KEY_AREAS = new Set(["Dragon Roost Cavern", "Forbidden Woods", "Tower of the Gods", "Earth Temple", "Wind Temple"]);
 
+  // Memoized. Every rule check, inventory lookup and cache key goes through
+  // here - the tracker's modules call it as WWRSphereEngine.normalize too - and
+  // the four regex passes were over half of all the time a busy board spent.
+  // The names it is asked about are a few thousand at most, so a lookup answers
+  // nearly every call; the ceiling only guards against free text (hint lines)
+  // piling up over a long session.
+  const NORMALIZE_CACHE = new Map();
+  const NORMALIZE_CACHE_LIMIT = 50000;
+
   function normalize(value) {
-    return String(value || "")
-      .toLowerCase()
-      .replace(/[']/g, "")
-      .replace(/&/g, " and ")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
+    const text = String(value || "");
+    let normalized = NORMALIZE_CACHE.get(text);
+    if (normalized === undefined) {
+      normalized = text
+        .toLowerCase()
+        .replace(/[']/g, "")
+        .replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+      if (NORMALIZE_CACHE.size >= NORMALIZE_CACHE_LIMIT) NORMALIZE_CACHE.clear();
+      NORMALIZE_CACHE.set(text, normalized);
+    }
+    return normalized;
   }
 
   const DELAYED_BOSS_MAIL_PREREQUISITES = new Map([
@@ -644,11 +660,51 @@
     "skip rematch bosses": ["skip refights"]
   };
 
+  // Normalized option name -> the name it is stored under, for the options
+  // snapshots the public entry points take (indexedOptions). Every entrance's
+  // shuffle type and every option atom asks for an option, and finding one used
+  // to mean normalizing every name in the config on each ask - a quarter of a
+  // busy board's time. A snapshot is never written to, so its index cannot go
+  // stale; options the engine did not snapshot itself still get the plain
+  // search, since the tracker's own copy is edited in place while logic loads.
+  const OPTION_NAME_INDEX = new WeakMap();
+
+  function indexedOptions(options) {
+    if (!options || OPTION_NAME_INDEX.has(options)) return options;
+    const snapshot = { ...options };
+    const byKey = new Map();
+    // First one wins, as the search it replaces found it.
+    Object.keys(snapshot).forEach((optionName) => {
+      const key = normalize(optionName);
+      if (!byKey.has(key)) byKey.set(key, optionName);
+    });
+    OPTION_NAME_INDEX.set(snapshot, byKey);
+    return snapshot;
+  }
+
+  const OPTION_KEY_CACHE = new Map();
+
+  function findOption(options, byKey, candidate) {
+    if (byKey) {
+      const optionName = byKey.get(candidate);
+      return optionName === undefined ? null : { found: true, value: options[optionName] };
+    }
+    const entry = Object.entries(options).find(([optionName]) => normalize(optionName) === candidate);
+    return entry ? { found: true, value: entry[1] } : null;
+  }
+
   function getOptionValue(options, name) {
-    const key = normalize(unwrapYamlValue(name));
-    for (const candidate of [key, ...(OPTION_ALIASES[key] || [])]) {
-      const entry = Object.entries(options).find(([optionName]) => normalize(optionName) === candidate);
-      if (entry) return { found: true, value: entry[1] };
+    let key = OPTION_KEY_CACHE.get(name);
+    if (key === undefined) {
+      key = normalize(unwrapYamlValue(name));
+      if (typeof name === "string") OPTION_KEY_CACHE.set(name, key);
+    }
+    const byKey = OPTION_NAME_INDEX.get(options);
+    const direct = findOption(options, byKey, key);
+    if (direct) return direct;
+    for (const alias of OPTION_ALIASES[key] || []) {
+      const aliased = findOption(options, byKey, alias);
+      if (aliased) return aliased;
     }
     return { found: false, value: undefined };
   }
@@ -1058,6 +1114,7 @@
    * all (logic/entrances.ts).
    */
   function getAccessibleAreas({ locations, rules, macros, world, items, options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents }) {
+    options = indexedOptions(options);
     const inventory = {};
     (items || []).forEach((item) => addInventoryItem(inventory, item, ""));
     const contextBase = { rules, macros: getSeedMacros(macros, world, options, chartMappings), options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents, world };
@@ -1071,10 +1128,11 @@
    *
    * Standing in an area is not the same as being able to use every door in it:
    * Outset Mesa's House needs the Song of Passing and Jabun's Cave needs bombs.
-   * The entrance tracker colours a row by this, so an entrance you cannot open
+   * The entrance tracker colors a row by this, so an entrance you cannot open
    * yet reads red even though the island around it is reachable.
    */
   function getTraversableExits(input) {
+    input = { ...input, options: indexedOptions(input.options) };
     const world = input.world;
     if (!world?.areas) return new Set();
     const inventory = {};
@@ -1106,6 +1164,7 @@
   }
 
   function getReachableLocations({ locations, rules, macros, world, items, options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents }) {
+    options = indexedOptions(options);
     const inventory = {};
     (items || []).forEach((item) => addInventoryItem(inventory, item, ""));
     const contextBase = { rules, macros: getSeedMacros(macros, world, options, chartMappings), options, entranceMappings, entranceConnections, chartMappings, additionalStartAreas, startingIsland, additionalEvents, world };
@@ -1335,6 +1394,7 @@
   }
 
   function calculate(input) {
+    input = { ...input, options: indexedOptions(input.options) };
     const placements = input.placements || [];
     // Shared for every calculateCore call this invocation makes (initial run, every
     // candidate-removal test, and the final result) - see getReachableLocationSet's
@@ -1360,11 +1420,22 @@
       : initial;
     const goalLocation = normalize("Ganon's Tower - Defeat Ganondorf");
     const goalIsReachable = Number.isInteger(pruneInitial.locationSpheres[goalLocation]);
+    // Until Ganondorf can be reached there is no "is the seed still beatable"
+    // to ask, so a duplicate copy is spare only if everything still reachable
+    // without it: every recorded card, and every location not yet checked.
+    // Recorded cards alone called the Kreeb Picto Box Optional while the photo
+    // checks it opened were still unchecked - and with the other copy out of
+    // logic, it was the only Picto Box the logic had.
     const baselineTargets = new Set(goalIsReachable
       ? [goalLocation]
-      : placements
-        .filter((placement) => Number.isInteger(pruneInitial.locationSpheres[normalize(placement.location)]))
-        .map((placement) => normalize(placement.location)));
+      : [
+        ...placements
+          .filter((placement) => Number.isInteger(pruneInitial.locationSpheres[normalize(placement.location)]))
+          .map((placement) => normalize(placement.location)),
+        ...(input.uncheckedLocations || [])
+          .map(normalize)
+          .filter((locationKey) => Number.isInteger(pruneInitial.locationSpheres[locationKey]))
+      ]);
     const duplicateCounts = new Map();
     placements.forEach((placement) => {
       const itemKey = getInventoryItemKey(placement.item, placement.location);
@@ -1450,6 +1521,10 @@
     });
 
     result.prunedPlacementIds = [...prunedPlacementIds];
+    // Whether the pare-down asked about Ganondorf. Until he can be reached it
+    // can only drop spare duplicate copies, so every other card is "kept" by
+    // default rather than by any judgement - see computeHiddenPlacementIds.
+    result.prunedAgainstGoal = goalIsReachable;
     // Where everything would sit with the held items counted: a card with no
     // sphere that is reachable here is waiting on one of them, not out of
     // logic. The same as locationSpheres when nothing is held that way.
@@ -1873,6 +1948,7 @@
    * OR per location over every way to reach it, then simplification.
    */
   function flattenRequirements(input) {
+    input = { ...input, options: indexedOptions(input.options) };
     const world = input.world;
     if (!world || !world.areas) return {};
 
@@ -2011,6 +2087,10 @@
     compileExpression,
     classifyAtom,
     flattenRequirements,
+    // Exposed for the path cards (logic/sphere-path-progress.ts): an item in a
+    // path-hinted area is a candidate for its path item if any rule asks for
+    // it - the same list the Optional pare-down skips resimulating against.
+    collectReferencedItemKeys,
     // Exposed for the entrance tracker (logic/entrances.ts) for the same
     // reason: which entrance types a seed shuffles is a logic question, and a
     // second copy of the rule in the UI would be free to disagree with the one

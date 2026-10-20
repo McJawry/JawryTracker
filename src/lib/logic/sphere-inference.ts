@@ -213,6 +213,10 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
     );
   });
   const availableDependencies = new Map<string, string[]>(availableLocations.map((location) => [normalize(location), []]));
+  // What is open before any unknown item is added. Not the spheres: those
+  // leave out the bosses already beaten, so a letter that only waits on one -
+  // Orca's, once Kalle Demos is checked - has no sphere, yet is open now.
+  const reachableWithKnownItems = getReachableLocations(knownItems);
 
   const requiredItemCache = new Map();
   if (availableLocations.length || unresolvedPlacements.length) {
@@ -224,7 +228,14 @@ export function inferRelativeUnknownSpheres(knowledge: SphereTrackingKnowledge, 
 
       const reachable = reachableByItem.get(itemKey)!;
       availableLocations.forEach((location) => {
-        if (!reachable.has(normalize(location)) && !isLogicRequiredItemForLocation(source, location, requiredItemCache)) return;
+        // An item opens a location only if the location was shut without it.
+        // Asking just "is it reachable once this is added" said yes for every
+        // item at a location that was open already, so Orca's letter waited
+        // on all of them and was drawn a step after the latest - after a
+        // Hookshot it has nothing to do with.
+        const locationKey = normalize(location);
+        const opens = reachable.has(locationKey) && !reachableWithKnownItems.has(locationKey);
+        if (!opens && !isLogicRequiredItemForLocation(source, location, requiredItemCache)) return;
         availableDependencies.get(normalize(location))!.push(source.id);
       });
       // Two different reasons a source can gate a target, kept apart because

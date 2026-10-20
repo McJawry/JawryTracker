@@ -2,7 +2,7 @@
   // Requirement breakdown shown while hovering a location, mirroring the
   // randomizer tracker's own tooltip: an optional entrance path, then the
   // location's rule split into one bullet per top-level AND term, with each
-  // atom coloured by whether it's currently held.
+  // atom colored by whether it's currently held.
   import {
     getEntranceRequirements,
     getLocationRequirements,
@@ -18,7 +18,7 @@
   }: { location: string; x: number; y: number; kind?: "location" | "entrance" } = $props();
 
   // Requirements are flattened once when the logic loads, so this is a lookup
-  // plus a colouring pass - no waiting, no chunking, nothing to cancel.
+  // plus a coloring pass - no waiting, no chunking, nothing to cancel.
   const requirements = $derived<LocationRequirements>(
     kind === "entrance" ? getEntranceRequirements(location) : getLocationRequirements(location)
   );

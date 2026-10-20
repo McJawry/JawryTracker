@@ -5,7 +5,7 @@
 // Parsing and atom classification come from the engine itself
 // (WWRSphereEngine.compileExpression/classifyAtom) rather than a display-only
 // reimplementation, so the tooltip can't disagree with the logic about what a
-// rule means. Only the *rendering* and the have/don't-have colouring live
+// rule means. Only the *rendering* and the have/don't-have coloring live
 // here.
 import { WWRSphereEngine, type ExpressionNode } from "$lib/logic";
 import {
@@ -258,7 +258,7 @@ function prettyTrackerName(item: string, count: number): string {
 /* The tree comes from WWRSphereEngine.flattenRequirements, a port of the      */
 /* randomizer's own logic/flatten/. It is item-only - area access and events   */
 /* are inlined - and it depends on nothing that changes during a run, so it is */
-/* computed once per logic load and only the have/missing colouring is         */
+/* computed once per logic load and only the have/missing coloring is         */
 /* recomputed per hover. That is how the randomizer's tracker works too:       */
 /* tracker_label.cpp reads a stored location->computedRequirement.             */
 /* -------------------------------------------------------------------------- */
@@ -391,7 +391,7 @@ function getFlattenedRequirements(): Record<string, FlatRequirement> {
     // as well - a Dragon Roost boss you have already beaten still contributed
     // its whole dungeon - and with any dungeon's door still unrecorded the
     // whole requirement read "impossible". Whether the bosses are down is a
-    // separate question, and the location's own colour still answers it: that
+    // separate question, and the location's own color still answers it: that
     // comes from reachability, which does account for them.
     options: { ...data.sphereOptions, ...NO_REQUIRED_BOSSES },
     entranceMappings: Object.fromEntries(Object.entries(getEffectiveEntranceMappings()).map(([name, sector]) => [normalize(name), sector])),
@@ -399,12 +399,12 @@ function getFlattenedRequirements(): Record<string, FlatRequirement> {
     chartMappings: {},
     startingIsland: data.sphereStartingIsland,
     // Seeded with the dungeon starts you could ever savewarp to, which is
-    // what the colouring is computed from as well. Sharing the basis is the
+    // what the coloring is computed from as well. Sharing the basis is the
     // point: a check inside a dungeon you have entered reports what that room
     // costs, while one in a dungeon you have never found the way into reports
-    // that it cannot be reached, and neither can contradict its own colour.
+    // that it cannot be reached, and neither can contradict its own color.
     //
-    // Measured against what is held right now, which is what the colouring
+    // Measured against what is held right now, which is what the coloring
     // uses. Seeding from everything you could ever hold instead let a dungeon
     // you cannot yet reach report only what its rooms cost, skipping the
     // journey there - and a red check would claim you had all it needed.
@@ -425,7 +425,7 @@ function isSatisfied(requirement: FlatRequirement): boolean {
     case "impossible":
       return false;
     // Hearts aren't tracked, and the randomizer's tooltip doesn't print them
-    // either - treating them as met keeps them from colouring a bullet red.
+    // either - treating them as met keeps them from coloring a bullet red.
     case "health":
       return true;
     case "item":
@@ -514,7 +514,10 @@ function getEntrancePathSteps(location: string): string[] {
 
 export function getLocationRequirements(location: string): LocationRequirements {
   const entrancePath = getEntrancePathSteps(location);
-  const requirement = getFlattenedRequirements()[normalize(location)];
+  // Flattened under the logic's own names, which a renamed location does not
+  // share - see locationLogicNames.
+  const locationKey = normalize(location);
+  const requirement = getFlattenedRequirements()[data.sphereWorld?.locationLogicNames?.[locationKey] ?? locationKey];
 
   // No entry at all: the logic isn't loaded, or this location isn't in the seed.
   if (!requirement) return { entrancePath, terms: [], unknown: true };

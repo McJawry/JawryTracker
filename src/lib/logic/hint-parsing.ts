@@ -215,9 +215,49 @@ function buildHint(
   };
 }
 
+/**
+ * "no <area or location>": checked off without being looked at - an island
+ * not worth the trip, or one check that has been ruled out. Areas and single
+ * locations are told apart the way an item hint's destination is, and several
+ * areas can be named at once, as a hint names them.
+ */
+function buildNoHint(line: string, lineNumber: number, targetText: string): Hint {
+  const areas = parseHintAreas(targetText);
+  let kind: "area" | "location" = "area";
+  let targets = areas;
+  if (areas.length === 1) {
+    const location = findBestLocation(targetText);
+    if (location.score > areas[0].score + 8 || location.confidence === "exact") {
+      kind = "location";
+      targets = [location];
+    }
+  }
+
+  const unclear = targets.filter((match) => match.confidence === "unknown" || match.confidence === "ambiguous");
+  const names = targets.map((match) => match.name);
+  return {
+    type: "no",
+    line,
+    lineNumber,
+    left: { kind: "text", name: names.length > 3 ? `${names.length} areas` : names.join(" and ") },
+    right: { kind: "text", name: "Checked" },
+    title: `No ${names.join(", ")}`,
+    detail: unclear.length ? unclear.map((match) => match.note).join("; ") : "Checked by a no line",
+    mapTarget: null,
+    requirement: null,
+    // A line that cannot say for sure what it names checks nothing off.
+    needsReview: unclear.length > 0,
+    checks: names.map((name) => ({ kind, name }))
+  };
+}
+
 function parseLine(rawLine: string, lineNumber: number): Hint | null {
   const line = rawLine.trim();
   if (!line) return null;
+
+  // First, so the name after "no" is never read as some other kind of hint.
+  const noParts = line.match(/^no\s+(.+)$/i);
+  if (noParts) return buildNoHint(line, lineNumber, noParts[1]);
 
   const barrenParts = line.match(/^(.+?)\s+(?:is\s+)?(?:foolish|barren)$/i);
   if (barrenParts) {
@@ -287,6 +327,7 @@ export function labelForType(type: HintType): string {
   if (type === "item") return "Item hint";
   if (type === "location") return "Location hint";
   if (type === "barren") return "Foolish area hint";
+  if (type === "no") return "Marked checked";
   return "Review";
 }
 

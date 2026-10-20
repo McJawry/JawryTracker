@@ -28,6 +28,13 @@ export interface ReferenceData {
    */
   filteredLocationKeys: Set<string> | null;
   locationOrder: Map<string, number> | null;
+  /**
+   * Normalized location -> the locations elsewhere that depend on it, from
+   * location_data.yaml's "Outside Dependent Locations" (a boss's heart
+   * container -> the letter that boss's defeat sends). What right-clicking an
+   * area adds with rightClickClearsDependentLocations on.
+   */
+  outsideDependentLocations: Record<string, string[]>;
   loaded: boolean;
 }
 
@@ -51,6 +58,7 @@ function emptyReferenceData(): ReferenceData {
     requiredBosses: new Set(),
     randomStartingItemCount: 0,
     filteredLocationKeys: null,
+    outsideDependentLocations: {},
     locationOrder: null,
     loaded: false
   };

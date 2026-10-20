@@ -4,42 +4,36 @@
 // queueSphereDependencyAnalysis) - including both of this session's fixes:
 //
 // 1. Persistent worker, not one created per request - a fresh Worker means a
-//    fresh sphere-engine.js execution context, discarding its module-level
-//    expression/atom caches, which used to make every edit pay a full
-//    cold-start re-parse.
+//    fresh execution context, discarding every cache the analysis keeps,
+//    which used to make every edit pay a full cold start.
 // 2. Coalescing: the worker is capped at one in-flight job. A change that
 //    arrives while a job is running is held back (not queued) - the busy
 //    job's completion handler dispatches whatever is *currently* latest, so
 //    a burst of rapid changes can't queue up an unbounded backlog of full
-//    calculate() runs whose results all get thrown away except the last.
+//    runs whose results all get thrown away except the last.
 //
-// pathProgress (path-hint sphere prediction display) is simplified out along
-// with the rest of the hint-derived-placement inference this port doesn't
-// have yet - dependenciesReady/calculation/relativeUnknown are otherwise
-// unaffected.
+// The worker now does the whole analysis, not only the calculation (see
+// sphere-board-analysis.ts). This window sends it a copy of the tracker state
+// and stores what comes back; it never runs the logic itself unless no worker
+// can be started.
+import { untrack } from "svelte";
 import { WWRSphereEngine } from "$lib/logic";
-import type { SphereCalculationResult } from "$lib/logic";
 import { checked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
+import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
+import { hints } from "$lib/state/hints.svelte";
+import { itemTrackerState } from "$lib/state/item-tracker.svelte";
+import { rawTable } from "$lib/state/raw-table";
 import { settings } from "$lib/state/settings.svelte";
 import { sphereAnalysisCache } from "$lib/state/sphere-analysis.svelte";
-import { sphere, type SpherePlacement } from "$lib/state/sphere.svelte";
-import { getSphereTrackingKnowledge, type SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
-import {
-  getSphereBlueChuJellyCount,
-  getSphereProgressionInput,
-  getSphereReachabilityWithOwnDungeonKeys,
-  getSphereReachableLocationSet,
-  getOwnedInventory,
-  sphereReachabilityCache,
-  clearOwnDungeonKeyPoolCache
-} from "$lib/logic/sphere-calculation";
-import { getAvailableLocations } from "$lib/logic/locations";
-import { inferRelativeUnknownSpheres } from "$lib/logic/sphere-inference";
+import { sphere } from "$lib/state/sphere.svelte";
+import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
+import { getSphereBlueChuJellyCount } from "$lib/logic/sphere-calculation";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-import { isTriforceShardItem } from "$lib/logic/shard-tracking";
-import { clearHardBossRequirementCache } from "$lib/logic/sphere-boss-icons";
+import { getNoteCheckedLocationKeys } from "$lib/logic/locations";
 import { clearRequirementCache } from "$lib/logic/requirement-text";
+import { clearSphereLogicCaches, computeSphereAnalysis, type SphereAnalysisResult } from "$lib/logic/sphere-board-analysis";
+import { LOGIC_TABLE_FIELDS, type WorkerStateSnapshot } from "$lib/logic/sphere-worker-state";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -48,15 +42,38 @@ export function bumpSphereLogicRevision(): void {
   sphereLogicRevision += 1;
 }
 
-function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
+/**
+ * How many Sphere Boards this window shows. The boss icons, path cards and the
+ * Filters menu's walk are most of the analysis, and only a board reads them -
+ * a window with just the Main Tracker in it asks for the rest.
+ */
+const boardViewers = $state({ count: 0 });
+
+/**
+ * Called by a Sphere Board as it mounts; the returned function, as it goes.
+ * Untracked, since the board calls it from an effect: counting up reads the
+ * count, and an effect that reads what it writes runs forever.
+ */
+export function registerSphereBoardViewer(): () => void {
+  untrack(() => (boardViewers.count += 1));
+  return () => {
+    untrack(() => (boardViewers.count -= 1));
+  };
+}
+
+function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge, board: boolean): string {
   return JSON.stringify({
     revision: sphereLogicRevision,
     // Turning the calculation off changes what is computed, so it has to move
     // the key or the cache from before the switch would simply stand.
     sphereCalculation: settings.sphereCalculation,
+    // The board's half is only worked out for a window that shows a board,
+    // and the Filters menu's walk only while that filter is on.
+    board,
+    pathsAndRequired: board && settings.sphereFilters.pathsAndRequired,
     placements: knowledge.placements.map(({ id, item, location }) => [id, item, location]),
     areaHints: knowledge.areaHints.map((hint) => [hint.lineNumber, hint.left.name, hint.right.name]),
-    pathHints: knowledge.pathHints.map((hint) => [hint.lineNumber, hint.left.name, hint.right.name]),
+    pathHints: knowledge.pathHints.map((hint) => [hint.lineNumber, hint.left.name, hint.right.name, hint.areas ?? []]),
     barrenHints: knowledge.barrenHints.map((hint) => [hint.lineNumber, hint.left.name]),
     acquiredShards: knowledge.acquiredShardSources.map((source) => source.number),
     unknownSourceItems: knowledge.unknownSourceItems.map((source) => source.item),
@@ -82,6 +99,9 @@ function getSphereAnalysisKey(knowledge: SphereTrackingKnowledge): string {
     markedLocations: Object.keys(checked)
       .filter((key) => key.startsWith("sphere-location-checked:") && checked[key])
       .sort(),
+    // Checked off by a "no" line in the hint notes, which never touches the
+    // checked state above.
+    noteCheckedLocations: [...getNoteCheckedLocationKeys()].sort(),
     // Marking a sector says a required boss is behind a door there, which
     // decides which bosses the run has to beat at all - so it moves the
     // spheres without touching a placement, a check or an entrance.
@@ -94,144 +114,141 @@ export function invalidateSphereAnalysis(): void {
   // routine placement change - so it is the right place to drop the derived
   // caches wholesale. The persistent worker deliberately stays alive across
   // it (see getSphereAnalysisWorker below); bumping the job id is enough to
-  // make any in-flight response for a now-stale request get ignored.
+  // make any in-flight response for a now-stale request get ignored, and the
+  // worker clears its own caches when the next job brings it the new logic.
   sphereAnalysisJobId += 1;
-  Object.assign(sphereAnalysisCache, { key: "", calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, pending: false, dependenciesReady: false });
-  sphereReachabilityCache.clear();
-  clearHardBossRequirementCache();
-  clearOwnDungeonKeyPoolCache();
+  Object.assign(sphereAnalysisCache, {
+    key: "",
+    calculation: null,
+    relativeUnknown: null,
+    certainLocationKeys: null,
+    inventoryReachableKeys: null,
+    board: null,
+    pending: false,
+    dependenciesReady: false
+  });
+  clearSphereLogicCaches();
   // Flattened requirements depend only on the logic and the seed's options, so
   // they survive every inventory change - but a logic reload has to drop them.
   clearRequirementCache();
 }
 
-function finishSphereDependencyAnalysis(key: string, calculation: SphereCalculationResult | null): void {
-  if (sphereAnalysisCache.key !== key || !calculation) return;
-  const knowledge = getSphereTrackingKnowledge();
-  const relativeUnknown = inferRelativeUnknownSpheres(knowledge, calculation);
-  sphereAnalysisCache.key = key;
-  sphereAnalysisCache.calculation = calculation;
-  sphereAnalysisCache.relativeUnknown = relativeUnknown;
-  sphereAnalysisCache.certainLocationKeys = computeCertainLocationKeys();
-  sphereAnalysisCache.inventoryReachableKeys = computeInventoryReachableKeys();
-  sphereAnalysisCache.goMode = computeGoMode();
-  sphereAnalysisCache.pending = false;
-  sphereAnalysisCache.dependenciesReady = true;
-}
-
-/**
- * Locations reachable using only items whose source is known - the seed's
- * starting gear plus items assigned to a location. Anything reachable *only*
- * thanks to an acquired-but-unassigned item has no determinate sphere yet
- * (you hold the item, but not knowing where it came from means its own sphere
- * is unknown), so the location list shows "?" rather than a number.
- */
-function computeCertainLocationKeys(): Set<string> {
-  // Shards are the exception: the shard column and the generic tally are
-  // themselves the record of having one, and neither says where it came from -
-  // the generic one never can. Counting them as sources unknown put every
-  // check behind the Triforce of Courage at "?", the endgame included, for a
-  // set the player has complete in front of them.
-  const unplaced = new Set(
-    getUnplacedAcquiredItems()
-      .map((entry) => normalize(entry.item))
-      .filter((item) => !isTriforceShardItem(item))
-  );
-  if (!unplaced.size) return new Set(getAvailableLocations().map(normalize));
-
-  // Everything held whose source is known: the seed's gear *and* every item
-  // recorded at a location. Starting from the gear alone dropped the
-  // placements too, so holding a single unassigned item - one generic Triforce
-  // shard is enough, and it never gets a location by design - collapsed the
-  // whole column to what the seed's gear reaches and turned a hundred sphere
-  // numbers into "?".
-  const certainItems = getOwnedInventory().filter((item) => !unplaced.has(normalize(item)));
-  return getSphereReachableLocationSet(certainItems);
-}
-
-/**
- * What the map colours read: reachability from the whole held inventory, with
- * no regard for whether a given item was obtained in logic. Computed here,
- * beside the calculation, so locations.ts can read it off the shared cache -
- * importing sphere-calculation from locations.ts directly would close an
- * import cycle (sphere-calculation already imports getAvailableLocations).
- *
- * A dungeon's own keys count as held once every chest they could be in is
- * reachable: with keys shuffled inside their own dungeon, a Tower of the Gods
- * you can search end to end is a Tower you can unlock end to end, so the Stone
- * Tablet and everything past the locked doors is somewhere you can go. The
- * spheres already worked this way; only the colours were still asking without
- * it, so half of an open dungeon stayed red.
- */
-function computeInventoryReachableKeys(): Set<string> {
-  return getSphereReachabilityWithOwnDungeonKeys(getOwnedInventory());
-}
-
-/** Beating the game - the location the requirement walk aims at. */
-const GOAL_LOCATION = "Ganon's Tower - Defeat Ganondorf";
-
-/**
- * Progress items the logic asks for that the tracker has no cell for, so no
- * amount of playing will ever put them in the inventory. Light Arrows gate the
- * Puppet Ganon fight, and every route to Ganondorf runs through it - left
- * ungranted, "can I finish?" would answer no forever.
- */
-const UNTRACKED_PROGRESS_ITEMS = ["Light Arrows"];
-
-/**
- * Whether everything needed to finish the run is in hand: Ganondorf reachable
- * with what you hold. Ganon's Tower itself is never shuffled, so this is about
- * items and about getting into the dungeons the required bosses live in - both
- * of which the tracker does know.
- */
-function computeGoMode(): boolean {
-  const items = [...getOwnedInventory(), ...UNTRACKED_PROGRESS_ITEMS];
-  return getSphereReachableLocationSet(items).has(normalize(GOAL_LOCATION));
+function finishSphereAnalysis(key: string, analysis: SphereAnalysisResult | null): void {
+  if (sphereAnalysisCache.key !== key || !analysis) return;
+  // Stored as they arrived rather than deep-proxied: they are replaced whole
+  // on every run and never edited, and the board reads thousands of entries
+  // out of them each render (see raw-table.ts).
+  Object.assign(sphereAnalysisCache, {
+    calculation: rawTable(analysis.calculation),
+    relativeUnknown: rawTable(analysis.relativeUnknown),
+    certainLocationKeys: analysis.certainLocationKeys,
+    inventoryReachableKeys: analysis.inventoryReachableKeys,
+    goMode: analysis.goMode,
+    board: rawTable(analysis.board),
+    pending: false,
+    dependenciesReady: Boolean(analysis.calculation)
+  });
 }
 
 let sphereAnalysisWorker: Worker | null = null;
+// A worker whose script will not even load is not retried forever: after this
+// many failures every job runs here instead.
+const MAX_WORKER_FAILURES = 2;
+let sphereAnalysisWorkerFailures = 0;
 let sphereAnalysisJobId = 0;
 let sphereAnalysisPendingKey = "";
-let sphereAnalysisPendingPlacements: SpherePlacement[] = [];
+let sphereAnalysisPendingBoard = false;
 let sphereAnalysisWorkerBusy = false;
 let sphereAnalysisDispatchStart = 0;
+/** The logic tables the worker holds, by identity - only changed ones are resent. */
+let sentLogicTables = new Map<string, unknown>();
 
-function calculateSphereProgressionSync(placements: SpherePlacement[]): SphereCalculationResult | null {
-  if (!data.sphereLogicLoaded) return null;
-  return WWRSphereEngine.calculate(getSphereProgressionInput(placements));
+/**
+ * Everything the analysis reads, as plain data the worker can be sent. The
+ * logic tables go only when they differ from what the worker already has; the
+ * rest is small and goes every time, so nothing edited in place can be missed.
+ */
+function collectWorkerState(): WorkerStateSnapshot {
+  const tables = new Set<string>(LOGIC_TABLE_FIELDS);
+  const fields: Record<string, unknown> = {};
+  Object.entries(data).forEach(([field, value]) => {
+    if (tables.has(field)) {
+      if (sentLogicTables.get(field) === value) return;
+      // Loaded tables are raw objects (raw-table.ts), which post as they are;
+      // only the empty placeholders from before any logic loaded are proxies.
+      const proxied = value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype;
+      fields[field] = proxied ? $state.snapshot(value) : value;
+      return;
+    }
+    fields[field] = $state.snapshot(value);
+  });
+  return {
+    checked: $state.snapshot(checked),
+    sphere: $state.snapshot(sphere),
+    itemTrackerState: $state.snapshot(itemTrackerState),
+    dungeonItemsState: $state.snapshot(dungeonItemsState),
+    hints: $state.snapshot(hints),
+    settings: $state.snapshot(settings),
+    data: fields
+  };
+}
+
+function runAnalysisHere(jobId: number, key: string, board: boolean): void {
+  sphereAnalysisWorkerBusy = true;
+  const start = performance.now();
+  window.setTimeout(async () => {
+    try {
+      const analysis = await computeSphereAnalysis({ board });
+      if (jobId === sphereAnalysisJobId) finishSphereAnalysis(key, analysis);
+    } catch (error) {
+      console.error("[sphere-analysis] analysis failed", error);
+      if (jobId === sphereAnalysisJobId) Object.assign(sphereAnalysisCache, { pending: false });
+    } finally {
+      sphereAnalysisWorkerBusy = false;
+      const totalMs = performance.now() - start;
+      if (totalMs > 500) console.warn(`[sphere-analysis] slow job (no-Worker fallback): total=${totalMs.toFixed(0)}ms`);
+      if (jobId !== sphereAnalysisJobId) dispatchSphereAnalysisJob();
+    }
+  }, 0);
 }
 
 function getSphereAnalysisWorker(): Worker | null {
-  if (sphereAnalysisWorker || typeof Worker === "undefined") return sphereAnalysisWorker;
+  if (sphereAnalysisWorker || typeof Worker === "undefined" || sphereAnalysisWorkerFailures >= MAX_WORKER_FAILURES) {
+    return sphereAnalysisWorker;
+  }
 
-  // type: "module" - see sphere-worker.js for why it is not a classic worker.
-  const worker = new Worker(new URL("./sphere-worker.js", import.meta.url), { type: "module" });
+  // type: "module" - see sphere-worker.ts for why it is not a classic worker.
+  const worker = new Worker(new URL("./sphere-worker.ts", import.meta.url), { type: "module" });
+  sentLogicTables = new Map();
   worker.addEventListener("message", (event) => {
     sphereAnalysisWorkerBusy = false;
     const workerMs = performance.now() - sphereAnalysisDispatchStart;
-    const jobId = event.data?.jobId;
-    if (jobId === sphereAnalysisJobId) {
-      const finishStart = performance.now();
-      if (event.data.error) {
-        finishSphereDependencyAnalysis(sphereAnalysisPendingKey, calculateSphereProgressionSync(sphereAnalysisPendingPlacements));
-      } else {
-        finishSphereDependencyAnalysis(sphereAnalysisPendingKey, event.data.calculation);
-      }
-      const finishMs = performance.now() - finishStart;
-      if (workerMs > 500 || finishMs > 500) {
-        console.warn(`[sphere-analysis] slow job: workerMs=${workerMs.toFixed(0)}ms finishMs=${finishMs.toFixed(0)}ms total=${(workerMs + finishMs).toFixed(0)}ms`);
-      }
-    } else {
-      // A newer placement change arrived while this job was running -
-      // dispatch whatever is currently latest now that the worker is free.
+    const { jobId, analysis, error } = event.data ?? {};
+    if (jobId !== sphereAnalysisJobId) {
+      // A newer change arrived while this job was running - dispatch whatever
+      // is currently latest now that the worker is free.
       dispatchSphereAnalysisJob();
+      return;
+    }
+    if (error) {
+      console.error("[sphere-analysis] worker failed, running here instead:", error);
+      runAnalysisHere(jobId, sphereAnalysisPendingKey, sphereAnalysisPendingBoard);
+      return;
+    }
+    const finishStart = performance.now();
+    finishSphereAnalysis(sphereAnalysisPendingKey, analysis);
+    const finishMs = performance.now() - finishStart;
+    if (workerMs > 1500 || finishMs > 50) {
+      console.warn(`[sphere-analysis] slow job: workerMs=${workerMs.toFixed(0)}ms finishMs=${finishMs.toFixed(0)}ms`);
     }
   });
-  worker.addEventListener("error", () => {
+  worker.addEventListener("error", (event) => {
+    console.error("[sphere-analysis] worker error", event.message || event);
     sphereAnalysisWorkerBusy = false;
+    sphereAnalysisWorkerFailures += 1;
     worker.terminate();
     if (sphereAnalysisWorker === worker) sphereAnalysisWorker = null;
-    finishSphereDependencyAnalysis(sphereAnalysisPendingKey, calculateSphereProgressionSync(sphereAnalysisPendingPlacements));
+    runAnalysisHere(sphereAnalysisJobId, sphereAnalysisPendingKey, sphereAnalysisPendingBoard);
   });
   sphereAnalysisWorker = worker;
   return worker;
@@ -240,91 +257,61 @@ function getSphereAnalysisWorker(): Worker | null {
 function dispatchSphereAnalysisJob(): void {
   const jobId = sphereAnalysisJobId;
   const key = sphereAnalysisPendingKey;
-  const placements = sphereAnalysisPendingPlacements;
+  const board = sphereAnalysisPendingBoard;
   const worker = getSphereAnalysisWorker();
-
   if (!worker) {
-    sphereAnalysisWorkerBusy = true;
-    const fallbackStart = performance.now();
-    window.setTimeout(() => {
-      sphereAnalysisWorkerBusy = false;
-      if (jobId === sphereAnalysisJobId) {
-        finishSphereDependencyAnalysis(key, calculateSphereProgressionSync(placements));
-        const totalMs = performance.now() - fallbackStart;
-        if (totalMs > 500) console.warn(`[sphere-analysis] slow job (no-Worker fallback): total=${totalMs.toFixed(0)}ms`);
-      } else {
-        dispatchSphereAnalysisJob();
-      }
-    }, 0);
+    runAnalysisHere(jobId, key, board);
     return;
   }
 
   sphereAnalysisWorkerBusy = true;
   sphereAnalysisDispatchStart = performance.now();
   try {
-    // Svelte 5's $state proxies can't be structurally cloned for postMessage
-    // (throws DataCloneError) - $state.snapshot() converts them to plain,
-    // cloneable data first. This has no equivalent in the original vanilla-JS
-    // app since its objects were never reactive proxies to begin with.
-    const input = $state.snapshot(getSphereProgressionInput(placements));
-    worker.postMessage({ jobId, input });
+    const state = collectWorkerState();
+    worker.postMessage({ jobId, state, board });
+    LOGIC_TABLE_FIELDS.forEach((field) => {
+      if (field in state.data) sentLogicTables.set(field, state.data[field]);
+    });
   } catch (error) {
     sphereAnalysisWorkerBusy = false;
     console.error("[sphere-analysis] failed to dispatch to worker", error);
-    finishSphereDependencyAnalysis(key, calculateSphereProgressionSync(placements));
+    runAnalysisHere(jobId, key, board);
   }
 }
 
-function queueSphereDependencyAnalysis(key: string, placements: SpherePlacement[]): void {
+function queueSphereAnalysis(key: string, board: boolean): void {
   sphereAnalysisJobId += 1;
   sphereAnalysisPendingKey = key;
-  sphereAnalysisPendingPlacements = placements;
+  sphereAnalysisPendingBoard = board;
   if (sphereAnalysisWorkerBusy) return;
   dispatchSphereAnalysisJob();
 }
 
 export function getSphereBoardAnalysis(knowledge: SphereTrackingKnowledge) {
-  const key = getSphereAnalysisKey(knowledge);
+  const board = boardViewers.count > 0;
+  const key = getSphereAnalysisKey(knowledge, board);
   if (sphereAnalysisCache.key === key) return sphereAnalysisCache;
 
-  // With the calculation off, the expensive half never runs: no spheres, no
-  // dependency pruning, no worker job. What the map is coloured from is not
-  // the spheres but plain "can I reach this with what I hold", so that much is
-  // still worked out here - otherwise every location would read unreachable.
-  if (!settings.sphereCalculation) {
-    sphereAnalysisJobId += 1;
-    Object.assign(sphereAnalysisCache, {
-      key,
-      calculation: null,
-      relativeUnknown: null,
-      certainLocationKeys: null,
-      inventoryReachableKeys: data.sphereLogicLoaded ? computeInventoryReachableKeys() : null,
-      goMode: data.sphereLogicLoaded ? computeGoMode() : false,
-      pending: false,
-      dependenciesReady: false
-    });
-    return sphereAnalysisCache;
-  }
-
-  // No longer cleared here: the reachability cache keys on the inventory and
-  // the entrance mappings, so a tracker change can't collide with a stale
-  // entry. A real logic or settings reload still clears it, via
-  // invalidateSphereAnalysis. Wiping it on every change meant the first
-  // requirement tooltip after any click paid a full cold recompute.
-  const canAnalyze = data.sphereLogicLoaded;
-
-  // The previous calculation deliberately stays in place while the new one
-  // runs. Nulling it made every area fraction drop to 0/N - and flash red,
-  // since "nothing accessible" is the stuck colour - for the frame or two
+  // The previous results deliberately stay in place while the new ones are
+  // worked out. Nulling them made every area fraction drop to 0/N - and flash
+  // red, since "nothing accessible" is the stuck color - for the frame or two
   // between a tracker edit and the worker's reply. Slightly stale numbers for
   // a moment read far better than a blink. A real logic reload still clears
-  // it, via invalidateSphereAnalysis().
-  Object.assign(sphereAnalysisCache, {
-    key,
-    dependenciesReady: false,
-    pending: canAnalyze,
-    ...(canAnalyze ? {} : { calculation: null, relativeUnknown: null })
+  // them, via invalidateSphereAnalysis().
+  //
+  // With the calculation off there are no spheres, but the map's colors still
+  // come from the worker - only the spinner stays still, since no sphere
+  // calculation is running.
+  untrack(() => {
+    Object.assign(sphereAnalysisCache, {
+      key,
+      dependenciesReady: false,
+      pending: settings.sphereCalculation && data.sphereLogicLoaded,
+      ...(settings.sphereCalculation ? {} : { calculation: null, relativeUnknown: null, certainLocationKeys: null, board: null })
+    });
+    // Read inside, so the effect that called this doesn't come to depend on
+    // every piece of state the job carries.
+    queueSphereAnalysis(key, board);
   });
-  if (canAnalyze) queueSphereDependencyAnalysis(key, knowledge.placements);
   return sphereAnalysisCache;
 }

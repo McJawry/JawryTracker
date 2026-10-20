@@ -26,7 +26,7 @@
   import { answerArmedLocation, isFindableItem, needsRemovalChoice } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
-  import { getHeldTriforceShardCount, getShardTrackingState } from "$lib/logic/shard-tracking";
+  import { getHeldTriforceShardCount, getShardTrackingState, isStartingShard } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
   import { itemImage } from "$lib/logic/images";
@@ -66,7 +66,7 @@
   // tinted red to mark where it came from.
   const ownedShards = $derived(
     Array.from({ length: 8 }, (_, index) => index + 1)
-      .map((number) => ({ number, starting: settings.startingGearShards.includes(number) }))
+      .map((number) => ({ number, starting: isStartingShard(number) }))
       .filter(({ number, starting }) => starting || getShardTrackingState(number).isChecked)
   );
   const allShards = $derived(ownedShards.length === 8);
@@ -77,7 +77,7 @@
   // stage, which the grid has always advanced on click - it just had nowhere
   // to show it.
   // Every shard you hold, named or generic - see getHeldTriforceShardCount,
-  // which is also what the logic counts and what the tooltip colours, so the
+  // which is also what the logic counts and what the tooltip colors, so the
   // number on the Triforce and the Triforce of Courage line agree.
   //
   // Eight is all there are, so the counter stops there - and so does clicking,
@@ -240,7 +240,7 @@
                 <img class="triforce-shard-layer" class:starting={shard.starting} src={trackerAsset(`shard_${shard.number}`)} alt="" />
                 {#if shard.starting}
                   <!-- Red blended over the shard (masked to its own shape)
-                       rather than a filter recolour, so the piece keeps its
+                       rather than a filter recolor, so the piece keeps its
                        original shading and just takes on the red hue. -->
                   <span
                     class="triforce-shard-tint"

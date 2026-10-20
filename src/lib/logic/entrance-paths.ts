@@ -30,6 +30,7 @@ import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { settings } from "$lib/state/settings.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
+import { memoizeOnStateEpoch } from "$lib/logic/state-epoch";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -279,7 +280,11 @@ let cache: PathCache | null = null;
  * stores those are derived from stringify in a fraction of that, and the two
  * that are replaced wholesale rather than edited are compared by identity.
  */
-function stateSignature(): string {
+// Serialising the whole state is the expensive part of a cache probe, and in
+// the worker it cannot change within a job (state-epoch.ts).
+const stateSignature = memoizeOnStateEpoch(computeStateSignature);
+
+function computeStateSignature(): string {
   return JSON.stringify([
     sphere.placements,
     sphere.entranceConnections,

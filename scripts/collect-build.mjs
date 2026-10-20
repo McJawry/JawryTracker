@@ -3,45 +3,16 @@
 // Tauri has no after-build hook in tauri.conf.json, so this runs as the second
 // half of `npm run build:app`. It only ever copies out of target/release - it
 // never builds anything itself, so running it twice is harmless.
-import { mkdir, readdir, copyFile, stat, writeFile, readFile } from "node:fs/promises";
+import { mkdir, readdir, copyFile, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { findBuildsRoot, projectRoot, readAppVersion, readTauriConfig } from "./build-paths.mjs";
 
-const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const releaseDir = join(projectRoot, "src-tauri", "target", "release");
 const bundleDir = join(releaseDir, "bundle");
 
-const tauriConfig = JSON.parse(await readFile(join(projectRoot, "src-tauri", "tauri.conf.json"), "utf8"));
-const { productName } = tauriConfig;
-
-// tauri.conf.json's "version" may be a literal semver or a path to a
-// package.json to read it from - follow the path when that's what it is.
-const version = /^\d/.test(tauriConfig.version)
-  ? tauriConfig.version
-  : JSON.parse(await readFile(resolve(projectRoot, "src-tauri", tauriConfig.version), "utf8")).version;
-
-/**
- * APP/builds sits deliberately outside the repo (see BUILDING.md), so its
- * location is found by walking up from the project root rather than by a fixed
- * number of "..". The repo has already moved once - APP/dev to
- * APP/github/JawryTracker-dev - and a hard-coded hop count silently started
- * writing builds into the wrong folder rather than failing.
- *
- * The search starts at the repo's parent so it can never land on a "builds"
- * directory inside the repo itself, which isn't gitignored.
- */
-function findBuildsRoot(root) {
-  let dir = dirname(root);
-  for (let depth = 0; depth < 4; depth += 1) {
-    const candidate = join(dir, "builds");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return join(dirname(root), "builds");
-}
+const { productName } = await readTauriConfig();
+const version = await readAppVersion();
 
 const outputDir = join(findBuildsRoot(projectRoot), `v${version}`);
 
@@ -63,7 +34,9 @@ if (!existsSync(releaseDir)) {
  * read straight out of target/release and so is always the current build.
  */
 function isCurrentVersion(fileName) {
-  const stamped = fileName.match(/[_-](\d+\.\d+\.\d+)[_-]/);
+  // The whole version, test suffix included: JawryTracker_0.2.7-beta.1_x64-setup.exe.
+  // Stopping at the third number put a 0.2.7-beta.1 installer in with 0.2.7's.
+  const stamped = fileName.match(/_(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+?)?)_/);
   return !stamped || stamped[1] === version;
 }
 

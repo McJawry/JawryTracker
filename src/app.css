@@ -61,7 +61,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  /* Flat colour, no white overlay gradient: the old
+  /* Flat color, no white overlay gradient: the old
      linear-gradient(rgba(255,255,255,0.72) -> transparent) sat on top of
      --bg and washed it out to near-white across the visible area, which made
      the page-background setting look like it did nothing. */
@@ -71,7 +71,7 @@ body {
 }
 
 /* Stream mode no longer repaints the page - the chosen page background still
-   shows. The keyable colour is applied to specific panels instead, via
+   shows. The keyable color is applied to specific panels instead, via
    --stream-backdrop (see the stream backdrop block further down). */
 
 /* A popout window never scrolls sideways: its content is already scaled to
@@ -446,7 +446,7 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   border-radius: 3px;
   background: var(--panel);
   /* --ink, not --muted: the same mid-grey problem as the panel name - it
-     disappeared against mid-tone panel colours. */
+     disappeared against mid-tone panel colors. */
   color: var(--ink);
   font-size: 0.68rem;
   line-height: 1;
@@ -486,6 +486,43 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
 
 .sphere-zoom-slider input[type="range"] {
   width: 110px;
+}
+
+/* Sphere analysis in progress (SphereLoadingSpinner). Full 32px, but the
+   negative margins leave it the 18px of layout height a title-bar button has,
+   so the header or title bar it sits in is no taller than without it: the
+   popout shell sizes its content around a fixed header height. */
+.sphere-loading-spinner {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  margin: -7px 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sphere-loading-spinner.active {
+  visibility: visible;
+  animation: sphere-loading-spin 1s linear infinite;
+}
+
+/* Docked: the Sphere Board's spinner leads its Filters + Scale group, and the
+   Main Tracker's hugs the section name rather than floating mid-bar. */
+.dockable-titlebar-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dockable-titlebar > .sphere-loading-spinner {
+  margin-right: auto;
+}
+
+@keyframes sphere-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sphere-zoom-value {
@@ -832,13 +869,13 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  /* Neutral grey rather than the panel colour: the text is fixed white (see
+  /* Neutral grey rather than the panel color: the text is fixed white (see
      below), so this needs a background dark enough to read against no matter
-     what panel colour is chosen. In stream mode the backdrop replaces it. */
+     what panel color is chosen. In stream mode the backdrop replaces it. */
   background: #54595f;
   border-color: rgba(255, 255, 255, 0.18);
   /* Fixed white rather than the auto-contrast --ink: this panel sits over the
-     stream backdrop, whose colour says nothing about what is readable here. */
+     stream backdrop, whose color says nothing about what is readable here. */
   color: #ffffff;
 }
 
@@ -975,6 +1012,17 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   text-decoration: underline;
 }
 
+.location-drop-empty {
+  position: relative;
+  z-index: 1;
+  margin: 6px 2px;
+  /* Full ink rather than muted: it sits over the sector's artwork, where grey
+     all but disappeared. */
+  color: #000;
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
 .location-drop-columns {
   display: grid;
   grid-template-columns: repeat(var(--location-column-count), minmax(0, 1fr));
@@ -988,7 +1036,7 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   align-content: start;
 }
 
-/* Plain coloured text on the dark panel: blue = reachable in logic,
+/* Plain colored text on the dark panel: blue = reachable in logic,
    red = not currently reachable, struck through once checked. */
 .location-drop-option {
   padding: 1px 2px;
@@ -1018,9 +1066,16 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   text-decoration: line-through;
 }
 
+/* Checked off by a "no" line in the hint notes rather than by hand - the same
+   struck-through row, in its own color so the two can be told apart. Two
+   classes deep to outrank the .inaccessible color. */
+.location-drop-option.rando-marked.note-marked {
+  color: #175a69;
+}
+
 /* A settled entrance - recorded or implied by its coupled partner - goes
    black, so the red and blue ones left are exactly the ones still to find.
-   Two classes deep to outrank the .inaccessible colour above. */
+   Two classes deep to outrank the .inaccessible color above. */
 .location-drop-option.entrance-drop-option.entrance-known {
   color: #000;
 }
@@ -1576,8 +1631,8 @@ body.stream-mode .parsed-section {
 }
 
 /* The heading/filters strip keeps a solid backing in stream mode so it stays
-   readable over a keyed background - but it takes the panel colour, not a
-   hardcoded cream. That fixed fill ignored the panel colour entirely, and
+   readable over a keyed background - but it takes the panel color, not a
+   hardcoded cream. That fixed fill ignored the panel color entirely, and
    with light auto-contrast ink it left white text on a near-white box. */
 body.stream-mode .parsed-section .parsed-actions,
 body.stream-mode .parsed-section .tabs {
@@ -3461,13 +3516,26 @@ body.stream-mode .empty-state {
   display: none;
 }
 
-/* Appearance holds two groups (the colour controls and the colour presets).
+/* Appearance holds two groups (the color controls and the color presets).
    With the legends gone they would otherwise run straight into each other,
    and "Folder" arriving under "Hint arrow position" reads as a non-sequitur. */
 .settings-group + .settings-group {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+/* A tab's first group is named by the tab itself, but the ones after it are
+   not - Appearance's Presets and Custom Color Presets show their own titles. */
+.settings-group + .settings-group > legend {
+  display: block;
+  float: left;
+  width: 100%;
+  margin: 0 0 2px;
+  padding: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .settings-group .setting-control {
@@ -3614,7 +3682,7 @@ body.stream-mode .empty-state {
 
 /* ---- Stream mode backdrop -------------------------------------------------
    Stream mode leaves the page background alone and instead paints one solid,
-   keyable colour behind the regions a stream overlay actually shows: the Hint
+   keyable color behind the regions a stream overlay actually shows: the Hint
    Panel, the item grid, and the dungeon/misc row. --stream-backdrop is set
    from settings.streamBackdrop.
    -------------------------------------------------------------------------- */
@@ -3625,19 +3693,19 @@ body.stream-mode .tracking-summary-panel {
   background-color: var(--stream-backdrop);
 }
 
-/* The item grid normally carries the tracker's own artwork; the solid colour
+/* The item grid normally carries the tracker's own artwork; the solid color
    has to replace it, not sit under it. */
 body.stream-mode .tracking-item-grid.item-palette {
   background-image: none;
 }
 
-/* Stream mode changes colour only - never geometry. The padding that frames
+/* Stream mode changes color only - never geometry. The padding that frames
    the dungeon-item icons is applied in BOTH modes (see .tracking-area-row
    above); putting it here made the Main Tracker resize on every toggle, which
    would shift an OBS layout. */
 
 /* No boxes around the dungeon/misc icons in stream mode - just the artwork on
-   the flat colour. */
+   the flat color. */
 body.stream-mode .tracking-boss-entry .tracker-area-cell,
 body.stream-mode .tracking-misc-trackers .tracker-area-cell {
   border: 0;
@@ -3645,7 +3713,7 @@ body.stream-mode .tracking-misc-trackers .tracker-area-cell {
 }
 
 /* An undocked Hint Panel is meant to be a keyed-out overlay source, so in
-   stream mode its whole window takes the backdrop colour - not just the panel
+   stream mode its whole window takes the backdrop color - not just the panel
    within it. Scoped by data-popout so the other popouts keep their normal
    surface. */
 body.popout-window.stream-mode[data-popout="hint-panel"],
@@ -3671,9 +3739,9 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 
 
 /* ---- Fixed-contrast surfaces -------------------------------------------
-   --ink flips to white on a dark panel colour. Only elements with their OWN
+   --ink flips to white on a dark panel color. Only elements with their OWN
    hardcoded light fill keep fixed dark text; anything sitting directly on the
-   panel colour must follow --ink instead.
+   panel color must follow --ink instead.
 
    Getting this wrong is what made the Hint Panel's headings unreadable: the
    whole panel was pinned dark, but .parsed-section is painted with
@@ -3724,7 +3792,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 
 /* Same reasoning as the buttons beside it: the panel name paints its own
    var(--panel) fill, so it has to follow the ink rather than the top bar's
-   fixed dark text - on a dark panel colour it was dark on dark. */
+   fixed dark text - on a dark panel color it was dark on dark. */
 .top-bar .restore-section-name {
   color: var(--ink);
 }
@@ -3761,7 +3829,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 /* The shard column has its own fixed dark background, so it redefines the
    contrast tokens locally - its contents (entrance buttons, jelly count)
    inherit those rather than the panel's, and stay readable whatever panel
-   colour is chosen. */
+   color is chosen. */
 .map-side-tab {
   background: #262626;
   --ink: #f5f7f8;
@@ -3772,7 +3840,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 
 
 /* Notes tab strip: the unselected tab reads as a plain white chip so the
-   selected one is unmistakable. Fixed colours because the chip paints its own
+   selected one is unmistakable. Fixed colors because the chip paints its own
    background rather than sitting on the panel. */
 .segmented-control.notes-tabs {
   background: #ffffff;
@@ -3854,7 +3922,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 }
 
 /* The backdrop hugs the text rather than filling the row, and carries its own
-   dark ground so the name stays readable whatever colour sits behind the grid
+   dark ground so the name stays readable whatever color sits behind the grid
    - stream mode can put anything back there. */
 .tracking-item-grid .hovered-row-name span {
   padding: 2px 7px;
@@ -3967,7 +4035,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 
 /* The game's own important-location marker (static/assets/tracker/Important
    Location.png). The art is white on transparent, so it is used as an alpha
-   mask and the colour comes from the element behind it - that way the two
+   mask and the color comes from the element behind it - that way the two
    shades are the exact RGB values the game cycles between rather than an
    approximation reached with filters. */
 .important-location-mark {
@@ -4128,7 +4196,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 
 /* Turns once every 2 seconds when the dungeon door on that sector can be
    opened with what the player is carrying. The angle comes from the same
-   shared clock as the colour, for the same reason: an animation on each marker
+   shared clock as the color, for the same reason: an animation on each marker
    would start when that marker did, so two of them would spin out of step. */
 @property --important-location-angle {
   syntax: "<angle>";
@@ -4152,7 +4220,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 /* The sector's entrance has been found. The marker stays put as the answer
    rather than disappearing: it stops turning, goes green, and fades in and out
    between invisible and half strength. Driven from the shared clock like the
-   colour and the angle, so several found markers pulse together. */
+   color and the angle, so several found markers pulse together. */
 @property --important-location-fade {
   syntax: "<number>";
   inherits: true;
@@ -4419,9 +4487,9 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   overflow-wrap: anywhere;
 }
 
-/* ---- Coloured hint notes ---------------------------------------------- */
+/* ---- Colored hint notes ---------------------------------------------- */
 
-/* The notes are drawn twice: this layer paints the coloured text, and the
+/* The notes are drawn twice: this layer paints the colored text, and the
    textarea sits on top with transparent glyphs so the caret, the selection and
    every editing behaviour still belong to it. Both have to agree on every
    property that decides where a glyph lands. */
@@ -4465,7 +4533,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   caret-color: #172027;
 }
 
-/* Fixed colours rather than theme tokens: this box keeps its near-white fill
+/* Fixed colors rather than theme tokens: this box keeps its near-white fill
    in every mode, so the ink is chosen against that. */
 .notes-highlight .hint-line.item {
   color: #0b7285;
@@ -4491,6 +4559,11 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: #6b21a8;
 }
 
+/* "no <area or location>" - checks things off, so it stands out. */
+.notes-highlight .hint-line.no {
+  color: #d01414;
+}
+
 /* The Sync button's warning: config.yaml has moved on since the last sync.
    Sits inside the button so the row keeps its width - the message itself is
    the button's tooltip. */
@@ -4507,7 +4580,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   display: inline-flex;
 }
 
-/* Painted with the panel colour, so it follows the auto-contrast ink rather
+/* Painted with the panel color, so it follows the auto-contrast ink rather
    than pinning its own fill the way the sphere board's Filters menu does -
    see the fixed-contrast note further down. */
 .tracker-settings-panel {
@@ -4551,6 +4624,14 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   display: block;
   font-style: normal;
   color: var(--muted);
+}
+
+/* Between the switches and the slider - the same rule the folder row below
+   draws above itself. */
+.tracker-settings-divider {
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 /* The shard count on the finished Triforce, when shards are counted
@@ -4643,7 +4724,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 }
 
 /* "GO MODE" over the item grid: everything needed to beat Ganondorf is held.
-   Pulses so it catches the eye without a colour change anywhere else, and is
+   Pulses so it catches the eye without a color change anywhere else, and is
    transparent to the pointer so the items under it stay clickable. */
 .tracking-item-grid .go-mode-banner {
   position: absolute;

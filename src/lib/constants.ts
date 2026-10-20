@@ -74,10 +74,10 @@ export const DEFAULT_SPHERE_FILTERS: SphereFilters = { paths: false, pathsAndReq
 
 export interface Settings {
   pageBackground: string;
-  /** The panel surface colour - the light area inside each docked panel. */
+  /** The panel surface color - the light area inside each docked panel. */
   panelColor: string;
   /**
-   * Solid colour painted behind the Hint Panel, the item grid and the
+   * Solid color painted behind the Hint Panel, the item grid and the
    * dungeon/misc row while stream mode is on - the region a chroma key
    * removes.
    */
@@ -100,6 +100,14 @@ export interface Settings {
   sphereCalculation: boolean;
   /** Show the icon of whatever item is recorded at a location, in the lists. */
   showPlacedItemIcons: boolean;
+  /**
+   * Right-clicking an area to clear it also checks the locations elsewhere
+   * that hang on the cleared ones - the letters a beaten boss sends, Mrs.
+   * Marie's rewards behind Ivan's bees. Based on the randomizer tracker's
+   * "Clear All Includes Dependent Locations", and on by default as it is there,
+   * but only for the right-click: the list's Clear All button never does it.
+   */
+  rightClickClearsDependentLocations: boolean;
   /**
    * Size of the requirement tooltip, as a percentage. Its own setting rather
    * than following the panel scale: the tooltip is drawn against the window
@@ -128,7 +136,7 @@ export interface Settings {
   randoConfigText: string | null;
   /** Which data root the layout preset list reads from - see tauri/data-paths.ts. */
   presetLocation: "app" | "user";
-  /** Same, for colour presets - chosen independently of the layout one. */
+  /** Same, for color presets - chosen independently of the layout one. */
   colorPresetLocation: "app" | "user";
   runSaveLocation: "app" | "user";
   /** Notes panel grows with its text instead of scrolling inside a fixed box. */
@@ -197,6 +205,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chartSortByNumber: true,
   sphereCalculation: true,
   showPlacedItemIcons: true,
+  rightClickClearsDependentLocations: true,
   tooltipScale: 100,
   streamMode: false,
   parsedHintsFilters: true,

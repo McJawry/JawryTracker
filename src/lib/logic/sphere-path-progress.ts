@@ -13,17 +13,20 @@
 // dungeon (or no placements yet) that set is empty.
 import { WWRSphereEngine, type SphereCalculationResult } from "$lib/logic";
 import type { Hint } from "$lib/state/hints.svelte";
+import type { SpherePlacement } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
-import { getBossLocation } from "$lib/logic/sphere-boss-icons";
+import { answersPathBoss, getBossLocation } from "$lib/logic/sphere-boss-icons";
 import { getPathHintAreaLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
 import {
   getSphereCalculationInput,
   getSphereLogicStartingGear,
+  getSphereInventoryItemKey,
   getSphereReachabilityWithOwnDungeonKeys,
   getUnknownSourceItems,
   isOwnDungeonKeyForPath
 } from "$lib/logic/sphere-calculation";
+import { data } from "$lib/state/data.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -184,7 +187,14 @@ export function getPathHintSourceIds(
   calculation: SphereCalculationResult,
   relativeUnknown: RelativeUnknownResult
 ): string[] {
-  if (progress.kind === "unknown") return [];
+  // Nothing reaches the boss yet, so there is no chain to trace back from it -
+  // the card's own confirmed candidates are its sources, every one of them.
+  // Several are drawn dashed (sphere-edges.ts): any of them may be the item.
+  if (progress.kind === "unknown") {
+    return getPathHintCandidates(hint, knowledge, calculation, relativeUnknown)
+      .filter((candidate) => candidate.confirmed)
+      .map((candidate) => candidate.id);
+  }
 
   const placementsById = new Map(knowledge.placements.map((placement) => [placement.id, placement]));
   const dependenciesFor = (sourceId: string): string[] => {
@@ -287,6 +297,19 @@ export interface PathCandidate {
   confirmed: boolean;
 }
 
+let logicItemKeysCache: { rules: unknown; macros: unknown; world: unknown; keys: Set<string> } | null = null;
+
+/** Every item the logic asks for anywhere. Depends on the logic alone, so it is kept until that reloads. */
+function getLogicItemKeys(): Set<string> {
+  const cache = logicItemKeysCache;
+  if (cache && cache.rules === data.sphereRules && cache.macros === data.sphereMacros && cache.world === data.sphereWorld) {
+    return cache.keys;
+  }
+  const keys = WWRSphereEngine.collectReferencedItemKeys(data.sphereRules, data.sphereMacros, data.sphereWorld);
+  logicItemKeysCache = { rules: data.sphereRules, macros: data.sphereMacros, world: data.sphereWorld, keys };
+  return keys;
+}
+
 /** Locations a barren hint has ruled out - never path candidates. */
 function getBarrenSphereLocationKeys(knowledge: SphereTrackingKnowledge): Set<string> {
   return new Set(
@@ -328,6 +351,15 @@ export function getPathLogicalItems(
  * (dev/app/app.js:3945). Items already used as a dependency somewhere are
  * "confirmed" and, when any exist, they alone are offered - an item the logic
  * has never needed is a much weaker guess.
+ *
+ * An item that answers the hint's boss (answersPathBoss: the boss cannot be
+ * reached without it, or it is one the boss could turn on) is always offered,
+ * confirmed, whether or not anything depends on it. Left to the dependency
+ * test alone, a Progressive Shield Jalhalla cannot be beaten without dropped
+ * off its card, because nothing reachable yet needed the first shield - while
+ * a Ghost Ship Chart stayed on for opening the Ghost Ship's chest. It does not
+ * push the other candidates off: being required does not make it certain to
+ * be the location the hint was drawn from.
  */
 function buildPathHintCandidates(
   hint: Hint,
@@ -350,7 +382,19 @@ function buildPathHintCandidates(
     ...Object.values(calculation.dependencies).flat(),
     ...[...relativeUnknown.dependencies.values()].flat()
   ]);
-  const confirmed = exactCandidates.filter((placement) => usedDependencies.has(placement.id));
+  const answering = new Set(
+    exactCandidates.filter((placement) => answersPathBoss(placement, hint.right.name)).map((placement) => placement.id)
+  );
+  // A recorded item in the hinted area is a candidate - drawn a line to - when
+  // the logic asks for it anywhere, or it measures as this boss's path item.
+  // It used to take opening something on the board right now instead, which
+  // has nothing to do with the boss and favours items that work alone: Power
+  // Bracelets, opening a few boulder chests, got the line, while Magic - which
+  // needs the Deku Leaf or arrows beside it before it opens anything - did not.
+  const logicItems = getLogicItemKeys();
+  const usedByLogic = (item: string, location = "") => logicItems.has(getSphereInventoryItemKey(item, location));
+  const isConfirmed = (placement: SpherePlacement) => usedByLogic(placement.item, placement.location) || answering.has(placement.id);
+  const confirmed = exactCandidates.filter(isConfirmed);
   const selectedExact = confirmed.length ? confirmed : exactCandidates;
 
   const areaHintCandidates = knowledge.areaHints
@@ -373,11 +417,12 @@ function buildPathHintCandidates(
       lineNumber: placement.lineNumber ?? null,
       sphere: calculation.placementSpheres[placement.id],
       relativeLevel: relativeUnknown.placementLevels.get(placement.id),
-      confirmed: usedDependencies.has(placement.id)
+      confirmed: isConfirmed(placement)
     })),
+    // The same rule for an item hinted somewhere in the area.
     ...areaHintCandidates.map((candidate) => ({
       ...candidate,
-      confirmed: usedDependencies.has(candidate.id)
+      confirmed: usedDependencies.has(candidate.id) || usedByLogic(candidate.item)
     }))
   ];
 

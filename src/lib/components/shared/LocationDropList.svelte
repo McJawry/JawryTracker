@@ -11,10 +11,10 @@
   import {
     getAllListedLocations,
     getAreaLocationChoices,
-    getLocationCheckedId,
     getLocationMarkedTitle,
     getLocationSphereLabel,
     isLocationAccessible,
+    isLocationCheckedByNote,
     isLocationMarked
   } from "$lib/logic/locations";
   import {
@@ -32,8 +32,7 @@
     type TrackerEntrance
   } from "$lib/logic/entrances";
   import { isSphereExitTraversable } from "$lib/logic/sphere-calculation";
-  import { setChecked } from "$lib/state/checked.svelte";
-  import { toggleLocationChecked } from "$lib/logic/locations";
+  import { clearLocations, toggleLocationChecked } from "$lib/logic/locations";
   import { trackerAreaImage } from "$lib/logic/tracker-images";
   import { itemImage } from "$lib/logic/images";
   import { WWRSphereEngine } from "$lib/logic";
@@ -161,7 +160,7 @@
 
   function clearAll() {
     recordTrackerAction();
-    locations.forEach((location) => setChecked(getLocationCheckedId(location), true));
+    clearLocations(locations);
   }
 
   function onToggle(location: string) {
@@ -232,7 +231,10 @@
   onauxclick={(event) => event.button === 3 && event.preventDefault()}
 />
 
-{#if allLocations.length || entrances.length}
+<!-- A sector with nothing to list still opens when it has Ho Ho or Blue Chu
+     markers: this list is the only place they can be marked, and a sector the
+     seed leaves no checks in would otherwise keep them unmarkable all run. -->
+{#if allLocations.length || entrances.length || markerIcons.length}
   <div class="location-drop-list" oncontextmenu={handleContextMenu}>
     <!-- The area's own artwork, half-transparent, so you can still tell
          which sector you're inside while reading the list. -->
@@ -255,7 +257,7 @@
           {/each}
         </div>
       {/if}
-      {#if view === "locations" && !showingEverything}
+      {#if view === "locations" && !showingEverything && allLocations.length}
         <button type="button" class="location-drop-action" onclick={clearAll}>Clear All</button>
       {/if}
     </div>
@@ -270,6 +272,9 @@
     {/if}
 
     {#if view === "locations"}
+      {#if !allLocations.length && !showingEverything}
+        <p class="location-drop-empty">No locations to check here.</p>
+      {/if}
       <div class="location-drop-columns" style="--location-column-count: {columnCount}">
         {#each columns as column, columnIndex (columnIndex)}
           <div class="location-drop-column">
@@ -278,6 +283,7 @@
                 type="button"
                 class="location-drop-option"
                 class:rando-marked={isLocationMarked(location)}
+                class:note-marked={isLocationCheckedByNote(location)}
                 class:inaccessible={!isLocationAccessible(location)}
                 class:pulsing={ui.pendingLocationForItemAssignment === location}
                 data-location={location}

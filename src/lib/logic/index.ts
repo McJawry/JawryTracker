@@ -37,6 +37,8 @@ export interface SphereWorld {
   startArea: string;
   shuffleEntrances?: EntranceTableEntry[];
   shuffleEntranceByEdge?: Record<string, { entry: EntranceTableEntry; side: EntranceSide }>;
+  /** Tracker location key -> the logic location it was matched to (sphere-logic-loading). */
+  locationLogicNames?: Record<string, string>;
   [key: string]: unknown;
 }
 
@@ -74,6 +76,12 @@ export interface SphereCalculationInput {
    * by the pare-down that decides which cards are Optional. calculate() only.
    */
   heldWithoutSphere?: string[];
+  /**
+   * Locations nobody has checked yet. Until Ganondorf can be reached, a spare
+   * copy is only Optional if these all stay reachable without it - what is in
+   * them could still be on the path. calculate() only.
+   */
+  uncheckedLocations?: string[];
   options?: Record<string, unknown>;
   entranceMappings?: Record<string, string>;
   entranceConnections?: Record<string, unknown>;
@@ -91,6 +99,8 @@ export interface SphereCalculationResult {
   sphereLocations: string[][];
   dependencies: Record<string, string[]>;
   prunedPlacementIds: string[];
+  /** Whether the pare-down was run against Defeat Ganondorf (only once he is reachable) - calculate() only. */
+  prunedAgainstGoal?: boolean;
   /** locationSpheres with input.heldWithoutSphere counted as held - calculate() only. */
   locationSpheresWithHeld?: Record<string, number>;
   [key: string]: unknown;
@@ -129,6 +139,8 @@ interface WWRSphereEngineApi {
     startingIsland: string;
     additionalStartAreas?: string[];
   }): Record<string, unknown>;
+  /** Every inventory key some rule, macro, event or exit asks for, canonical and normalized. */
+  collectReferencedItemKeys(rules: Record<string, unknown>, macros: Record<string, unknown>, world: unknown): Set<string>;
   /** Whether a seed's settings shuffle the given entrance type. */
   isShuffleTypeEnabled(type: string, options: Record<string, unknown>): boolean;
   /** Normalized dungeon name -> the sector it sits on with vanilla entrances. */

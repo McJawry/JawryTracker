@@ -57,6 +57,12 @@ npm run build:app
 
 No environment variables or signing keys are needed.
 
+`Build JawryTracker Release.bat` (in `APP\`, beside the dev start/stop
+scripts) does the same, but only when `package.json`'s version differs from
+the most recent build in `builds/` - `scripts/build-check.mjs` decides. For a
+version that was built at some earlier point, it asks before overwriting that
+folder.
+
 The **first** release build takes several minutes: Rust compiles the whole
 dependency tree from scratch in release mode. Later builds are incremental and
 much faster.
@@ -78,7 +84,7 @@ the new release folder.
 |---|---|
 | `JawryTracker.exe` | Standalone binary — **the one to distribute** |
 | `JawryTracker_<version>_x64-setup.exe` | NSIS installer |
-| `JawryTracker_<version>_x64_en-US.msi` | MSI installer, for managed installs |
+| `JawryTracker_<version>_x64_en-US.msi` | MSI installer, for managed installs (not built for [test versions](#test-versions)) |
 | `build-info.json` | Version + timestamp, so an old folder is self-describing |
 
 `builds/` sits deliberately *outside* the git repo, so compiled binaries
@@ -106,7 +112,7 @@ executable**:
 |---|---|
 | `data/layout.json` | Panel layout, sizes, window position (auto-saved) |
 | `data/presets/*.json` | Named layout presets |
-| `data/presets/colors/*.json` | Named colour presets |
+| `data/presets/colors/*.json` | Named color presets |
 | `data/webview/` | WebView2 profile — **all tracker progress**: checked locations, items, hints, notes, settings |
 
 Copy the app folder anywhere and everything travels with it. Nothing is
@@ -127,7 +133,7 @@ folder.
 
 ### Shared presets
 
-Layout and colour presets each choose their own storage independently: the
+Layout and color presets each choose their own storage independently: the
 portable app folder, or `Documents\JawryTracker`. The shared folder lets
 several portable copies use one set of presets.
 
@@ -148,6 +154,21 @@ the notice can't tell them apart.
 `src-tauri/Cargo.toml` carries its own `version` for the Rust crate. It has no
 effect on the app.
 
+### Test versions
+
+For a build handed out before a release, put the label after a dash:
+`0.2.7-beta.1`, `0.2.7-test.2`, `0.2.7-rc.1`. Tauri only accepts semver, so a
+version like `0.2.7b` or `0.2.7 beta` fails the build outright.
+
+The MSI installer can't hold letters at all - Windows Installer stores
+versions as numbers - so `npm run build:app` leaves it out for a lettered
+version and builds the standalone exe and the NSIS installer only
+(`scripts/build-app.mjs`). Artifacts land in `builds/v0.2.7-beta.1/` as usual.
+
+Test versions sort the way you'd expect: `0.2.6` < `0.2.7-beta.1` <
+`0.2.7-beta.2` < `0.2.7-rc.1` < `0.2.7`. So someone on a beta gets the update
+notice once the real `0.2.7` is published.
+
 ---
 
 ## Publishing a release
@@ -159,6 +180,10 @@ effect on the app.
 
 Tag releases as `v<version>` matching `package.json` — that's what the
 in-app notice compares against.
+
+Publishing a test version to GitHub? Tick **"Set as a pre-release"**. The
+notice reads `releases/latest`, which GitHub never points at a pre-release, so
+nobody on a normal version gets told about the beta.
 
 ### The update notice
 

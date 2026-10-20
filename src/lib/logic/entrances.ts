@@ -166,6 +166,18 @@ export function getShuffledEntrances(): TrackerEntrance[] {
   const entries = world?.shuffleEntrances;
   if (!entries?.length) return [];
   const options = data.sphereOptions ?? {};
+
+  // Asked from inside every reachability question that walks the entrance
+  // graph, so it is kept until the world or a shuffle setting changes. The
+  // settings are compared by value, not by the options object: that object is
+  // edited in place while logic loads.
+  const signature = JSON.stringify(
+    Object.entries(options).filter(([name]) => /^(?:randomize|mix|decouple)/i.test(name))
+  );
+  if (shuffledEntrancesCache?.world === world && shuffledEntrancesCache.signature === signature) {
+    return shuffledEntrancesCache.entrances;
+  }
+
   const decoupled = Boolean(options.decouple_entrances);
   const mixedTypes = getMixedPoolTypes(options);
 
@@ -178,8 +190,12 @@ export function getShuffledEntrances(): TrackerEntrance[] {
     const reverse = toTrackerEntrance(entry, true, mixedTypes);
     if (reverse) entrances.push(reverse);
   });
-  return entrances.sort(compareByWorldOrder);
+  entrances.sort(compareByWorldOrder);
+  shuffledEntrancesCache = { world, signature, entrances };
+  return entrances;
 }
+
+let shuffledEntrancesCache: { world: SphereWorld | null; signature: string; entrances: TrackerEntrance[] } | null = null;
 
 /**
  * Areas that lead into each area *as currently known*: the world's own exits,

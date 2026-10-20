@@ -18,7 +18,7 @@ import { WWRSphereEngine } from "$lib/logic";
 import { REQUIRED_BOSS_OPTION_KEYS, TRACKED_AREAS } from "$lib/gameData";
 import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
 import { getEffectiveItemStage, getStartingItemStage } from "$lib/logic/starting-gear-items";
-import { getShardTrackingState } from "$lib/logic/shard-tracking";
+import { getShardTrackingState, isStartingShard } from "$lib/logic/shard-tracking";
 import { getAcquiredCharts } from "$lib/logic/chart-tracking";
 import {
   getDungeonItems,
@@ -26,8 +26,8 @@ import {
   hasKeyItems,
   hasStartingDungeonItem
 } from "$lib/state/dungeon-items.svelte";
-import { settings } from "$lib/state/settings.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
+import { memoizeOnStateEpoch } from "$lib/logic/state-epoch";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -61,7 +61,11 @@ function makeId(item: string, copy: number): string {
   return `unplaced-${normalize(item).replace(/ /g, "-")}-${copy}`;
 }
 
-export function getUnplacedAcquiredItems(): UnplacedItem[] {
+// Once per analysis job in the worker (state-epoch.ts): the inventory and the
+// sphere input are built from this, and they are asked for constantly.
+export const getUnplacedAcquiredItems = memoizeOnStateEpoch(computeUnplacedAcquiredItems);
+
+function computeUnplacedAcquiredItems(): UnplacedItem[] {
   const placedCounts = countPlaced();
   const unplaced: UnplacedItem[] = [];
 
@@ -88,7 +92,7 @@ export function getUnplacedAcquiredItems(): UnplacedItem[] {
   // Ones crossed out there are the seed's starting gear, so they're excluded
   // for the same reason starting gear is above.
   for (let number = 1; number <= 8; number += 1) {
-    if (settings.startingGearShards.includes(number)) continue;
+    if (isStartingShard(number)) continue;
     if (!getShardTrackingState(number).isChecked) continue;
     push(`Triforce Shard ${number}`, 1);
   }

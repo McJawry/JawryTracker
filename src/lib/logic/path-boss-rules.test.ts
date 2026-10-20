@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAreaBranchModel, planPathBossIcons } from "./path-boss-rules";
+import { buildAreaBranchModel, planPathBossIcons, withoutSettledBosses } from "./path-boss-rules";
 
 /**
  * The scenarios below are the ruleset for an area hinted as the path to more
@@ -79,6 +79,18 @@ describe("multi-boss path hints", () => {
       A: [],
       B: ["boss2"]
     });
+  });
+
+  it("9: a boss with a known sphere loses its icons everywhere, whatever the other rules drew", () => {
+    const drawn = new Map([
+      ["A", ["boss1", "boss2"]],
+      ["B", ["boss1"]],
+      ["C", ["boss2"]]
+    ]);
+    const kept = withoutSettledBosses(drawn, new Set(["boss1"]));
+    expect(Object.fromEntries(kept)).toEqual({ A: ["boss2"], C: ["boss2"] });
+    // Nothing settled: the drawing stands as it was.
+    expect(withoutSettledBosses(drawn, new Set())).toBe(drawn);
   });
 });
 
