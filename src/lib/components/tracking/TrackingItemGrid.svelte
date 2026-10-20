@@ -77,7 +77,7 @@
   // stage, which the grid has always advanced on click - it just had nowhere
   // to show it.
   // Every shard you hold, named or generic - see getHeldTriforceShardCount,
-  // which is also what the logic counts and what the tooltip colours, so the
+  // which is also what the logic counts and what the tooltip colors, so the
   // number on the Triforce and the Triforce of Courage line agree.
   //
   // Eight is all there are, so the counter stops there - and so does clicking,
@@ -240,7 +240,7 @@
                 <img class="triforce-shard-layer" class:starting={shard.starting} src={trackerAsset(`shard_${shard.number}`)} alt="" />
                 {#if shard.starting}
                   <!-- Red blended over the shard (masked to its own shape)
-                       rather than a filter recolour, so the piece keeps its
+                       rather than a filter recolor, so the piece keeps its
                        original shading and just takes on the red hue. -->
                   <span
                     class="triforce-shard-tint"

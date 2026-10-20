@@ -109,14 +109,14 @@ function computeCertainLocationKeys(): Set<string> {
 }
 
 /**
- * What the map colours read: reachability from the whole held inventory, with
+ * What the map colors read: reachability from the whole held inventory, with
  * no regard for whether a given item was obtained in logic.
  *
  * A dungeon's own keys count as held once every chest they could be in is
  * reachable: with keys shuffled inside their own dungeon, a Tower of the Gods
  * you can search end to end is a Tower you can unlock end to end, so the Stone
  * Tablet and everything past the locked doors is somewhere you can go. The
- * spheres already worked this way; only the colours were still asking without
+ * spheres already worked this way; only the colors were still asking without
  * it, so half of an open dungeon stayed red.
  */
 function computeInventoryReachableKeys(): Set<string> {
@@ -229,7 +229,7 @@ export async function computeSphereAnalysis({ board }: { board: boolean }): Prom
     return { calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, goMode: false, board: null };
   }
 
-  // What the map is coloured from is not the spheres but plain "can I reach
+  // What the map is colored from is not the spheres but plain "can I reach
   // this with what I hold", so it is worked out even with the calculation off.
   const inventoryReachableKeys = computeInventoryReachableKeys();
   const goMode = computeGoMode();

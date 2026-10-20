@@ -26,11 +26,11 @@
   // so it disagreed with the map cells' accessible/remaining fractions by
   // exactly the checked count.
   //
-  // Reachable by the same test that colours the map and fills each cell's
+  // Reachable by the same test that colors the map and fills each cell's
   // fraction (isLocationAccessible), so this is the number of blue locations.
   // It used to count the sphere calculation's locations instead, which read 0
   // with the calculation switched off - there are no spheres then, though the
-  // map is still coloured - and fell short of the map whenever an item was held
+  // map is still colored - and fell short of the map whenever an item was held
   // that the spheres hold back (found out of logic, or never placed).
   const accessibleCount = $derived(
     totalLocations.filter((location) => !isLocationMarked(location) && isLocationAccessible(location)).length

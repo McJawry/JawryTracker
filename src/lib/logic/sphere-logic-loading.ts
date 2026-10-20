@@ -28,7 +28,7 @@ function mapSphereRulesToLocationPool(logicLocations: ParsedLogicLocationEntry[]
   // logic itself keys by its own names has to be asked under this one: the
   // flattened requirements did not know "Five Eye Reef - Destroy Cannons and
   // Gunboats", the tracker's older name for "Destroy Cannons", so its tooltip
-  // said no logic was loaded while its colour was worked out fine.
+  // said no logic was loaded while its color was worked out fine.
   const locationLogicNames: Record<string, string> = {};
   const sourceByKey = new Map(logicLocations.map((entry) => [normalize(entry.name), entry]));
   const sourceByArea = new Map<string, ParsedLogicLocationEntry[]>();

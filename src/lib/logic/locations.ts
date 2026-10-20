@@ -273,7 +273,7 @@ export function getLocationSphereLabel(location: string): string {
 
   const sphereNumber = getLocationSphere(location);
   // No determinate sphere, but you can still walk in there with what you're
-  // holding - "-" would read as unreachable and contradict the colour.
+  // holding - "-" would read as unreachable and contradict the color.
   if (sphereNumber === null) return isLocationAccessible(location) ? "?" : "-";
 
   const certain = sphereAnalysisCache.certainLocationKeys;
@@ -282,7 +282,7 @@ export function getLocationSphereLabel(location: string): string {
 }
 
 /**
- * Whether the held inventory opens this location, used to colour the location
+ * Whether the held inventory opens this location, used to color the location
  * list and drive the map's area fractions.
  *
  * Deliberately NOT the sphere calculation's reachable set: that withholds a
@@ -340,7 +340,7 @@ export function getAreaAccessibility(areaName: string, targetKind: "sector" | "a
 
   // Same inventory-based question the location list asks - see
   // isLocationAccessible. Keeping the cell fractions on the sphere-propagated
-  // set would have them disagree with the colours inside the cell's own list.
+  // set would have them disagree with the colors inside the cell's own list.
   const accessible = remainingLocations.filter((location) => isLocationAccessible(location)).length;
 
   const colorClass: AreaAccessibility["colorClass"] = remaining === 0 && accessible === 0 ? "done" : accessible === 0 ? "stuck" : "open";

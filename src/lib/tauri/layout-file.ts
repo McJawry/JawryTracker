@@ -33,8 +33,8 @@ import { isTauriRuntime } from "./is-tauri";
 
 const PREFERENCES_FILE = "layout.json";
 
-// Colours deliberately live in their own preset files (tauri/color-presets.ts)
-// so a colour scheme and a panel layout can be swapped independently.
+// Colors deliberately live in their own preset files (tauri/color-presets.ts)
+// so a color scheme and a panel layout can be swapped independently.
 
 export interface LayoutPreferences {
   version: 1;
@@ -187,7 +187,7 @@ export async function applyLoadedPreferences(prefs: Partial<LayoutPreferences>):
  *
  * Window size and position are deliberately left alone: nothing about the
  * panel layout depends on them, and yanking the window to another size
- * mid-session is more startling than helpful. Colours are left alone too -
+ * mid-session is more startling than helpful. Colors are left alone too -
  * they have their own presets and their own reset.
  */
 export async function resetLayoutToDefaults(): Promise<LayoutFileResult> {

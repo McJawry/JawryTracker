@@ -74,10 +74,10 @@ export const DEFAULT_SPHERE_FILTERS: SphereFilters = { paths: false, pathsAndReq
 
 export interface Settings {
   pageBackground: string;
-  /** The panel surface colour - the light area inside each docked panel. */
+  /** The panel surface color - the light area inside each docked panel. */
   panelColor: string;
   /**
-   * Solid colour painted behind the Hint Panel, the item grid and the
+   * Solid color painted behind the Hint Panel, the item grid and the
    * dungeon/misc row while stream mode is on - the region a chroma key
    * removes.
    */
@@ -136,7 +136,7 @@ export interface Settings {
   randoConfigText: string | null;
   /** Which data root the layout preset list reads from - see tauri/data-paths.ts. */
   presetLocation: "app" | "user";
-  /** Same, for colour presets - chosen independently of the layout one. */
+  /** Same, for color presets - chosen independently of the layout one. */
   colorPresetLocation: "app" | "user";
   runSaveLocation: "app" | "user";
   /** Notes panel grows with its text instead of scrolling inside a fixed box. */

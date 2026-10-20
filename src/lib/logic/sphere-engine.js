@@ -1128,7 +1128,7 @@
    *
    * Standing in an area is not the same as being able to use every door in it:
    * Outset Mesa's House needs the Song of Passing and Jabun's Cave needs bombs.
-   * The entrance tracker colours a row by this, so an entrance you cannot open
+   * The entrance tracker colors a row by this, so an entrance you cannot open
    * yet reads red even though the island around it is reachable.
    */
   function getTraversableExits(input) {

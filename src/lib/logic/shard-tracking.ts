@@ -83,7 +83,7 @@ export function getTriforceShardNumber(item: string): number {
  * themselves nowhere.
  *
  * One count for the whole app: the number on the Triforce, whether the logic
- * considers the Triforce of Courage complete, and what the tooltip colours.
+ * considers the Triforce of Courage complete, and what the tooltip colors.
  */
 export function getHeldTriforceShardCount(): number {
   const numbers = new Set<number>();

@@ -329,7 +329,7 @@ export function isBossRequired(bossName: string): boolean {
  * Without it a dungeon you walked into through a shuffled door is sealed off as
  * far as the spheres are concerned - you can savewarp to its entrance room, but
  * the calculation cannot - so every check inside reads "?" (reachable, but no
- * sphere the logic will commit to) while the map colours it perfectly
+ * sphere the logic will commit to) while the map colors it perfectly
  * available. Kept apart from getSphereCalculationInput because working out the
  * savewarp destinations needs that input itself.
  */
@@ -598,7 +598,7 @@ export function getSphereReachableLocationSet(items: string[], options: Reachabi
  * reported "Impossible (please discover an entrance first)" for a chest with
  * no entrance randomisation anywhere near it.
  */
-/** Areas the current inventory can reach, for the entrance list's colouring. */
+/** Areas the current inventory can reach, for the entrance list's coloring. */
 const sphereAreaCache = new Map<string, Set<string>>();
 
 export function getSphereAccessibleAreaSet(): Set<string> {
@@ -619,9 +619,9 @@ export function getSphereAccessibleAreaSet(): Set<string> {
 }
 
 /**
- * Whether you can currently get to an area. The entrance list colours a
+ * Whether you can currently get to an area. The entrance list colors a
  * reachable entrance blue and an unreachable one red, the same way locations
- * are coloured, and asks about the area the entrance is *in* - where it leads
+ * are colored, and asks about the area the entrance is *in* - where it leads
  * is unknown until you record it.
  */
 export function isSphereAreaAccessible(areaName: string): boolean {

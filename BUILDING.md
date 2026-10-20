@@ -112,7 +112,7 @@ executable**:
 |---|---|
 | `data/layout.json` | Panel layout, sizes, window position (auto-saved) |
 | `data/presets/*.json` | Named layout presets |
-| `data/presets/colors/*.json` | Named colour presets |
+| `data/presets/colors/*.json` | Named color presets |
 | `data/webview/` | WebView2 profile — **all tracker progress**: checked locations, items, hints, notes, settings |
 
 Copy the app folder anywhere and everything travels with it. Nothing is
@@ -133,7 +133,7 @@ folder.
 
 ### Shared presets
 
-Layout and colour presets each choose their own storage independently: the
+Layout and color presets each choose their own storage independently: the
 portable app folder, or `Documents\JawryTracker`. The shared folder lets
 several portable copies use one set of presets.
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   // Settings that belong to the tracker itself rather than to the app's
-  // appearance - the Settings panel in the control panel is about colours,
+  // appearance - the Settings panel in the control panel is about colors,
   // layout and file locations, and these want to be a click away from the
   // board they change. Built like SphereFilterMenu: a button in the toolbar
   // with its own small panel, closed by clicking away or pressing Escape.

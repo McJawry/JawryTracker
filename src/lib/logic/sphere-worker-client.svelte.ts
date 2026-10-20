@@ -294,12 +294,12 @@ export function getSphereBoardAnalysis(knowledge: SphereTrackingKnowledge) {
 
   // The previous results deliberately stay in place while the new ones are
   // worked out. Nulling them made every area fraction drop to 0/N - and flash
-  // red, since "nothing accessible" is the stuck colour - for the frame or two
+  // red, since "nothing accessible" is the stuck color - for the frame or two
   // between a tracker edit and the worker's reply. Slightly stale numbers for
   // a moment read far better than a blink. A real logic reload still clears
   // them, via invalidateSphereAnalysis().
   //
-  // With the calculation off there are no spheres, but the map's colours still
+  // With the calculation off there are no spheres, but the map's colors still
   // come from the worker - only the spinner stays still, since no sphere
   // calculation is running.
   untrack(() => {

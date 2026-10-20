@@ -16,8 +16,8 @@
   let sphereText = $state(serializeSpherePlacements());
 
   /**
-   * A textarea cannot colour its own text, so the notes are drawn twice: a
-   * layer behind carries one span per line with the colour, and the textarea
+   * A textarea cannot color its own text, so the notes are drawn twice: a
+   * layer behind carries one span per line with the color, and the textarea
    * sits in front with transparent glyphs and a visible caret. The two share
    * every typographic property, so the lines land exactly on each other.
    */
@@ -32,7 +32,7 @@
     if (!hint) return "";
     // Path and location hints are told apart by their kind; only an item hint
     // carries a requirement, and there the tag is the more useful thing to see
-    // at a glance, so it decides the colour.
+    // at a glance, so it decides the color.
     if (hint.type === "no") return "hint-line no";
     if (hint.type === "path") return "hint-line path";
     if (hint.type === "location") return "hint-line location";

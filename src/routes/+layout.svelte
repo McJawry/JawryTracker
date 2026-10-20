@@ -144,7 +144,7 @@
   });
 
   /**
-   * Text colour that stays readable on whatever panel colour is chosen.
+   * Text color that stays readable on whatever panel color is chosen.
    * Uses WCAG relative luminance rather than a naive average, so mid-tone
    * hues (a saturated green reads far brighter than a saturated blue at the
    * same "average") flip at the right point.
