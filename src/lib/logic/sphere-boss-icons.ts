@@ -126,6 +126,13 @@ export function isHardRequiredItemForBoss(placement: SpherePlacement | undefined
  * Only the dungeon's own items are stripped, so the journey to its door keeps
  * everything it needs, and only items the dungeon's logic actually names are
  * tested - a dozen or so rather than the whole pool.
+ *
+ * A way through can need two of them together, and then neither completes the
+ * dungeon alone: the Forsaken Fortress is the Hookshot, or the Deku Leaf and
+ * Magic. Given back one at a time, only the Hookshot ever counted, so a Leaf or
+ * Magic found in the area hinted at Helmaroc King settled nothing. Pairs of the
+ * items that fail alone are tried as well, and a pair that completes it makes
+ * both candidates.
  */
 const sphereSoftBossCandidateCache = new Map<string, Set<string>>();
 
@@ -221,12 +228,26 @@ export function getPossiblePathItemKeysForBoss(bossName: string): Set<string> {
   // Nothing optional stands in the way, so nothing optional can be the path
   // item either.
   if (!reaches(floor, options)) {
-    universe.forEach((key) => {
-      if (cannotDoWithout.includes(key)) return;
-      const copies = copiesOf(key);
-      if (!copies.length || isOwnDungeonKeyForPath(copies[0])) return;
-      const restored = [...floor.filter((item) => getSphereInventoryItemKey(item) !== key), ...copies];
-      if (reaches(restored, options)) candidates.add(key);
+    const optional = universe.filter((key) => !cannotDoWithout.includes(key) && copiesOf(key).length);
+    // Own-dungeon keys can be half of a pair, but are never anyone's path item.
+    const canBePathItem = (key: string) => !isOwnDungeonKeyForPath(copiesOf(key)[0]);
+    const restoring = (keys: string[]) => [
+      ...floor.filter((item) => !keys.includes(getSphereInventoryItemKey(item))),
+      ...keys.flatMap(copiesOf)
+    ];
+    const alone = new Set(optional.filter((key) => reaches(restoring([key]), options)));
+    alone.forEach((key) => {
+      if (canBePathItem(key)) candidates.add(key);
+    });
+    // Only pairs of items that fail alone: with one that works by itself, the
+    // other is along for the ride.
+    const notAlone = optional.filter((key) => !alone.has(key));
+    notAlone.forEach((key, index) => {
+      notAlone.slice(index + 1).forEach((other) => {
+        if (!reaches(restoring([key, other]), options)) return;
+        if (canBePathItem(key)) candidates.add(key);
+        if (canBePathItem(other)) candidates.add(other);
+      });
     });
   }
   sphereSoftBossCandidateCache.set(cacheKey, candidates);
