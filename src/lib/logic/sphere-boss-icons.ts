@@ -27,7 +27,13 @@ import { data } from "$lib/state/data.svelte";
 import type { SpherePlacement } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
-import { buildAreaBranchModel, planPathBossIcons, withoutSettledBosses } from "$lib/logic/path-boss-rules";
+import {
+  buildAreaBranchModel,
+  capDuplicateBossIcons,
+  planDuplicatePathBossIcons,
+  planPathBossIcons,
+  withoutSettledBosses
+} from "$lib/logic/path-boss-rules";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -283,12 +289,20 @@ export function buildPathBossLocationIcons(
   const availableLocations = unique([...calculation.sphereLocations.flatMap((locations) => locations || []), ...(relativeUnknown.availableLocations || [])]).filter(
     (location) => !occupiedLocationKeys.has(normalize(location)) && !isLocationMarked(location)
   );
-  const addBoss = (location: string, bossName: string) => {
+  // A location keeps as many of a boss's icons as any one hinted area asks of
+  // it - two copies where an area holds two of that boss's path items. Two
+  // different areas leading to the same location still give it one each.
+  const addBosses = (location: string, bossNames: string[]) => {
     const locationKey = normalize(location);
     if (!bossesByLocation.has(locationKey)) bossesByLocation.set(locationKey, []);
     const bosses = bossesByLocation.get(locationKey)!;
-    if (!bosses.includes(bossName)) bosses.push(bossName);
+    new Set(bossNames).forEach((bossName) => {
+      const wanted = bossNames.filter((name) => name === bossName).length;
+      const held = bosses.filter((name) => name === bossName).length;
+      for (let copy = held; copy < wanted; copy += 1) bosses.push(bossName);
+    });
   };
+  const addBoss = (location: string, bossName: string) => addBosses(location, [bossName]);
   const placementDependencies = (placement: SpherePlacement) =>
     unique([...(calculation.dependencies[normalize(placement.location)] || []), ...(relativeUnknown.dependencies.get(placement.id) || [])]);
   const locationDependencies = (location: string) =>
@@ -309,8 +323,9 @@ export function buildPathBossLocationIcons(
         bosses: []
       });
     }
-    const group = hintsByArea.get(areaKey)!;
-    if (!group.bosses.includes(hint.right.name)) group.bosses.push(hint.right.name);
+    // Every hint counts, a boss named twice included: each names its own path
+    // item (planDuplicatePathBossIcons in path-boss-rules.ts).
+    hintsByArea.get(areaKey)!.bosses.push(hint.right.name);
   });
 
   hintsByArea.forEach((group) => {
@@ -342,23 +357,47 @@ export function buildPathBossLocationIcons(
       return;
     }
 
+    // Each hint is a slot of its own - named for its boss, numbered from the
+    // second copy on - so the matching keeps a boss hinted twice to two items.
+    const copies = new Map<string, number>();
+    const slotBoss = new Map<string, string>();
+    const slots = group.bosses.map((bossName) => {
+      const copy = (copies.get(bossName) ?? 0) + 1;
+      copies.set(bossName, copy);
+      const slot = copy === 1 ? bossName : `${bossName} #${copy}`;
+      slotBoss.set(slot, bossName);
+      return slot;
+    });
+
     const rootIds = collectedPlacements.filter((placement) => hintedAreaLocations.has(normalize(placement.location))).map((placement) => placement.id);
     const byId = new Map(collectedPlacements.map((placement) => [placement.id, placement]));
     const { candidatesByBoss, locations, openRootIds } = buildAreaBranchModel({
-      bosses: group.bosses,
+      bosses: slots,
       rootIds,
       placementIds: collectedPlacements.map((placement) => placement.id),
       dependenciesOf: (placementId) => {
         const placement = byId.get(placementId);
         return placement ? placementDependencies(placement) : [];
       },
-      isHardRequired: (placementId, bossName) => answersPathBoss(byId.get(placementId), bossName),
+      isHardRequired: (placementId, slot) => answersPathBoss(byId.get(placementId), slotBoss.get(slot)!),
       availableLocations: treeAvailableLocations,
       locationDependenciesOf: locationDependencies
     });
+    const answeringBranchCounts = new Map([...copies.keys()].map((bossName) => [bossName, candidatesByBoss.get(bossName)?.length ?? 0]));
 
-    const plan = planPathBossIcons(group.bosses, candidatesByBoss, locations, openRootIds);
-    plan.forEach((bossNames, location) => bossNames.forEach((bossName) => addBoss(location, bossName)));
+    // The same boss hinted here more than once, and nothing else: one icon per
+    // copy still missing, wherever the tree is searched.
+    if (copies.size === 1) {
+      const [bossName] = copies.keys();
+      const plan = planDuplicatePathBossIcons(bossName, copies.get(bossName)!, answeringBranchCounts.get(bossName)!, treeAvailableLocations);
+      plan.forEach((bossNames, location) => addBosses(location, bossNames));
+      return;
+    }
+
+    const plan = planPathBossIcons(slots, candidatesByBoss, locations, openRootIds);
+    plan.forEach((slotNames, location) => {
+      addBosses(location, capDuplicateBossIcons(slotNames.map((slot) => slotBoss.get(slot)!), copies, answeringBranchCounts));
+    });
   });
 
   // Rule 9 (path-boss-rules.ts): a boss already in a numbered sphere - the same

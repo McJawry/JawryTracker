@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildAreaBranchModel, planPathBossIcons, withoutSettledBosses } from "./path-boss-rules";
+import {
+  buildAreaBranchModel,
+  capDuplicateBossIcons,
+  planDuplicatePathBossIcons,
+  planPathBossIcons,
+  withoutSettledBosses
+} from "./path-boss-rules";
 
 /**
  * The scenarios below are the ruleset for an area hinted as the path to more
@@ -280,5 +286,46 @@ describe("what the bosses get paired against", () => {
   it("leaves a location that needs nothing from the area in no branch at all", () => {
     const loose = model({ ...pawprint, locations: { ...pawprint.locations, areaChest: [] } });
     expect(loose.branchesOf("areaChest")).toEqual([]);
+  });
+});
+
+/**
+ * The same boss hinted at one area twice: the randomizer never hints a
+ * location twice, so that is two path items there, and one found item can
+ * only settle one of the two hints.
+ */
+describe("a boss hinted at the same area twice", () => {
+  const where = ["chest", "cave"];
+
+  it("shows two icons of the boss while neither path item is found", () => {
+    expect(Object.fromEntries(planDuplicatePathBossIcons("Kalle Demos", 2, 0, where))).toEqual({
+      chest: ["Kalle Demos", "Kalle Demos"],
+      cave: ["Kalle Demos", "Kalle Demos"]
+    });
+  });
+
+  it("takes one icon away everywhere once one path item is found", () => {
+    expect(Object.fromEntries(planDuplicatePathBossIcons("Kalle Demos", 2, 1, where))).toEqual({
+      chest: ["Kalle Demos"],
+      cave: ["Kalle Demos"]
+    });
+  });
+
+  it("shows none once both are found, and more found changes nothing", () => {
+    expect(planDuplicatePathBossIcons("Kalle Demos", 2, 2, where).size).toBe(0);
+    expect(planDuplicatePathBossIcons("Kalle Demos", 2, 3, where).size).toBe(0);
+  });
+
+  it("limits a boss's icons beside another boss's to the copies still missing", () => {
+    const copies = new Map([["Kalle Demos", 2], ["Molgera", 1]]);
+    const drawn = ["Kalle Demos", "Kalle Demos", "Molgera"];
+    expect(capDuplicateBossIcons(drawn, copies, new Map([["Kalle Demos", 0]]))).toEqual(drawn);
+    expect(capDuplicateBossIcons(drawn, copies, new Map([["Kalle Demos", 1]]))).toEqual(["Kalle Demos", "Molgera"]);
+    expect(capDuplicateBossIcons(drawn, copies, new Map([["Kalle Demos", 2]]))).toEqual(["Molgera"]);
+  });
+
+  it("leaves a boss hinted once to the other rules", () => {
+    const copies = new Map([["Molgera", 1]]);
+    expect(capDuplicateBossIcons(["Molgera"], copies, new Map([["Molgera", 1]]))).toEqual(["Molgera"]);
   });
 });

@@ -48,6 +48,12 @@ export type PathProgress =
 export interface PathProgressEntry {
   hint: Hint;
   progress: PathProgress;
+  /**
+   * How many identical hints this card stands for. The randomizer never hints
+   * a location twice, so the same hint twice is two path items in that area -
+   * one card for both, as the boss icons count both.
+   */
+  copies?: number;
 }
 
 export function getPathBossProgressEntries(
@@ -295,6 +301,11 @@ export interface PathCandidate {
   sphere?: number;
   relativeLevel?: number;
   confirmed: boolean;
+  /**
+   * On a solved card: this item is the path item ("decided"), or one of
+   * several it could be ("undecided"). See getPathItemMarks.
+   */
+  pathItem?: "decided" | "undecided";
 }
 
 let logicItemKeysCache: { rules: unknown; macros: unknown; world: unknown; keys: Set<string> } | null = null;
@@ -514,6 +525,40 @@ function withholdingBlocksGoal(
   const blocked = !Number.isInteger(result.locationSpheres[bossKey]);
   cache.set(cacheKey, blocked);
   return blocked;
+}
+
+/**
+ * Which items a solved path card should ring as its path item.
+ *
+ * The path item sits in the hinted area, and the boss cannot be reached
+ * without it - the randomizer's own test for its path pool (see
+ * withholdingBlocksGoal). As many of those as the card has hints settles it;
+ * more than that is undecided between them. When nothing in the area holds the
+ * boss up, the area's candidates are all it could be, and that is undecided
+ * too - the item it really is may be one nobody has recorded.
+ *
+ * `gating` says the items were found by that test, so they belong on the card
+ * even when the boss's own linked items do not include them: the path item is
+ * often further back along the chain than the items that open the boss.
+ */
+export function getPathItemMarks(
+  hint: Hint,
+  copies: number,
+  knowledge: SphereTrackingKnowledge,
+  calculation: SphereCalculationResult,
+  relativeUnknown: RelativeUnknownResult
+): { candidates: PathCandidate[]; decided: boolean; gating: boolean } {
+  const candidates = getPathHintCandidates(hint, knowledge, calculation, relativeUnknown);
+  const bossKey = normalize(getBossLocation(hint.right.name));
+  const placementIds = new Set(knowledge.placements.map((placement) => placement.id));
+  // A boss out of reach with everything known says nothing: every item would
+  // "hold it up". Only a boss reachable now can single out its path item.
+  const measurable = Boolean(bossKey) && !withholdingBlocksGoal("", bossKey, knowledge, calculation);
+  const gating = measurable
+    ? candidates.filter((candidate) => placementIds.has(candidate.id) && withholdingBlocksGoal(candidate.id, bossKey, knowledge, calculation))
+    : [];
+  if (gating.length) return { candidates: gating, decided: gating.length <= copies, gating: true };
+  return { candidates, decided: false, gating: false };
 }
 
 /**

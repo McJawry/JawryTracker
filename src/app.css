@@ -2640,6 +2640,27 @@ body.stream-mode .empty-state {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.38));
 }
 
+/* The path item on a solved card: a ring, solid once it is settled, dashed
+   round each item it could still be. */
+.sphere-path-candidate.path-item::after,
+.sphere-path-candidate.path-item-undecided::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 4px solid var(--path);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.sphere-path-candidate.path-item-undecided::after {
+  border-style: dashed;
+}
+
+.sphere-path-copies {
+  margin-left: 0.3em;
+  font-weight: 700;
+}
+
 .sphere-path-candidate img {
   grid-area: 1 / 1;
   max-width: 100%;

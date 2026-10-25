@@ -19,6 +19,8 @@
   const areaNames = $derived(entry.hint.areas?.length ? entry.hint.areas : [entry.hint.left.name]);
   const area = $derived(areaNames.map((name) => name.replace(" Sector", "")).join(" and "));
   const solved = $derived(entry.progress.kind !== "unknown");
+  // The same hint written down more than once is one card for all of them.
+  const copies = $derived(entry.copies ?? 1);
 
   // Linked items once solved, candidates until then - worked out in the
   // analysis worker with the rest of the board (sphere-board-analysis.ts).
@@ -31,16 +33,20 @@
   // Linking only the furthest-along one left a Ghost Ship Chart on Jalhalla's
   // card with no line to it, and collapsed two bosses' cards onto one item.
   const linkedItems = $derived.by(() => {
-    if (solved) return displayedItems;
+    // Only what actually opened the boss: a path item shown from further back
+    // along the chain is not a dependency of this card.
+    if (solved) return displayedItems.filter((item) => entry.progress.logicalIds.includes(item.id));
     return displayedItems.filter((item) => item.confirmed);
   });
 
   function candidateTitle(candidate: PathCandidate): string {
-    if (Number.isInteger(candidate.sphere)) return `${candidate.item} - sphere ${candidate.sphere}`;
+    const role =
+      candidate.pathItem === "decided" ? "\nThe path item" : candidate.pathItem === "undecided" ? "\nCould be the path item" : "";
+    if (Number.isInteger(candidate.sphere)) return `${candidate.item} - sphere ${candidate.sphere}${role}`;
     if (Number.isInteger(candidate.relativeLevel) && (candidate.relativeLevel ?? 0) > 0) {
-      return `${candidate.item} - ${candidate.relativeLevel} steps after unknown sphere`;
+      return `${candidate.item} - ${candidate.relativeLevel} steps after unknown sphere${role}`;
     }
-    return `${candidate.item} - sphere unknown`;
+    return `${candidate.item} - sphere unknown${role}`;
   }
 
   const itemSummary = $derived(
@@ -62,13 +68,13 @@
   data-hint-line={entry.hint.lineNumber}
   data-dependencies={[...new Set(linkedItems.map((item) => item.id))].join(",")}
   data-path-source-ids={sourceIds.join(",")}
-  title={`${areaNames.join(" and ")} to ${entry.hint.right.name}\n${label}${itemSummary}\nRight-click to remove hint`}
+  title={`${areaNames.join(" and ")} to ${entry.hint.right.name}${copies > 1 ? ` - hinted ${copies} times, so ${copies} path items` : ""}\n${label}${itemSummary}\nRight-click to remove hint`}
   oncontextmenu={(event) => { event.preventDefault(); removeHintLine(entry.hint.lineNumber); }}
 >
   <span class="sphere-path-header">
     <img class="sphere-boss-icon" src={bossImage(entry.hint.right.name)} alt={entry.hint.right.name} />
     <span class="sphere-path-text">
-      <strong>{area}</strong>
+      <strong>{area}{#if copies > 1}<span class="sphere-path-copies">&times;{copies}</span>{/if}</strong>
       <small>{label}</small>
     </span>
   </span>
@@ -77,7 +83,12 @@
     <span class="sphere-path-candidates">
       {#each displayedItems as candidate (candidate.id)}
         {@const badge = getItemNumberBadge(candidate.item)}
-        <span class="sphere-path-candidate" title={candidateTitle(candidate)}>
+        <span
+          class="sphere-path-candidate"
+          class:path-item={candidate.pathItem === "decided"}
+          class:path-item-undecided={candidate.pathItem === "undecided"}
+          title={candidateTitle(candidate)}
+        >
           <img src={itemImage(candidate.item)} alt={candidate.item} />
           {#if badge}<span class="item-number {badge.className}">{badge.number}</span>{/if}
           {#if Number.isInteger(candidate.sphere)}
