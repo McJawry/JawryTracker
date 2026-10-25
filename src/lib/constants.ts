@@ -156,6 +156,8 @@ export interface Settings {
   sphereBoardZoom: number;
   /** Sphere board Filters menu: which cards to hide. */
   sphereFilters: SphereFilters;
+  /** Sphere board: the boss icons path hints put on locations. */
+  showPathIcons: boolean;
   /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
@@ -230,5 +232,6 @@ export const DEFAULT_SETTINGS: Settings = {
   sectionWidths: { ...DEFAULT_SECTION_WIDTHS },
   sphereBoardZoom: 100,
   sphereFilters: { ...DEFAULT_SPHERE_FILTERS },
+  showPathIcons: true,
   popoutZoom: {}
 };

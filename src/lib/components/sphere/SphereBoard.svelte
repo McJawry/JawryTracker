@@ -61,7 +61,9 @@
   // lays it out. Until a run lands it shows the previous one's, the same as the
   // calculation it belongs to.
   const boardAnalysis = $derived(sphereAnalysisCache.board);
-  const pathBossIconsByLocation = $derived(boardAnalysis?.pathBossIcons ?? new Map<string, string[]>());
+  const pathBossIconsByLocation = $derived(
+    (settings.showPathIcons && boardAnalysis?.pathBossIcons) || new Map<string, string[]>()
+  );
 
   interface SphereColumnData {
     sphereNumber: number;

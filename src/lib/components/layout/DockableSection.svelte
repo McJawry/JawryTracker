@@ -26,6 +26,7 @@
   import SphereZoomSlider from "./SphereZoomSlider.svelte";
   import SphereLoadingSpinner from "./SphereLoadingSpinner.svelte";
   import SphereFilterMenu from "./SphereFilterMenu.svelte";
+  import SpherePathIconsToggle from "./SpherePathIconsToggle.svelte";
 
   let { sectionId }: { sectionId: string } = $props();
 
@@ -158,6 +159,7 @@
         >
           <SphereLoadingSpinner />
           <SphereFilterMenu />
+          <SpherePathIconsToggle />
           <SphereZoomSlider />
         </span>
       {/if}

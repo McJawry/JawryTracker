@@ -8,6 +8,7 @@
   import SphereBoard from "./SphereBoard.svelte";
   import SphereZoomSlider from "$lib/components/layout/SphereZoomSlider.svelte";
   import SphereFilterMenu from "$lib/components/layout/SphereFilterMenu.svelte";
+  import SpherePathIconsToggle from "$lib/components/layout/SpherePathIconsToggle.svelte";
   import SphereLoadingSpinner from "$lib/components/layout/SphereLoadingSpinner.svelte";
   import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { data } from "$lib/state/data.svelte";
@@ -51,7 +52,11 @@
         {data.sphereLogicLoaded ? (data.sphereRules && Object.keys(data.sphereRules).length ? "Sphere logic ready" : "Sphere logic loading") : "Loading sphere logic..."}
       </span>
     </span>
-    <SphereFilterMenu />
+    <!-- One flex item, so the header's space-between keeps the two together. -->
+    <span class="popout-header-filters">
+      <SphereFilterMenu />
+      <SpherePathIconsToggle />
+    </span>
     <SphereZoomSlider />
   </header>
   {#if !data.loaded}

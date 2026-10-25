@@ -3849,6 +3849,12 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   gap: 10px;
 }
 
+.popout-header-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 
 /* Draggable tracker icons: the artwork must not start the browser's own image
    drag, and must not swallow the pointerdown the drag controller listens for
