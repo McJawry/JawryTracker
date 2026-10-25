@@ -10,7 +10,7 @@
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
   import "$lib/logic/hint-parsing"; // registers the hints parser (side effect)
   import { ui } from "$lib/state/ui.svelte";
-  import { updateHintsFromNotes, initHintsHistory } from "$lib/state/hints.svelte";
+  import { updateHintsFromNotes } from "$lib/state/hints.svelte";
 
   // A popout window (see $lib/tauri/popout-window.ts) loads this same
   // index.html with ?popout=spheres rather than a second SvelteKit route,
@@ -28,10 +28,9 @@
       console.error(error);
     }
     // Ported from the end of loadData() (dev/app/app.js:659-661): the fuzzy
-    // matcher needs reference data loaded first, so the initial parse (and the
-    // history entry it seeds) happens after loadReferenceData() resolves.
-    updateHintsFromNotes({ recordHistory: false });
-    initHintsHistory();
+    // matcher needs reference data loaded first, so the initial parse happens
+    // after loadReferenceData() resolves.
+    updateHintsFromNotes();
 
     // mapSphereRulesToLocationPool() needs data.locations, so this waits for
     // loadReferenceData() above rather than running in parallel.

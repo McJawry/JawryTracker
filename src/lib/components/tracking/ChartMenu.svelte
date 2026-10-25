@@ -15,7 +15,6 @@
   import { ui, clearPendingLocationForItemAssignment } from "$lib/state/ui.svelte";
   import { answerArmedLocation } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
 
   const charts = $derived(getSectorCharts());
   // Sea-chart order is the default: the grid is the map, so a cell's position
@@ -48,7 +47,6 @@
       answerArmedLocation(chart, ui.pendingLocationForItemAssignment);
       return;
     }
-    recordTrackerAction();
     toggleChartAcquired(chart);
   }
 
@@ -59,7 +57,6 @@
       clearPendingLocationForItemAssignment();
       return;
     }
-    recordTrackerAction();
     toggleChartAcquired(chart);
   }
 

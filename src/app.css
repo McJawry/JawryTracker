@@ -2136,6 +2136,22 @@ body.stream-mode .empty-state {
   font-weight: 800;
 }
 
+/* Fixed colors rather than theme ones: red back, green forward, whatever the
+   color preset. */
+.map-toolbar-button.history-button {
+  font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-toolbar-button.undo-button {
+  color: #d32f2f;
+}
+
+.map-toolbar-button.redo-button {
+  color: #2e9e44;
+}
+
 
 .sphere-logic-status {
   min-width: 0;

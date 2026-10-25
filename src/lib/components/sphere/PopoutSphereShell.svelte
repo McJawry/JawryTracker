@@ -15,7 +15,7 @@
   import { loadReferenceData } from "$lib/logic/data-loading";
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
   import "$lib/logic/hint-parsing"; // registers the hints parser (side effect)
-  import { updateHintsFromNotes, initHintsHistory } from "$lib/state/hints.svelte";
+  import { updateHintsFromNotes } from "$lib/state/hints.svelte";
 
   onMount(async () => {
     announceRedockOnUnload("sphere-board");
@@ -30,8 +30,7 @@
     // Without this the hints array stays empty in this window, so path hints
     // produced no boss cards here even though the docked board showed them.
     // The parse needs reference data, hence its position after the load.
-    updateHintsFromNotes({ recordHistory: false });
-    initHintsHistory();
+    updateHintsFromNotes();
     try {
       await restoreRandoSync();
     } catch (error) {

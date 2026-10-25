@@ -25,7 +25,6 @@
   import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
   import { answerArmedLocation, isFindableItem, needsRemovalChoice } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { getHeldTriforceShardCount, getShardTrackingState, isStartingShard } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
@@ -119,7 +118,6 @@
 
   function handleLeftClick(itemName: string) {
     if (ui.markStartingMode) {
-      recordTrackerAction();
       toggleStartingItem(itemName);
       return;
     }
@@ -129,7 +127,6 @@
       answerArmedLocation(itemName, ui.pendingLocationForItemAssignment);
       return;
     }
-    recordTrackerAction();
     advanceEffectiveItemStage(itemName);
   }
 
@@ -150,7 +147,6 @@
       openItemCardPicker(itemName);
       return;
     }
-    recordTrackerAction();
     retreatEffectiveItemStage(itemName);
   }
 

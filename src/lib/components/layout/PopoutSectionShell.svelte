@@ -15,7 +15,7 @@
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
   import "$lib/logic/hint-parsing"; // registers the hints parser (side effect)
   import { ui } from "$lib/state/ui.svelte";
-  import { updateHintsFromNotes, initHintsHistory } from "$lib/state/hints.svelte";
+  import { updateHintsFromNotes } from "$lib/state/hints.svelte";
 
   let { sectionId }: { sectionId: string } = $props();
 
@@ -87,8 +87,7 @@
       ui.dataStatus = "Data not loaded";
       console.error(error);
     }
-    updateHintsFromNotes({ recordHistory: false });
-    initHintsHistory();
+    updateHintsFromNotes();
     try {
       await restoreRandoSync();
     } catch (error) {

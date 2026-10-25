@@ -16,7 +16,6 @@
   import { ui, armEntranceAssignment, clearPendingEntranceAssignment } from "$lib/state/ui.svelte";
   import { DUNGEON_ENTRANCE_TRACKERS } from "$lib/gameData";
   import { DUNGEON_DRAG_MIME } from "./dungeon-drag";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { answerArmedLocation } from "$lib/logic/assignment";
 
@@ -52,7 +51,6 @@
       answerArmedLocation(`Triforce Shard ${number}`, pending, () => setShardTrackingChecked(number, true));
       return;
     }
-    recordTrackerAction();
     setShardTrackingChecked(number, !isChecked);
   }
 
