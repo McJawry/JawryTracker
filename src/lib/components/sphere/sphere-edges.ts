@@ -18,12 +18,17 @@ function collectNodes(canvas: HTMLElement): Map<string, HTMLElement> {
   );
 }
 
-/** parents/children adjacency, filtered to nodes actually on the board. */
-function buildGraph(nodes: Map<string, HTMLElement>) {
+/**
+ * parents/children adjacency, filtered to nodes actually on the board, less
+ * any `omitted` edges (see redundantLines).
+ */
+function buildGraph(nodes: Map<string, HTMLElement>, omitted: Set<string> = new Set()) {
   const parents = new Map<string, string[]>();
   const children = new Map<string, string[]>([...nodes.keys()].map((id) => [id, [] as string[]]));
   nodes.forEach((node, targetId) => {
-    const dependencies = (node.dataset.dependencies?.split(",") ?? []).filter((id) => nodes.has(id));
+    const dependencies = (node.dataset.dependencies?.split(",") ?? []).filter(
+      (id) => nodes.has(id) && !omitted.has(edgeKey(id, targetId))
+    );
     parents.set(targetId, dependencies);
     dependencies.forEach((sourceId) => children.get(sourceId)!.push(targetId));
   });
@@ -31,6 +36,57 @@ function buildGraph(nodes: Map<string, HTMLElement>) {
 }
 
 const edgeKey = (sourceId: string, targetId: string) => `${sourceId}\n${targetId}`;
+
+/**
+ * Lines that repeat what a longer chain already shows: A straight to C when A
+ * reaches C through B anyway. Every card still traces back to exactly the
+ * same items, by its lines and on hover, so these are left off the board.
+ * Kept, they were four lines in ten on a mid-run board - Iron Boots, Magic and
+ * the Deku Leaf each ran to every Wind Temple chest beside the keys that
+ * already led there, and every path item grew a second purple line across
+ * the board to its boss.
+ *
+ * Dropped one at a time, each checked against the lines still left, so a
+ * card never loses its way back to anything even where the graph loops.
+ */
+function redundantLines(nodes: Map<string, HTMLElement>): Set<string> {
+  const { parents, children } = buildGraph(nodes);
+  const dropped = new Set<string>();
+  const reachesWithout = (sourceId: string, targetId: string) => {
+    const visited = new Set([sourceId]);
+    const pending = (children.get(sourceId) ?? []).filter((childId) => childId !== targetId);
+    while (pending.length) {
+      const currentId = pending.pop()!;
+      if (currentId === targetId) return true;
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
+      (children.get(currentId) ?? []).forEach((childId) => {
+        if (!dropped.has(edgeKey(currentId, childId))) pending.push(childId);
+      });
+    }
+    return false;
+  };
+  parents.forEach((sourceIds, targetId) => {
+    sourceIds.forEach((sourceId) => {
+      if (!reachesWithout(sourceId, targetId)) return;
+      dropped.add(edgeKey(sourceId, targetId));
+      children.set(sourceId, children.get(sourceId)!.filter((childId) => childId !== targetId));
+    });
+  });
+  return dropped;
+}
+
+/**
+ * The last answer, for the hover focus to reuse: it runs on every pointer
+ * move, and the board's lines only change when it is redrawn.
+ */
+let redundantCache: { signature: string; dropped: Set<string> } | null = null;
+
+function cachedRedundantLines(nodes: Map<string, HTMLElement>): Set<string> {
+  const signature = [...nodes].map(([id, node]) => `${id}:${node.dataset.dependencies ?? ""}`).join("|");
+  if (redundantCache?.signature !== signature) redundantCache = { signature, dropped: redundantLines(nodes) };
+  return redundantCache.dropped;
+}
 
 /**
  * Redraws every edge. `zoom` is the CSS zoom on the column container: node
@@ -55,6 +111,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
   edges.replaceChildren();
 
   const nodes = collectNodes(canvas);
+  const shortcuts = cachedRedundantLines(nodes);
   const scale = zoom || 1;
 
   // Every rect is read before a single path is written. Measuring inside the
@@ -71,7 +128,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
     const dependencies = (target.dataset.dependencies?.split(",") ?? []).filter(Boolean);
     dependencies.forEach((sourceId) => {
       const sourceRect = rects.get(sourceId);
-      if (!sourceRect) return;
+      if (!sourceRect || shortcuts.has(edgeKey(sourceId, targetId))) return;
       // Source's right edge to the target's left edge, both at mid-height.
       const startX = (sourceRect.right - canvasRect.left) / scale;
       const startY = (sourceRect.top + sourceRect.height / 2 - canvasRect.top) / scale;
@@ -87,7 +144,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
   });
   edges.appendChild(fragment);
 
-  return markPathHintEdges(nodes, canvas, edges);
+  return markPathHintEdges(nodes, canvas, edges, shortcuts);
 }
 
 /**
@@ -99,13 +156,18 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
  * through those ancestors - so only edges that actually lie between the
  * source and the boss are painted, not the source's whole subtree.
  */
-function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement, edges: SVGSVGElement): Set<string> {
+function markPathHintEdges(
+  nodes: Map<string, HTMLElement>,
+  canvas: HTMLElement,
+  edges: SVGSVGElement,
+  shortcuts: Set<string>
+): Set<string> {
   nodes.forEach((node) => {
     node.classList.remove("path-chain-location");
     delete node.dataset.pathTargetIds;
   });
 
-  const { parents, children } = buildGraph(nodes);
+  const { parents, children } = buildGraph(nodes, shortcuts);
   const pathEdges = new Set<string>();
   const pathNodeIds = new Set<string>();
   // A card with several candidates can't say which one is really its path
@@ -210,7 +272,7 @@ export function applySphereChainFocus(canvas: HTMLElement | null, edges: SVGSVGE
     return;
   }
 
-  const { parents, children } = buildGraph(nodes);
+  const { parents, children } = buildGraph(nodes, cachedRedundantLines(nodes));
   const chain = new Set([nodeId]);
   const highlightedEdges = new Set<string>();
 
