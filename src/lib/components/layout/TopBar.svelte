@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { APP_VERSION } from "$lib/constants";
+  import { APP_VERSION, NEW_RUN_KEY } from "$lib/constants";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { ui, setMarkStartingMode } from "$lib/state/ui.svelte";
   import { checked, saveChecked } from "$lib/state/checked.svelte";
@@ -37,6 +37,8 @@
     const shouldReset = confirm("Start a new tracker? This clears notes, checked locations, items, and sphere placements.");
     if (!shouldReset) return;
 
+    // The one empty run allowed to replace a run in autosave.json.
+    localStorage.setItem(NEW_RUN_KEY, "1");
     hintNotes.value = "";
     saveHintNotes();
     setHints([]);

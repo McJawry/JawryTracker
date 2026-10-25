@@ -21,7 +21,7 @@ import {
   type PresetResult
 } from "./preference-presets";
 import { isTauriRuntime } from "./is-tauri";
-import { AUTOSAVE_STAMP_KEY, CHECKED_KEY, ITEM_STORAGE_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
+import { AUTOSAVE_STAMP_KEY, CHECKED_KEY, ITEM_STORAGE_KEY, NEW_RUN_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 
 const AUTOSAVE_FILE = "autosave.json";
 const DUNGEON_ITEMS_KEY = "ww-rando-hint-tracker-dungeon-items";
@@ -86,11 +86,39 @@ async function autosavePath(): Promise<string> {
   return join(await getAppDataRoot(), AUTOSAVE_FILE);
 }
 
+/** Nothing tracked at all: no notes, checks, items, placements or entrances. */
+function isEmptyRun(save: Partial<TrackerAutosave> | null): boolean {
+  if (!save) return true;
+  const sphere = (save.sphere ?? {}) as { placements?: unknown[]; entranceConnections?: object };
+  return (
+    !save.notes?.trim() &&
+    !Object.values(save.checked ?? {}).some(Boolean) &&
+    !Object.values(save.items ?? {}).some(Boolean) &&
+    !sphere.placements?.length &&
+    !Object.keys(sphere.entranceConnections ?? {}).length &&
+    !Object.keys((save.dungeonItems ?? {}) as object).length
+  );
+}
+
 /** Debounced by the caller; safe to invoke on every tracker change. */
 export async function saveTrackerAutosave(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
-    await writeTextFile(await autosavePath(), JSON.stringify(currentAutosave(), null, 2));
+    const save = currentAutosave();
+    if (isEmptyRun(save) && !localStorage.getItem(NEW_RUN_KEY)) {
+      // Storage that has lost the run must not take this file down with it -
+      // the file is what the next start restores an empty profile from.
+      // WebView2 rebuilds its localStorage from nothing when writes to it keep
+      // failing, which a USB drive dropping out for a moment is enough for,
+      // and the next window to open then wrote that emptiness over the run.
+      // Only Start New Tracker empties the file.
+      if (!isEmptyRun(await readTrackerAutosave())) {
+        console.warn("Not replacing the run in autosave.json with an empty one");
+        return;
+      }
+    }
+    if (!isEmptyRun(save)) localStorage.removeItem(NEW_RUN_KEY);
+    await writeTextFile(await autosavePath(), JSON.stringify(save, null, 2));
     localStorage.setItem(AUTOSAVE_STAMP_KEY, String(Date.now()));
   } catch (error) {
     console.error("Could not write the tracker autosave", error);
@@ -242,7 +270,9 @@ export async function listRunSaves(location: PresetLocation): Promise<PresetEntr
 
 export async function saveRunAs(name: string, location: PresetLocation): Promise<PresetResult> {
   if (!isTauriRuntime()) return { ok: false, message: "Saving a run requires the desktop app." };
-  return savePreferencePreset(name, location, currentAutosave(), "runs");
+  const save = currentAutosave();
+  if (isEmptyRun(save)) return { ok: false, message: "The current run is empty - nothing was saved." };
+  return savePreferencePreset(name, location, save, "runs");
 }
 
 export async function loadRunSave(name: string, location: PresetLocation): Promise<AutosaveLoadResult> {

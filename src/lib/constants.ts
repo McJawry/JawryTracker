@@ -17,6 +17,9 @@ export const PENDING_LOCATION_KEY = "ww-rando-hint-tracker-pending-location";
 // When autosave.json was last written. Shared so a popout can tell whether the
 // main window is still doing it - see the autosave effect in +layout.svelte.
 export const AUTOSAVE_STAMP_KEY = "ww-rando-hint-tracker-autosave-stamp";
+// Set by Start New Tracker: the empty run that follows is meant, so it may
+// replace a run in autosave.json. Nothing else may - see saveTrackerAutosave.
+export const NEW_RUN_KEY = "ww-rando-hint-tracker-new-run";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
