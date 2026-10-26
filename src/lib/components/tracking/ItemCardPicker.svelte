@@ -22,7 +22,6 @@
     unassignPlacement
   } from "$lib/logic/assignment";
   import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
 
   const normalize = WWRSphereEngine.normalize;
 
@@ -36,7 +35,6 @@
   const badge = $derived(getItemNumberBadge(item));
 
   function choosePlaced(placement: SpherePlacement) {
-    recordTrackerAction();
     if (target) {
       // Same copy, found somewhere else: nothing is acquired or given up.
       movePlacementToLocation(placement, target);
@@ -49,7 +47,6 @@
   }
 
   function chooseLoose(copyItem: string) {
-    recordTrackerAction();
     // Replacing: the copy you counted without a location came from here.
     // Removing: nothing to detach, so giving the copy back is the whole action.
     if (target) placeAcquiredItemAtLocation(copyItem, target);

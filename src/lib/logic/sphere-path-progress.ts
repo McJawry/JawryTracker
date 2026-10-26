@@ -19,6 +19,7 @@ import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
 import { answersPathBoss, getBossLocation } from "$lib/logic/sphere-boss-icons";
 import { getPathHintAreaLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
 import {
+  getMaximalSphereLogicInventory,
   getSphereCalculationInput,
   getSphereLogicStartingGear,
   getSphereInventoryItemKey,
@@ -48,6 +49,12 @@ export type PathProgress =
 export interface PathProgressEntry {
   hint: Hint;
   progress: PathProgress;
+  /**
+   * How many identical hints this card stands for. The randomizer never hints
+   * a location twice, so the same hint twice is two path items in that area -
+   * one card for both, as the boss icons count both.
+   */
+  copies?: number;
 }
 
 export function getPathBossProgressEntries(
@@ -295,6 +302,11 @@ export interface PathCandidate {
   sphere?: number;
   relativeLevel?: number;
   confirmed: boolean;
+  /**
+   * On a solved card: this item is the path item ("decided"), or one of
+   * several it could be ("undecided"). See getPathItemMarks.
+   */
+  pathItem?: "decided" | "undecided";
 }
 
 let logicItemKeysCache: { rules: unknown; macros: unknown; world: unknown; keys: Set<string> } | null = null;
@@ -489,19 +501,30 @@ const goalGateCache = new WeakMap<SphereCalculationResult, Map<string, boolean>>
  * actually need. A flat check hands you the Deku Leaf anyway and reports the
  * Spoils Bag as harmless. Upstream's runGeneralSearch is a progression search
  * for exactly this reason (Hints.cpp, calculatePossiblePathLocations).
+ *
+ * Two worlds to ask in, and they answer opposite questions:
+ * - The known placements alone. An item that does not block the boss here
+ *   does not block it in the finished seed either - the seed only adds items -
+ *   so this is the one for ruling candidates out.
+ * - With every copy still to be found handed over as well (`assumeUnfound`).
+ *   An item that still blocks the boss is one no unchecked location can stand
+ *   in for, so it blocks it in the finished seed too - the one for ruling a
+ *   path item in. The known-only world cannot do that: a boss still waiting on
+ *   anything unfound is out of reach whatever is withheld.
  */
 function withholdingBlocksGoal(
   placementId: string,
   bossKey: string,
   knowledge: SphereTrackingKnowledge,
-  calculation: SphereCalculationResult
+  calculation: SphereCalculationResult,
+  assumeUnfound = false
 ): boolean {
   let cache = goalGateCache.get(calculation);
   if (!cache) {
     cache = new Map();
     goalGateCache.set(calculation, cache);
   }
-  const cacheKey = `${bossKey}|${placementId}`;
+  const cacheKey = `${assumeUnfound ? "unfound" : "known"}|${bossKey}|${placementId}`;
   const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -510,10 +533,75 @@ function withholdingBlocksGoal(
   // Everything known, which includes what is held with no location: the
   // spheres withhold those, but this asks about the seed, not about spheres.
   const heldWithoutLocation = getUnknownSourceItems().map((source) => source.item);
-  const result = WWRSphereEngine.calculate({ ...input, startingGear: [...(input.startingGear ?? []), ...heldWithoutLocation] });
+  const startingGear = [...(input.startingGear ?? []), ...heldWithoutLocation];
+  if (assumeUnfound) startingGear.push(...getUnfoundCopies(input.startingGear ?? [], heldWithoutLocation, knowledge));
+  const result = WWRSphereEngine.calculate({ ...input, startingGear });
   const blocked = !Number.isInteger(result.locationSpheres[bossKey]);
   cache.set(cacheKey, blocked);
   return blocked;
+}
+
+/**
+ * Every copy the seed still has to hand out: its whole item pool, less the
+ * starting gear, what is recorded at a location and what is held with none.
+ * Taken from every placement, the withheld one included - its copy is not
+ * still out there to be found.
+ */
+function getUnfoundCopies(startingGear: string[], held: string[], knowledge: SphereTrackingKnowledge): string[] {
+  const unfound = getMaximalSphereLogicInventory();
+  const takeOne = (key: string) => {
+    const index = unfound.findIndex((item) => getSphereInventoryItemKey(item) === key);
+    if (index >= 0) unfound.splice(index, 1);
+  };
+  [...startingGear, ...held].forEach((item) => takeOne(getSphereInventoryItemKey(item)));
+  knowledge.placements.forEach((placement) => takeOne(getSphereInventoryItemKey(placement.item, placement.location)));
+  return unfound;
+}
+
+/**
+ * Which items a solved path card should ring as its path item.
+ *
+ * The path item sits in the hinted area, and the boss cannot be reached
+ * without it - the randomizer's own test for its path pool (see
+ * withholdingBlocksGoal). Asked first with everything still unfound handed
+ * over, so the answer holds for the finished seed: the Mailbox's Farore's
+ * Pearl gates Molgera when the seed's only Iron Boots are in the Tower of the
+ * Gods, even while the Wind Temple still waits on keys nobody has found. As
+ * many of those as the card has hints settles it; more than that is undecided
+ * between them. When nothing in the area holds the
+ * boss up, the area's candidates are all it could be, and that is undecided
+ * too - the item it really is may be one nobody has recorded.
+ *
+ * `gating` says the items were found by that test, so they belong on the card
+ * even when the boss's own linked items do not include them: the path item is
+ * often further back along the chain than the items that open the boss.
+ */
+export function getPathItemMarks(
+  hint: Hint,
+  copies: number,
+  knowledge: SphereTrackingKnowledge,
+  calculation: SphereCalculationResult,
+  relativeUnknown: RelativeUnknownResult
+): { candidates: PathCandidate[]; decided: boolean; gating: boolean } {
+  const candidates = getPathHintCandidates(hint, knowledge, calculation, relativeUnknown);
+  const bossKey = normalize(getBossLocation(hint.right.name));
+  const placementIds = new Set(knowledge.placements.map((placement) => placement.id));
+  // A boss out of reach in the world asked about says nothing there: every
+  // item would "hold it up".
+  const gatingIn = (assumeUnfound: boolean) =>
+    bossKey && !withholdingBlocksGoal("", bossKey, knowledge, calculation, assumeUnfound)
+      ? candidates.filter(
+          (candidate) =>
+            placementIds.has(candidate.id) && withholdingBlocksGoal(candidate.id, bossKey, knowledge, calculation, assumeUnfound)
+        )
+      : [];
+  // Proven first. That cannot speak for an item a copy still unfound could
+  // stand in for - one bow of three, more magic - so failing it, the known
+  // placements alone, when they reach the boss: what they cannot do without.
+  const proven = gatingIn(true);
+  const gating = proven.length ? proven : gatingIn(false);
+  if (gating.length) return { candidates: gating, decided: gating.length <= copies, gating: true };
+  return { candidates, decided: false, gating: false };
 }
 
 /**

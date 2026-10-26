@@ -3,7 +3,6 @@
   import { WWRSphereEngine, type SphereCalculationResult } from "$lib/logic";
   import type { SpherePlacement } from "$lib/state/sphere.svelte";
   import { unassignPlacement } from "$lib/logic/assignment";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { data } from "$lib/state/data.svelte";
   import { itemImage, getItemNumberBadge } from "$lib/logic/images";
   import { getAreaFromLocation } from "$lib/logic/data-loading";
@@ -65,7 +64,7 @@
   data-path-item={placement.item}
   data-marked-location={placement.fromHint ? undefined : "true"}
   title={`${placement.item}\n${placement.location}\n${sphereLabel}${isPruned ? "\nOptional in the minimal playthrough" : ""}\nRight-click to remove placement and un-acquire the item`}
-  oncontextmenu={(event) => { event.preventDefault(); recordTrackerAction(); unassignPlacement(placement); }}
+  oncontextmenu={(event) => { event.preventDefault(); unassignPlacement(placement); }}
 >
   <span class="sphere-item-icon">
     <img src={imageSrc} alt="" />

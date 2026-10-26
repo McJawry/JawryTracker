@@ -41,7 +41,6 @@
   import { getStaticSectorIcons } from "$lib/logic/map-icons";
   import MapIcon from "$lib/components/map/MapIcon.svelte";
   import { ui } from "$lib/state/ui.svelte";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { onDestroy } from "svelte";
   import { dropDraggedItemOnLocation } from "$lib/logic/item-drag";
   import {
@@ -159,7 +158,6 @@
   }
 
   function clearAll() {
-    recordTrackerAction();
     clearLocations(locations);
   }
 
@@ -170,7 +168,6 @@
       onClose();
       return;
     }
-    recordTrackerAction();
     toggleLocationChecked(location);
   }
 
@@ -182,13 +179,11 @@
 
   function chooseTarget(target: TrackerEntrance) {
     if (!selectedEntrance) return;
-    recordTrackerAction();
     connectEntrance(selectedEntrance, target);
     setView("entrances");
   }
 
   function clearEntrance(entrance: TrackerEntrance) {
-    recordTrackerAction();
     disconnectEntrance(entrance);
   }
 

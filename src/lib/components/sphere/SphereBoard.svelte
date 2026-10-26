@@ -61,7 +61,9 @@
   // lays it out. Until a run lands it shows the previous one's, the same as the
   // calculation it belongs to.
   const boardAnalysis = $derived(sphereAnalysisCache.board);
-  const pathBossIconsByLocation = $derived(boardAnalysis?.pathBossIcons ?? new Map<string, string[]>());
+  const pathBossIconsByLocation = $derived(
+    (settings.showPathIcons && boardAnalysis?.pathBossIcons) || new Map<string, string[]>()
+  );
 
   interface SphereColumnData {
     sphereNumber: number;
@@ -116,10 +118,11 @@
           // The draw decides which cards are purple, so it is also what tells
           // the Filters menu what "Paths" should keep. Only republish on a real
           // change, or hiding cards would redraw and loop.
-          const painted = drawSphereEdges(canvas, edges, zoom);
-          if (painted.size !== pathChainNodeIds.size || [...painted].some((id) => !pathChainNodeIds.has(id))) {
-            pathChainNodeIds = painted;
-          }
+          const { chain, potential } = drawSphereEdges(canvas, edges, zoom);
+          const changed = (next: Set<string>, current: Set<string>) =>
+            next.size !== current.size || [...next].some((id) => !current.has(id));
+          if (changed(chain, pathChainNodeIds)) pathChainNodeIds = chain;
+          if (changed(potential, potentialPathNodeIds)) potentialPathNodeIds = potential;
         });
       });
     };
@@ -192,8 +195,10 @@
   //
   // A card placed since that walk ran has not been judged yet, so it stays in
   // view until the next result lands - and with no walk yet, every card does.
-  // Published by drawSphereEdges - the cards it painted purple.
+  // Published by drawSphereEdges - the cards it painted purple, and the ones
+  // that could still join a path (see potentialPathNodes there).
   let pathChainNodeIds = $state(new Set<string>());
+  let potentialPathNodeIds = $state(new Set<string>());
   const hiddenPlacementIds = $derived.by((): Set<string> => {
     const filters = settings.sphereFilters;
     if (!isSphereFilterActive(filters)) return new Set();
@@ -207,12 +212,29 @@
       placements,
       filters,
       pathChainIds: [...pathChainNodeIds],
+      potentialPathIds: [...potentialPathNodeIds],
       sphereLocations: calculation?.sphereLocations,
       prunedPlacementIds: calculation?.prunedPlacementIds ?? [],
       playthroughFinished: Boolean(calculation?.prunedAgainstGoal),
       requiredIds: requiredIds ?? []
     });
   });
+
+  // Cards the Filters menu hides still sit on the board, out of sight. Which
+  // cards are purple is read off the board's own lines (drawSphereEdges), so a
+  // card left out of the DOM could never turn purple: a newly found item stayed
+  // hidden for good, as did a hidden card a later find put on a path, until the
+  // filter was switched off and on again.
+  const filteredPlacements = $derived(
+    knowledge.placements
+      .filter((placement) => hiddenPlacementIds.has(placement.id))
+      .map((placement) => {
+        // The same split the columns make: a numbered sphere hangs off the
+        // calculation's dependencies, anything else off the inferred ones.
+        const sphere = calculation?.locationSpheres[normalize(placement.location)];
+        return { placement, sphereNumber: Number.isInteger(sphere) ? (sphere as number) : null };
+      })
+  );
 
   const sphereColumns = $derived.by((): SphereColumnData[] => {
     if (!calculation) return [];
@@ -265,6 +287,14 @@
   // Path hints get a card wherever their boss lands: a numbered sphere, one of
   // the relative-unknown columns, or the Paths column when nothing reaches it
   // yet.
+
+  // What each location in the relative columns waits on. Those locations have
+  // no sphere, so the calculation's dependencies say nothing about them: their
+  // area groups sat unconnected, and a branch that only led there looked
+  // finished to the Paths filter.
+  const relativeAvailableDependencies = $derived(
+    Object.fromEntries(sphereAnalysisCache.relativeUnknown?.availableDependencies ?? []) as Record<string, string[]>
+  );
 
   const predictionColumns = $derived.by((): PredictionColumnData[] => {
     const relativeUnknown = sphereAnalysisCache.relativeUnknown;
@@ -387,6 +417,14 @@
         onmouseout={() => applySphereChainFocus(columnsElement ?? null, edgesElement ?? null, "")}
       >
         <svg class="sphere-edges" bind:this={edgesElement} aria-hidden="true"></svg>
+        {#if filteredPlacements.length}
+          <!-- See filteredPlacements: in the graph, not on screen. -->
+          <div class="sphere-filtered-cards" hidden>
+            {#each filteredPlacements as { placement, sphereNumber } (placement.id)}
+              <SpherePlacementNode {placement} {sphereNumber} {calculation} relativeUnknown={sphereAnalysisCache.relativeUnknown} />
+            {/each}
+          </div>
+        {/if}
         <article class="sphere-column start-column">
           <h3>Start</h3>
           <button
@@ -439,7 +477,7 @@
               <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
               <div class="sphere-area-groups">
                 {#each column.groups as group (group.area)}
-                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} sphere={`p${column.level}`} dependencySource={calculation.dependencies} />
+                  <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} sphere={`p${column.level}`} dependencySource={relativeAvailableDependencies} />
                 {/each}
               </div>
             {/if}

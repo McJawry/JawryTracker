@@ -28,7 +28,17 @@
 
   const normalize = WWRSphereEngine.normalize;
 
-  const groupBosses = $derived([...new Set(locations.flatMap((location) => bossIconsByLocation.get(normalize(location)) || []))]);
+  // The header shows each boss as many times as any one location does: two
+  // icons when a boss hinted twice still has both path items to find.
+  const groupBosses = $derived.by(() => {
+    const most = new Map<string, number>();
+    locations.forEach((location) => {
+      const counts = new Map<string, number>();
+      (bossIconsByLocation.get(normalize(location)) || []).forEach((bossName) => counts.set(bossName, (counts.get(bossName) ?? 0) + 1));
+      counts.forEach((count, bossName) => most.set(bossName, Math.max(most.get(bossName) ?? 0, count)));
+    });
+    return [...most].flatMap(([bossName, count]) => Array<string>(count).fill(bossName));
+  });
 
   // An area group is a graph node too: it depends on whatever unlocked any
   // location inside it, so the board draws a line into the group rather than
@@ -53,8 +63,9 @@
   <summary>
     <span>{area.replace(" Sector", "")}</span>
     {#if groupBosses.length}
-      <span class="sphere-location-path-bosses" aria-label={`Possibly on the path to ${groupBosses.join(" or ")}`}>
-        {#each groupBosses as bossName (bossName)}
+      <span class="sphere-location-path-bosses" aria-label={`Possibly on the path to ${[...new Set(groupBosses)].join(" or ")}`}>
+        <!-- Keyed by position: a boss hinted twice repeats. -->
+        {#each groupBosses as bossName, index (`${bossName}-${index}`)}
           <img class="sphere-location-path-boss" src={bossImage(bossName)} alt={bossName} title={`Possibly on the path to ${bossName}`} />
         {/each}
       </span>
@@ -72,8 +83,8 @@
       >
         <span>{location.replace(`${getAreaFromLocation(location)} - `, "")}</span>
         {#if locationBosses.length}
-          <span class="sphere-location-path-bosses" aria-label={`Possibly on the path to ${locationBosses.join(" or ")}`}>
-            {#each locationBosses as bossName (bossName)}
+          <span class="sphere-location-path-bosses" aria-label={`Possibly on the path to ${[...new Set(locationBosses)].join(" or ")}`}>
+            {#each locationBosses as bossName, index (`${bossName}-${index}`)}
               <img class="sphere-location-path-boss" src={bossImage(bossName)} alt={bossName} title={`Possibly on the path to ${bossName}`} />
             {/each}
           </span>

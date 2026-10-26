@@ -8,7 +8,6 @@
   import type { UnplacedItem } from "$lib/logic/unplaced-items";
   import { placeAcquiredItemAtLocation, unacquireItem } from "$lib/logic/assignment";
   import { ui } from "$lib/state/ui.svelte";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
 
   let { entry }: { entry: UnplacedItem } = $props();
 
@@ -21,7 +20,6 @@
 
   function handleClick() {
     if (!armed) return;
-    recordTrackerAction();
     placeAcquiredItemAtLocation(entry.item, armed);
   }
 
@@ -29,7 +27,6 @@
   // there's no location to free here, so this is purely giving the item back.
   function handleContextMenu(event: MouseEvent) {
     event.preventDefault();
-    recordTrackerAction();
     unacquireItem(entry.item);
   }
 </script>

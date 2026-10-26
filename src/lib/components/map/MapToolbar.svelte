@@ -9,8 +9,12 @@
   import TrackerSettingsMenu from "$lib/components/tracking/TrackerSettingsMenu.svelte";
   import { data, randoConfig } from "$lib/state/data.svelte";
   import { refreshRandoConfigChanged, syncRandoFolder } from "$lib/tauri/rando-sync";
-  import { trackerHistory, undoTrackerAction } from "$lib/state/tracker-history.svelte";
+  import { redoTrackerAction, startTrackerHistory, trackerHistory, undoTrackerAction } from "$lib/state/tracker-history.svelte";
   import { ui, toggleMarkStartingMode } from "$lib/state/ui.svelte";
+
+  // The one undo for the whole run, so whichever window shows these buttons
+  // keeps the history - including actions taken in other windows.
+  startTrackerHistory();
 
   // Only meaningful when the seed actually grants random starting items -
   // these are the two config flags that do so.
@@ -54,14 +58,27 @@
 </script>
 
 <div class="map-toolbar">
+  <!-- The arrows are the text forms (U+FE0E), not the emoji: an emoji keeps
+       its own colors and could not be red or green. -->
   <button
-    class="tool-button map-toolbar-button"
+    class="tool-button map-toolbar-button history-button undo-button"
     type="button"
     disabled={!trackerHistory.canUndo}
-    title="Undo the last tracker action"
+    title="Undo"
+    aria-label="Undo"
     onclick={undoTrackerAction}
   >
-    Undo
+    &#x21a9;&#xfe0e;
+  </button>
+  <button
+    class="tool-button map-toolbar-button history-button redo-button"
+    type="button"
+    disabled={!trackerHistory.canRedo}
+    title="Redo"
+    aria-label="Redo"
+    onclick={redoTrackerAction}
+  >
+    &#x21aa;&#xfe0e;
   </button>
   {#if showMarkStarting}
     <button

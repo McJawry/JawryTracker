@@ -27,6 +27,7 @@ import {
   getPathBossProgressEntries,
   getPathHintCandidates,
   getPathHintSourceIds,
+  getPathItemMarks,
   getPathLogicalItems,
   pathHintAreaKey,
   type PathCandidate,
@@ -146,18 +147,44 @@ function computeGoMode(): boolean {
 }
 
 /**
+ * One card for a path hint written down more than once: same areas, same
+ * boss. It keeps the first one's line, and counts the rest in `copies`.
+ */
+function mergeDuplicatePathHints(entries: PathProgressEntry[]): PathProgressEntry[] {
+  const byHint = new Map<string, PathProgressEntry>();
+  entries.forEach((entry) => {
+    const key = `${pathHintAreaKey(entry.hint)}|${normalize(entry.hint.right.name)}`;
+    const first = byHint.get(key);
+    if (first) first.copies = (first.copies ?? 1) + 1;
+    else byHint.set(key, { ...entry });
+  });
+  return [...byHint.values()];
+}
+
+/**
  * Which cards each path hint's purple chain runs back from, keyed by hint
  * line so the card components can publish it as data-path-source-ids.
+ *
+ * A path item the gating test singled out (getPathItemMarks) is the answer
+ * itself, so the line runs from it - whether or not the boss's own chain
+ * passes through it. The Mailbox's Farore's Pearl gates Molgera by way of the
+ * Iron Boots in the Tower of the Gods, which the chain into the Wind Temple
+ * never touches.
  */
 function buildPathSourceIds(
   pathProgress: PathProgressEntry[],
+  gatingPathItemIds: Map<number, string[]>,
   knowledge: SphereTrackingKnowledge,
   calculation: SphereCalculationResult,
   relativeUnknown: RelativeUnknownResult
 ): Map<number, string[]> {
   const map = new Map<number, string[]>();
   pathProgress.forEach((entry) => {
-    map.set(entry.hint.lineNumber, getPathHintSourceIds(entry.hint, entry.progress, knowledge, calculation, relativeUnknown));
+    const gating = gatingPathItemIds.get(entry.hint.lineNumber);
+    map.set(
+      entry.hint.lineNumber,
+      gating?.length ? gating : getPathHintSourceIds(entry.hint, entry.progress, knowledge, calculation, relativeUnknown)
+    );
   });
 
   // Two hints on one area can never name the same location - the randomizer
@@ -196,21 +223,35 @@ async function computeBoardDerived(
   calculation: SphereCalculationResult,
   relativeUnknown: RelativeUnknownResult
 ): Promise<SphereBoardDerived> {
-  const pathProgress = knowledge.pathHints.length ? getPathBossProgressEntries(knowledge, calculation, relativeUnknown) : [];
+  const pathProgress = mergeDuplicatePathHints(
+    knowledge.pathHints.length ? getPathBossProgressEntries(knowledge, calculation, relativeUnknown) : []
+  );
   const pathItems = new Map<number, PathCandidate[]>();
+  const gatingPathItemIds = new Map<number, string[]>();
   pathProgress.forEach((entry) => {
-    pathItems.set(
-      entry.hint.lineNumber,
-      entry.progress.kind !== "unknown"
-        ? getPathLogicalItems(entry.progress, knowledge, calculation, relativeUnknown)
-        : getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown)
-    );
+    if (entry.progress.kind === "unknown") {
+      pathItems.set(entry.hint.lineNumber, getPathHintCandidates(entry.hint, knowledge, calculation, relativeUnknown));
+      return;
+    }
+    // A solved card lists what opened the boss, with its path item ringed -
+    // and added, when the path item is further back than those.
+    const linked = getPathLogicalItems(entry.progress, knowledge, calculation, relativeUnknown);
+    const marks = getPathItemMarks(entry.hint, entry.copies ?? 1, knowledge, calculation, relativeUnknown);
+    const mark: PathCandidate["pathItem"] = marks.decided ? "decided" : "undecided";
+    const marked = new Set(marks.candidates.map((candidate) => candidate.id));
+    const items = linked.map((item) => (marked.has(item.id) ? { ...item, pathItem: mark } : item));
+    if (marks.gating) {
+      gatingPathItemIds.set(entry.hint.lineNumber, [...marked]);
+      const shown = new Set(linked.map((item) => item.id));
+      marks.candidates.filter((candidate) => !shown.has(candidate.id)).forEach((candidate) => items.unshift({ ...candidate, pathItem: mark }));
+    }
+    pathItems.set(entry.hint.lineNumber, items);
   });
 
   return {
     pathBossIcons: buildPathBossLocationIcons(knowledge, calculation, relativeUnknown),
     pathProgress,
-    pathSourceIds: buildPathSourceIds(pathProgress, knowledge, calculation, relativeUnknown),
+    pathSourceIds: buildPathSourceIds(pathProgress, gatingPathItemIds, knowledge, calculation, relativeUnknown),
     pathItems,
     evaluatedPlacementIds: new Set(knowledge.placements.map((placement) => placement.id)),
     requiredPlacementIds:

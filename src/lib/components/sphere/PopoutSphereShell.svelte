@@ -8,6 +8,7 @@
   import SphereBoard from "./SphereBoard.svelte";
   import SphereZoomSlider from "$lib/components/layout/SphereZoomSlider.svelte";
   import SphereFilterMenu from "$lib/components/layout/SphereFilterMenu.svelte";
+  import SpherePathIconsToggle from "$lib/components/layout/SpherePathIconsToggle.svelte";
   import SphereLoadingSpinner from "$lib/components/layout/SphereLoadingSpinner.svelte";
   import { announceRedockOnUnload, announceGeometryChanges } from "$lib/tauri/popout-session";
   import { data } from "$lib/state/data.svelte";
@@ -15,7 +16,7 @@
   import { loadReferenceData } from "$lib/logic/data-loading";
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
   import "$lib/logic/hint-parsing"; // registers the hints parser (side effect)
-  import { updateHintsFromNotes, initHintsHistory } from "$lib/state/hints.svelte";
+  import { updateHintsFromNotes } from "$lib/state/hints.svelte";
 
   onMount(async () => {
     announceRedockOnUnload("sphere-board");
@@ -30,8 +31,7 @@
     // Without this the hints array stays empty in this window, so path hints
     // produced no boss cards here even though the docked board showed them.
     // The parse needs reference data, hence its position after the load.
-    updateHintsFromNotes({ recordHistory: false });
-    initHintsHistory();
+    updateHintsFromNotes();
     try {
       await restoreRandoSync();
     } catch (error) {
@@ -52,7 +52,11 @@
         {data.sphereLogicLoaded ? (data.sphereRules && Object.keys(data.sphereRules).length ? "Sphere logic ready" : "Sphere logic loading") : "Loading sphere logic..."}
       </span>
     </span>
-    <SphereFilterMenu />
+    <!-- One flex item, so the header's space-between keeps the two together. -->
+    <span class="popout-header-filters">
+      <SphereFilterMenu />
+      <SpherePathIconsToggle />
+    </span>
     <SphereZoomSlider />
   </header>
   {#if !data.loaded}

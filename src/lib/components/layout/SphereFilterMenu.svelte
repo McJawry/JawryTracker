@@ -36,14 +36,14 @@
     class="sphere-filter-button"
     class:active
     aria-expanded={open}
-    title="Hide sphere board cards that can no longer help beat the seed"
+    title="Narrow the sphere board to the boss paths, with or without what beating the seed needs"
     onclick={() => (open = !open)}
   >
     Filters{active ? " •" : ""}
   </button>
   {#if open}
     <div class="sphere-filter-panel">
-      <label title="Hide paths that end in junk - every location the item opens is checked and empty">
+      <label title="Show only the boss paths - the purple cards, plus items that could still turn out to be on one until their branch is a dead end">
         <input
           type="checkbox"
           checked={settings.sphereFilters.paths}
@@ -51,7 +51,7 @@
         />
         <span>Paths</span>
       </label>
-      <label title="Also hide anything not required to beat the seed, spent path or not">
+      <label title="The boss paths, plus every item beating the seed depends on">
         <input
           type="checkbox"
           checked={settings.sphereFilters.pathsAndRequired}

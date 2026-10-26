@@ -5,6 +5,7 @@
   import { settings } from "$lib/state/settings.svelte";
   import { initWindowGroupSync } from "$lib/tauri/window-group";
   import { initStorageSync } from "$lib/tauri/storage-sync";
+  import { initStorageHeal } from "$lib/tauri/storage-heal";
   import { loadPreferencesFile, savePreferencesFile } from "$lib/tauri/layout-file";
   import { migrateLayoutPresetFolders } from "$lib/tauri/data-paths";
   import { initPopoutSession } from "$lib/tauri/popout-session";
@@ -35,6 +36,7 @@
 
   onMount(() => {
     initStorageSync();
+    initStorageHeal();
     void initWindowGroupSync();
     if (isPopout) {
       // A popout owns no preferences, but it does stand in for the main window
@@ -88,6 +90,11 @@
 
   let autosaveArmed = $state(false);
   let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+  // The run as a popout last saw it. A popout stands in for the main window on
+  // changes only: opening one is not a change, and writing then copied
+  // whatever its storage held over the file - after WebView2 had wiped that
+  // storage, an empty run over the real one.
+  let popoutRunSignature: string | null = null;
   $effect(() => {
     // The whole sphere object, not a few of its properties: Svelte subscribes
     // to what is actually read, and naming them by hand left
@@ -95,8 +102,14 @@
     // and marking sectors scheduled no write at all, and the file stayed as
     // old as the last location check. Reading it whole covers whatever the
     // sphere state grows next, too.
-    JSON.stringify([checked, sphere, hintNotes.value, itemTrackerState, dungeonItemsState]);
+    const runSignature = JSON.stringify([checked, sphere, hintNotes.value, itemTrackerState, dungeonItemsState]);
     if (!autosaveArmed) return;
+    if (isPopout) {
+      const opened = popoutRunSignature === null;
+      const unchanged = runSignature === popoutRunSignature;
+      popoutRunSignature = runSignature;
+      if (opened || unchanged) return;
+    }
 
     // Popouts are a backstop rather than a second writer: they wait for the
     // main window to have done it and stand down when it did. With every panel

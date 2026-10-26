@@ -24,7 +24,6 @@ import { advanceEffectiveItemStage, getEffectiveItemStage, getStartingItemStage 
 import { clearPendingLocationForItemAssignment, openItemCardPicker } from "$lib/state/ui.svelte";
 import { retreatEffectiveItemStage } from "$lib/logic/starting-gear-items";
 import { getShardTrackingState, getTriforceShardNumber, isStartingShard, setShardTrackingChecked } from "$lib/logic/shard-tracking";
-import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
 import {
   cycleSmallKeys,
   getDungeonItems,
@@ -161,7 +160,6 @@ export function answerArmedLocation(itemName: string, location: string, acquire:
   }
 
   if (hasUndiscoveredCopy(itemName)) {
-    recordTrackerAction();
     assignPaletteEntryToLocation(itemName, location);
     acquire();
     return;

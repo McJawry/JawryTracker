@@ -3,7 +3,7 @@
   // (dev/app/app.js:1990+). Its own resize handle is gone now - Hint Panel
   // is a normal DockableSection like every other section, which provides a
   // generic right-edge resize handle (see DockableSection.svelte).
-  import { hints, filter, historyButtons, undoNotes, redoNotes, type HintFilter } from "$lib/state/hints.svelte";
+  import { hints, filter, type HintFilter } from "$lib/state/hints.svelte";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import HintCard from "./HintCard.svelte";
 
@@ -42,8 +42,6 @@
         />
         <span>Filters</span>
       </label>
-      <button class="tool-button" type="button" disabled={historyButtons.undoDisabled} onclick={undoNotes}>Undo</button>
-      <button class="tool-button" type="button" disabled={historyButtons.redoDisabled} onclick={redoNotes}>Redo</button>
       <span class="parsed-count">{hints.length} {hints.length === 1 ? "hint" : "hints"}</span>
     </div>
     <div class="tabs" role="tablist" aria-label="Hint type filters">

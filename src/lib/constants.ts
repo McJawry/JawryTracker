@@ -17,6 +17,9 @@ export const PENDING_LOCATION_KEY = "ww-rando-hint-tracker-pending-location";
 // When autosave.json was last written. Shared so a popout can tell whether the
 // main window is still doing it - see the autosave effect in +layout.svelte.
 export const AUTOSAVE_STAMP_KEY = "ww-rando-hint-tracker-autosave-stamp";
+// Set by Start New Tracker: the empty run that follows is meant, so it may
+// replace a run in autosave.json. Nothing else may - see saveTrackerAutosave.
+export const NEW_RUN_KEY = "ww-rando-hint-tracker-new-run";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
@@ -62,9 +65,10 @@ export interface SectionVisibility {
 }
 
 export interface SphereFilters {
-  /** Hide dead ends - paths that end in junk - that are not required. */
+  /** Show only the boss paths - the purple cards, and those that could still
+   *  join one (see sphere-usefulness.ts). */
   paths: boolean;
-  /** Also hide anything unrequired, whether or not its path is spent. */
+  /** The boss paths plus everything beating the seed depends on. */
   pathsAndRequired: boolean;
   /** Keep dungeon keys visible no matter what the other filters say. */
   showKeys: boolean;
@@ -156,6 +160,8 @@ export interface Settings {
   sphereBoardZoom: number;
   /** Sphere board Filters menu: which cards to hide. */
   sphereFilters: SphereFilters;
+  /** Sphere board: the boss icons path hints put on locations. */
+  showPathIcons: boolean;
   /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
@@ -230,5 +236,6 @@ export const DEFAULT_SETTINGS: Settings = {
   sectionWidths: { ...DEFAULT_SECTION_WIDTHS },
   sphereBoardZoom: 100,
   sphereFilters: { ...DEFAULT_SPHERE_FILTERS },
+  showPathIcons: true,
   popoutZoom: {}
 };

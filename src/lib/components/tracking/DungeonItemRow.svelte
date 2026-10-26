@@ -14,7 +14,6 @@
     cycleSmallKeys,
     toggleDungeonFlag
   } from "$lib/state/dungeon-items.svelte";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { answerArmedLocation, needsRemovalChoice, syncDungeonItemPlacements } from "$lib/logic/assignment";
   import { ui, openItemCardPicker } from "$lib/state/ui.svelte";
@@ -67,7 +66,6 @@
     if (step === 1 && assignIfArmed(hintNames.smallKey, () => cycleSmallKeys(dungeon, 1))) return;
     const givingUp = step === -1 || items.smallKeys >= maxKeys;
     if (givingUp && removeSmallKey()) return;
-    recordTrackerAction();
     cycleSmallKeys(dungeon, step);
     // Only the keys you found can be at a location: counting the seed's own
     // key here left a card sitting at a chest after the count came back down
@@ -86,7 +84,6 @@
       openItemCardPicker(named);
       return;
     }
-    recordTrackerAction();
     toggleDungeonFlag(dungeon, flag);
     // Same rule as the keys: one the seed handed you was never found anywhere.
     const found = getDungeonItems(dungeon)[flag] && !hasStartingDungeonItem(dungeon, flag);

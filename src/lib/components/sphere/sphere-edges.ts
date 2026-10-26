@@ -12,18 +12,31 @@
 // attributes to join the graph.
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-function collectNodes(canvas: HTMLElement): Map<string, HTMLElement> {
+/**
+ * The cards in sight, or with `includeFiltered` every card - the Filters menu
+ * keeps the ones it hides in a hidden holder rather than dropping them (see
+ * filteredPlacements in SphereBoard), so they still count towards the purple
+ * chain. Lines and hover only ever use the cards in sight.
+ */
+function collectNodes(canvas: HTMLElement, { includeFiltered = false } = {}): Map<string, HTMLElement> {
   return new Map(
-    [...canvas.querySelectorAll<HTMLElement>("[data-node-id]")].map((node) => [node.dataset.nodeId!, node])
+    [...canvas.querySelectorAll<HTMLElement>("[data-node-id]")]
+      .filter((node) => includeFiltered || !node.closest("[hidden]"))
+      .map((node) => [node.dataset.nodeId!, node])
   );
 }
 
-/** parents/children adjacency, filtered to nodes actually on the board. */
-function buildGraph(nodes: Map<string, HTMLElement>) {
+/**
+ * parents/children adjacency, filtered to nodes actually on the board, less
+ * any `omitted` edges (see redundantLines).
+ */
+function buildGraph(nodes: Map<string, HTMLElement>, omitted: Set<string> = new Set()) {
   const parents = new Map<string, string[]>();
   const children = new Map<string, string[]>([...nodes.keys()].map((id) => [id, [] as string[]]));
   nodes.forEach((node, targetId) => {
-    const dependencies = (node.dataset.dependencies?.split(",") ?? []).filter((id) => nodes.has(id));
+    const dependencies = (node.dataset.dependencies?.split(",") ?? []).filter(
+      (id) => nodes.has(id) && !omitted.has(edgeKey(id, targetId))
+    );
     parents.set(targetId, dependencies);
     dependencies.forEach((sourceId) => children.get(sourceId)!.push(targetId));
   });
@@ -31,6 +44,57 @@ function buildGraph(nodes: Map<string, HTMLElement>) {
 }
 
 const edgeKey = (sourceId: string, targetId: string) => `${sourceId}\n${targetId}`;
+
+/**
+ * Lines that repeat what a longer chain already shows: A straight to C when A
+ * reaches C through B anyway. Every card still traces back to exactly the
+ * same items, by its lines and on hover, so these are left off the board.
+ * Kept, they were four lines in ten on a mid-run board - Iron Boots, Magic and
+ * the Deku Leaf each ran to every Wind Temple chest beside the keys that
+ * already led there, and every path item grew a second purple line across
+ * the board to its boss.
+ *
+ * Dropped one at a time, each checked against the lines still left, so a
+ * card never loses its way back to anything even where the graph loops.
+ */
+function redundantLines(nodes: Map<string, HTMLElement>): Set<string> {
+  const { parents, children } = buildGraph(nodes);
+  const dropped = new Set<string>();
+  const reachesWithout = (sourceId: string, targetId: string) => {
+    const visited = new Set([sourceId]);
+    const pending = (children.get(sourceId) ?? []).filter((childId) => childId !== targetId);
+    while (pending.length) {
+      const currentId = pending.pop()!;
+      if (currentId === targetId) return true;
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
+      (children.get(currentId) ?? []).forEach((childId) => {
+        if (!dropped.has(edgeKey(currentId, childId))) pending.push(childId);
+      });
+    }
+    return false;
+  };
+  parents.forEach((sourceIds, targetId) => {
+    sourceIds.forEach((sourceId) => {
+      if (!reachesWithout(sourceId, targetId)) return;
+      dropped.add(edgeKey(sourceId, targetId));
+      children.set(sourceId, children.get(sourceId)!.filter((childId) => childId !== targetId));
+    });
+  });
+  return dropped;
+}
+
+/**
+ * The last answer, for the hover focus to reuse: it runs on every pointer
+ * move, and the board's lines only change when it is redrawn.
+ */
+let redundantCache: { signature: string; dropped: Set<string> } | null = null;
+
+function cachedRedundantLines(nodes: Map<string, HTMLElement>): Set<string> {
+  const signature = [...nodes].map(([id, node]) => `${id}:${node.dataset.dependencies ?? ""}`).join("|");
+  if (redundantCache?.signature !== signature) redundantCache = { signature, dropped: redundantLines(nodes) };
+  return redundantCache.dropped;
+}
 
 /**
  * Redraws every edge. `zoom` is the CSS zoom on the column container: node
@@ -41,11 +105,16 @@ const edgeKey = (sourceId: string, targetId: string) => `${sourceId}\n${targetId
 /**
  * Ids of the cards painted purple by the last draw - the full chain from each
  * path hint's source cards up to its boss card, which is what the Filters
- * menu's "Paths" means by a purple card. Reported from here rather than
- * recomputed because it is decided during the draw, off the same graph the
- * edges are drawn from.
+ * menu's "Paths" means by a purple card - and of the cards that could still
+ * join one (potentialPathNodes). Reported from here rather than recomputed
+ * because it is decided during the draw, off the same graph the edges are
+ * drawn from.
  */
-export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom = 1): Set<string> {
+export function drawSphereEdges(
+  canvas: HTMLElement,
+  edges: SVGSVGElement,
+  zoom = 1
+): { chain: Set<string>; potential: Set<string> } {
   const canvasRect = canvas.getBoundingClientRect();
   const width = Math.max(canvas.scrollWidth, canvas.clientWidth);
   const height = Math.max(canvas.scrollHeight, canvas.clientHeight);
@@ -55,6 +124,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
   edges.replaceChildren();
 
   const nodes = collectNodes(canvas);
+  const shortcuts = cachedRedundantLines(nodes);
   const scale = zoom || 1;
 
   // Every rect is read before a single path is written. Measuring inside the
@@ -71,7 +141,7 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
     const dependencies = (target.dataset.dependencies?.split(",") ?? []).filter(Boolean);
     dependencies.forEach((sourceId) => {
       const sourceRect = rects.get(sourceId);
-      if (!sourceRect) return;
+      if (!sourceRect || shortcuts.has(edgeKey(sourceId, targetId))) return;
       // Source's right edge to the target's left edge, both at mid-height.
       const startX = (sourceRect.right - canvasRect.left) / scale;
       const startY = (sourceRect.top + sourceRect.height / 2 - canvasRect.top) / scale;
@@ -87,7 +157,58 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
   });
   edges.appendChild(fragment);
 
-  return markPathHintEdges(nodes, canvas, edges);
+  // Every card, filtered ones included: a hidden card that now lies on a path
+  // has to be found purple here, or it would never be shown again.
+  const allNodes = collectNodes(canvas, { includeFiltered: true });
+  return { chain: markPathHintEdges(allNodes, canvas, edges), potential: potentialPathNodes(allNodes, canvas) };
+}
+
+/**
+ * Cards that could still turn out to be on a boss path: below a candidate of
+ * a boss nothing reaches yet, on a branch that still opens somewhere nobody has
+ * checked - an area group further down. The Windfall Magic's Wallet and the
+ * Bombs that Wallet bought were that before Helmaroc King came into reach:
+ * hidden by the Paths filter, then the very chain drawn to him. Once everything
+ * down a branch is checked, its cards are a dead end and drop back out.
+ *
+ * An out-of-logic card counts as below a candidate too, while any boss is
+ * still open: nothing on the board says how it was reached, so whatever got
+ * you there - and so the card itself - may well be on that path. A Wallet in
+ * the Cliff Plateau chest before the Deku Leaf that opens it is recorded.
+ */
+function potentialPathNodes(nodes: Map<string, HTMLElement>, canvas: HTMLElement): Set<string> {
+  const { parents, children } = buildGraph(nodes);
+  // Everything with a way down to an unchecked location.
+  const leadsToUnchecked = new Set<string>();
+  const pending = [...nodes].filter(([, node]) => node.classList.contains("sphere-area-group")).map(([id]) => id);
+  while (pending.length) {
+    const currentId = pending.pop()!;
+    (parents.get(currentId) ?? []).forEach((parentId) => {
+      if (leadsToUnchecked.has(parentId)) return;
+      leadsToUnchecked.add(parentId);
+      pending.push(parentId);
+    });
+  }
+
+  const openPathCards = [...canvas.querySelectorAll<HTMLElement>(".sphere-path-prediction[data-path-open]")];
+  if (!openPathCards.length) return new Set();
+  const below = [
+    ...openPathCards.flatMap((pathCard) => (pathCard.dataset.pathSourceIds ?? "").split(",")),
+    ...[...nodes].filter(([, node]) => node.classList.contains("out-of-logic-placement")).map(([id]) => id)
+  ].filter((id) => nodes.has(id));
+
+  const potential = new Set<string>();
+  const visited = new Set(below);
+  while (below.length) {
+    const currentId = below.pop()!;
+    if (leadsToUnchecked.has(currentId)) potential.add(currentId);
+    (children.get(currentId) ?? []).forEach((childId) => {
+      if (visited.has(childId)) return;
+      visited.add(childId);
+      below.push(childId);
+    });
+  }
+  return potential;
 }
 
 /**
@@ -105,6 +226,9 @@ function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement,
     delete node.dataset.pathTargetIds;
   });
 
+  // Every line, the ones left off the board included: which cards lie between
+  // a source and its boss does not depend on them, and only lines actually
+  // drawn are painted below.
   const { parents, children } = buildGraph(nodes);
   const pathEdges = new Set<string>();
   const pathNodeIds = new Set<string>();
@@ -210,7 +334,7 @@ export function applySphereChainFocus(canvas: HTMLElement | null, edges: SVGSVGE
     return;
   }
 
-  const { parents, children } = buildGraph(nodes);
+  const { parents, children } = buildGraph(nodes, cachedRedundantLines(nodes));
   const chain = new Set([nodeId]);
   const highlightedEdges = new Set<string>();
 

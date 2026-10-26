@@ -201,3 +201,48 @@ export function withoutSettledBosses(icons: Map<string, string[]>, settledBosses
   });
   return kept;
 }
+
+/**
+ * A boss hinted at the same area more than once has that many path items
+ * there. The randomizer never hints a location twice (Hints.cpp, through
+ * hasBeenHinted), so a second "Windfall Island is on the path to Kalle Demos"
+ * names a different item from the first - one found item settles one hint,
+ * never both.
+ *
+ * Each of the area's branches can account for one of them: an item required
+ * for the boss, or one with something required downstream of it. Until every
+ * copy has a branch, each location still searched shows one icon per copy
+ * still missing - so finding one of two takes one icon away everywhere.
+ */
+export function planDuplicatePathBossIcons(
+  bossName: string,
+  copies: number,
+  answeringBranchCount: number,
+  locationKeys: string[]
+): Map<string, string[]> {
+  const missing = copies - Math.min(copies, answeringBranchCount);
+  const plan = new Map<string, string[]>();
+  if (missing <= 0) return plan;
+  locationKeys.forEach((key) => plan.set(key, Array<string>(missing).fill(bossName)));
+  return plan;
+}
+
+/**
+ * The same limit where duplicates share an area with other bosses' hints and
+ * go through the matching as copies of their own. Copies of one boss are
+ * interchangeable, which the matching cannot see - with one of two found, it
+ * calls both unresolved, since either could be the one still looking - so a
+ * location never keeps more of a boss's icons than it has copies still
+ * missing.
+ */
+export function capDuplicateBossIcons(bosses: string[], copies: Map<string, number>, answeringBranchCounts: Map<string, number>): string[] {
+  const shown = new Map<string, number>();
+  return bosses.filter((bossName) => {
+    const total = copies.get(bossName) ?? 1;
+    const limit = total > 1 ? total - Math.min(total, answeringBranchCounts.get(bossName) ?? 0) : Infinity;
+    const count = shown.get(bossName) ?? 0;
+    if (count >= limit) return false;
+    shown.set(bossName, count + 1);
+    return true;
+  });
+}

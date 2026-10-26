@@ -8,7 +8,12 @@
  *
  * Both strengths are "show only" rules rather than "hide these" rules:
  *   "Paths"            shows only the purple cards - every card on the chain
- *                      from a path hint source up to its boss card.
+ *                      from a path hint source up to its boss card - and the
+ *                      cards that could still join one: below a candidate of a
+ *                      boss nothing reaches yet - or out of logic while one is,
+ *                      there being no telling what led there - on a branch that
+ *                      still opens somewhere unchecked. A branch checked to the
+ *                      end is a dead end, and its cards drop out again.
  *   "Paths + required" also shows what beating the game depends on, worked out
  *                      transitively: the items needed to reach Ganondorf, then
  *                      the items needed to reach wherever those sit, and so on.
@@ -271,6 +276,9 @@ export interface HiddenPlacementsInput {
   /** Ids of the cards painted purple by the last edge draw - the whole chain
    *  from each path hint source up to its boss card, not just the sources. */
   pathChainIds?: string[];
+  /** Cards that could still join a purple chain - below a candidate of a boss
+   *  nothing reaches yet, with somewhere unchecked further down. */
+  potentialPathIds?: string[];
   /** calculation.sphereLocations, indexed by sphere number - used to keep
    *  interchangeable keys in the same sphere together. */
   sphereLocations?: string[][];
@@ -303,6 +311,7 @@ export function combineHiddenPlacementIds({
   placements,
   filters,
   pathChainIds = [],
+  potentialPathIds = [],
   sphereLocations = [],
   prunedPlacementIds = [],
   playthroughFinished = false,
@@ -313,6 +322,13 @@ export function combineHiddenPlacementIds({
 
   // The purple cards themselves - shown by both strengths.
   const visible = new Set(pathChainIds);
+
+  // And under "Paths", the cards that could still join one. "Paths + required"
+  // has its own, wider rule for unfinished branches, and its own word on the
+  // cards the playthrough pared out, which this must not overrule.
+  if (!filters.pathsAndRequired) {
+    for (const id of potentialPathIds) visible.add(id);
+  }
 
   if (filters.pathsAndRequired) {
     for (const id of requiredIds) visible.add(id);

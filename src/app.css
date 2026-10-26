@@ -2136,6 +2136,22 @@ body.stream-mode .empty-state {
   font-weight: 800;
 }
 
+/* Fixed colors rather than theme ones: red back, green forward, whatever the
+   color preset. */
+.map-toolbar-button.history-button {
+  font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-toolbar-button.undo-button {
+  color: #d32f2f;
+}
+
+.map-toolbar-button.redo-button {
+  color: #2e9e44;
+}
+
 
 .sphere-logic-status {
   min-width: 0;
@@ -2270,7 +2286,8 @@ body.stream-mode .empty-state {
 
 .sphere-board[hidden],
 .sphere-canvas[hidden],
-.sea-grid[hidden] {
+.sea-grid[hidden],
+.sphere-filtered-cards {
   display: none;
 }
 
@@ -2638,6 +2655,27 @@ body.stream-mode .empty-state {
   height: 28px;
   font-size: 28px;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.38));
+}
+
+/* The path item on a solved card: a ring, solid once it is settled, dashed
+   round each item it could still be. */
+.sphere-path-candidate.path-item::after,
+.sphere-path-candidate.path-item-undecided::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 4px solid var(--path);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.sphere-path-candidate.path-item-undecided::after {
+  border-style: dashed;
+}
+
+.sphere-path-copies {
+  margin-left: 0.3em;
+  font-weight: 700;
 }
 
 .sphere-path-candidate img {
@@ -3810,6 +3848,12 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.popout-header-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 

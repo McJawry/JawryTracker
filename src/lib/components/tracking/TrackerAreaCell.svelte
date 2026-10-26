@@ -12,7 +12,6 @@
   // right-click-clears-the-area is not implemented here, flagged to the user
   // as a deliberate divergence.
   import { clearLocations, getAreaAccessibility, getAreaLocationChoices } from "$lib/logic/locations";
-  import { recordTrackerAction } from "$lib/state/tracker-history.svelte";
   import {
     openLocationDropList,
     ui,
@@ -128,7 +127,6 @@
     if ((event.target as HTMLElement).closest("button")) return;
     const locations = getAreaLocationChoices(areaName, targetKind);
     if (!locations.length) return;
-    recordTrackerAction();
     clearLocations(locations, { withDependents: true });
   }
 

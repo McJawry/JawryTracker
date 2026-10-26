@@ -56,33 +56,6 @@ export const filter: { value: HintFilter } = $state({ value: "all" });
 export const hintNotes: { value: string } = $state({ value: localStorage.getItem(STORAGE_KEY) || "" });
 export const saveStatus: { value: string } = $state({ value: "Saved locally" });
 
-// Ported from state.history/historyIndex/isApplyingHistory (dev/app/app.js:396-398).
-const history: { entries: string[]; index: number; isApplying: boolean } = $state({
-  entries: [],
-  index: -1,
-  isApplying: false
-});
-export const historyButtons: { undoDisabled: boolean; redoDisabled: boolean } = $state({
-  undoDisabled: true,
-  redoDisabled: true
-});
-
-function updateHistoryButtons(): void {
-  historyButtons.undoDisabled = history.index <= 0;
-  historyButtons.redoDisabled = history.index >= history.entries.length - 1;
-}
-
-// Ported from pushHistory() (dev/app/app.js:5716).
-function pushHistory(value: string): void {
-  if (history.isApplying) return;
-  if (history.entries[history.index] === value) return;
-
-  history.entries = history.entries.slice(0, history.index + 1);
-  history.entries.push(value);
-  history.index = history.entries.length - 1;
-  updateHistoryButtons();
-}
-
 export function saveHintNotes(): void {
   localStorage.setItem(STORAGE_KEY, hintNotes.value);
 }
@@ -97,7 +70,9 @@ export function registerHintsParser(parser: (text: string) => Hint[]): void {
 
 // Ported from updateFromInput() (dev/app/app.js:5758) - the hint-notes half;
 // renderGrid()/resizeHintInput() are handled by Svelte's own reactivity.
-export function updateHintsFromNotes(options: { recordHistory?: boolean; save?: boolean } = {}): void {
+// Undo is not here: the tracker's history (tracker-history.svelte.ts) watches
+// the notes along with the rest of the run.
+export function updateHintsFromNotes(options: { save?: boolean } = {}): void {
   if (hintsParser) setHints(hintsParser(hintNotes.value));
   // `save: false` is for re-parsing notes that came *from* storage. Writing
   // them straight back would fire a storage event in every other window, each
@@ -106,7 +81,6 @@ export function updateHintsFromNotes(options: { recordHistory?: boolean; save?: 
   // mid-keystroke, which reads as the text typing and deleting itself.
   if (options.save !== false) saveHintNotes();
   saveStatus.value = "Saved locally";
-  if (options.recordHistory !== false) pushHistory(hintNotes.value);
 }
 
 // Ported from appendHintLine() (dev/app/app.js:1841).
@@ -122,32 +96,6 @@ export function removeHintLine(lineNumber: number): void {
   lines.splice(lineNumber - 1, 1);
   hintNotes.value = lines.join("\n");
   updateHintsFromNotes();
-}
-
-function applyHistoryValue(value: string): void {
-  history.isApplying = true;
-  hintNotes.value = value;
-  updateHintsFromNotes({ recordHistory: false });
-  history.isApplying = false;
-  updateHistoryButtons();
-}
-
-// Ported from undoNotes()/redoNotes() (dev/app/app.js:5734).
-export function undoNotes(): void {
-  if (history.index <= 0) return;
-  history.index -= 1;
-  applyHistoryValue(history.entries[history.index]);
-}
-
-export function redoNotes(): void {
-  if (history.index >= history.entries.length - 1) return;
-  history.index += 1;
-  applyHistoryValue(history.entries[history.index]);
-}
-
-export function initHintsHistory(): void {
-  pushHistory(hintNotes.value);
-  updateHistoryButtons();
 }
 
 /**
@@ -176,13 +124,13 @@ export function setNotesEditorFocused(focused: boolean): void {
     // Focused but never typed in, so the other window's version is simply the
     // newer one and there is nothing here to lose.
     hintNotes.value = pending;
-    updateHintsFromNotes({ recordHistory: false, save: false });
+    updateHintsFromNotes({ save: false });
     return;
   }
 
   // Typed in here, so this text wins - and every other window is still showing
   // the version that arrived while typing, so publish to bring them back in line.
-  updateHintsFromNotes({ recordHistory: false });
+  updateHintsFromNotes();
 }
 
 /** Notes changed in another window. */
@@ -192,5 +140,5 @@ export function applyRemoteHintNotes(value: string): void {
     return;
   }
   hintNotes.value = value;
-  updateHintsFromNotes({ recordHistory: false, save: false });
+  updateHintsFromNotes({ save: false });
 }
