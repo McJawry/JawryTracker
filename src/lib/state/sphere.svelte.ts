@@ -27,8 +27,9 @@ export interface SphereState {
   requiredBossOverrides: Record<string, boolean>;
   /**
    * Sectors the player has flagged as leading to a required boss, drawn
-   * with the game's own important-location marker. Purely cosmetic - no
-   * logic reads it - but it belongs to the run, so it is saved with one.
+   * with the game's own important-location marker. Race mode's required
+   * bosses are read from it (entrance-paths.ts), and so is which dungeons
+   * Clear dead may write off (dead-locations.ts).
    */
   highlightedSectors: string[];
 }

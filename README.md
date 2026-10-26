@@ -83,6 +83,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 | **↪︎** (green) | Redo the last undone action. |
 | **⚙️** | Tracker settings: see below. Shows ⚠️ when the randomizer's `config.yaml` has changed since the last sync. |
 | **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
+| **Clear dead** | Checks off every location that can't hold anything the seed needs (see [Clear dead](#clear-dead) below). One undo puts them all back, and the tooltip lists what the last press cleared. |
 | Ho Ho / Blue Chu checkboxes | Show or hide the Old Man Ho Ho and Blue Chu Jelly markers on the map, when the seed tracks them. |
 | **Mark sectors leading to a required boss** | Click sectors on the map to flag them with a marker. The marker spins once you can open the door on that sector, and settles once the boss behind it is found. Right-click the map to stop marking. |
 
@@ -100,6 +101,26 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Location tooltip size**: how large the requirement tooltip is drawn.
 - **Randomizer folder**: **Change folder** picks the folder your randomizer is in and syncs
   from it. **Sync** re-reads `config.yaml` from that folder, and the result shows underneath.
+
+#### Clear dead
+
+Each press checks off what the seed's settings, your hints and your boss marks rule out:
+
+- **Race mode dungeons that aren't required**, with the letters their bosses send. This waits
+  until the tracker knows enough: path hints naming every required boss, every required dungeon
+  found, or every boss marker from the sea chart placed on the map. Once all the markers are
+  placed, a dungeon recorded on an unmarked island is ruled out even before you know the rest.
+- **Foolish areas**: every location in the area, plus any dungeon whose entrance is on a foolish
+  island, as the randomizer counts it.
+- **Not-required items** (`n`): the location a location hint names, and every location that
+  needs that item to reach. For an item with several copies, only locations that need every copy
+  are cleared. This part waits while any cave, door or misc entrance is still unrecorded, since
+  one of those could open another way in. It also skips an item the tracker thinks beating the
+  seed needs: either the hint is wrong, or the tracker doesn't know yet which race mode bosses
+  are left out.
+
+A location behind an entrance you haven't recorded is never cleared, and neither is a location
+a hint says holds a required or possibly required item.
 
 ### Item Tracker
 

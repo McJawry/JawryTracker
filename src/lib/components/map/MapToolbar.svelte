@@ -7,6 +7,7 @@
   import MapMarkerToggles from "$lib/components/map/MapMarkerToggles.svelte";
   import TrackerSettingsMenu from "$lib/components/tracking/TrackerSettingsMenu.svelte";
   import { data } from "$lib/state/data.svelte";
+  import { clearDeadLocations } from "$lib/logic/dead-locations";
   import { redoTrackerAction, startTrackerHistory, trackerHistory, undoTrackerAction } from "$lib/state/tracker-history.svelte";
   import { ui, toggleMarkStartingMode } from "$lib/state/ui.svelte";
 
@@ -18,6 +19,19 @@
   // these are the two config flags that do so.
   const RANDOM_START_OPTIONS = ["start_with_random_item", "random_item_slide_item"];
   const showMarkStarting = $derived(RANDOM_START_OPTIONS.some((key) => Boolean(data.sphereOptions[key])));
+
+  // What the last Clear dead did, rule by rule, goes in front of the button's
+  // own description in its tooltip - the row has no room for it.
+  const CLEAR_DEAD_TITLE =
+    "Check off the locations that can't hold anything the seed needs: race mode dungeons that aren't required, foolish areas, and what a not-required item hint rules out";
+  let clearDeadTitle = $state(CLEAR_DEAD_TITLE);
+
+  function handleClearDead() {
+    const report = clearDeadLocations();
+    const count = report.locations.length;
+    const summary = count ? `Last time: cleared ${count} location${count === 1 ? "" : "s"}` : "Last time: nothing new to clear";
+    clearDeadTitle = [summary, ...report.lines, "", CLEAR_DEAD_TITLE].join("\n");
+  }
 </script>
 
 <div class="map-toolbar">
@@ -57,5 +71,13 @@
       Mark starting
     </button>
   {/if}
+  <button
+    class="tool-button map-toolbar-button"
+    type="button"
+    title={clearDeadTitle}
+    onclick={handleClearDead}
+  >
+    Clear dead
+  </button>
   <MapMarkerToggles />
 </div>
