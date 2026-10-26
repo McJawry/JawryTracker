@@ -371,20 +371,20 @@ sphere calculation is running.
 
 Open **Settings** from the Control Panel.
 
+- **General**: **Group popout windows**, which brings every tracker window forward together.
 - **Appearance**:
   - Page background and panel colors, item icon size and hint arrow position.
   - **Stream mode** makes the Hint Panel see-through and paints a **stream backdrop** color
     behind the hint panel, item grid and dungeon row, ready for a chroma key.
   - **Presets** has built-in color sets: *Light mode*, *Dark mode* and *McJawry's Favorite*.
   - **Custom Color Presets** saves your own.
-- **Run saves**: named saves of your run. See [Saving your run](#saving-your-run).
-- **General**: **Group popout windows**, which brings every tracker window forward together.
-- **Layout presets**:
+- **Layout**:
   - Save and load window layouts, or **Reset layout to default**.
   - **Import portable preferences…** copies the layout and every preset from an older copy of
     the app. Point it at that copy's folder or its `data` folder. Your run isn't included: to
     carry that over, copy the whole `data` folder before the first launch, or use the autosave
     (see [Saving your run](#saving-your-run)).
+- **Run saves**: named saves of your run. See [Saving your run](#saving-your-run).
 
 Presets and saves can live in the **app folder** (portable, beside the exe) or the **user
 folder** (`Documents/JawryTracker`, shared by every copy of the app on the computer).

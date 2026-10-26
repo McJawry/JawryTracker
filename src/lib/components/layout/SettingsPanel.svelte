@@ -266,27 +266,11 @@
 
   // One category at a time instead of all six stacked: the panel is a
   // 380px column, so the whole page used to be one long scroll.
-  let activeTab = $state("appearance");
+  let activeTab = $state("general");
 </script>
 
 <section class="settings-section" aria-label="Tracker settings">
   <div class="settings-tabs" role="tablist">
-    <button
-      type="button"
-      role="tab"
-      class="settings-tab"
-      class:active={activeTab === "appearance"}
-      aria-selected={activeTab === "appearance"}
-      onclick={() => (activeTab = "appearance")}
-    >Appearance</button>
-    <button
-      type="button"
-      role="tab"
-      class="settings-tab"
-      class:active={activeTab === "run-saves"}
-      aria-selected={activeTab === "run-saves"}
-      onclick={() => (activeTab = "run-saves")}
-    >Run saves</button>
     <button
       type="button"
       role="tab"
@@ -299,10 +283,26 @@
       type="button"
       role="tab"
       class="settings-tab"
+      class:active={activeTab === "appearance"}
+      aria-selected={activeTab === "appearance"}
+      onclick={() => (activeTab = "appearance")}
+    >Appearance</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
       class:active={activeTab === "preference-presets"}
       aria-selected={activeTab === "preference-presets"}
       onclick={() => (activeTab = "preference-presets")}
-    >Layout presets</button>
+    >Layout</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "run-saves"}
+      aria-selected={activeTab === "run-saves"}
+      onclick={() => (activeTab = "run-saves")}
+    >Run saves</button>
   </div>
 
   {#if activeTab === "appearance"}
@@ -472,7 +472,7 @@
 
   {#if activeTab === "preference-presets"}
   <fieldset class="settings-group preset-group">
-    <legend>Layout presets</legend>
+    <legend>Layout</legend>
 
     <label class="setting-control">
       <span>Folder</span>
