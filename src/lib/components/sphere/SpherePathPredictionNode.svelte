@@ -83,6 +83,7 @@
   data-hint-line={entry.hint.lineNumber}
   data-dependencies={[...new Set([...linkedItems, ...addedPathItems].map((item) => item.id))].join(",")}
   data-path-source-ids={sourceIds.join(",")}
+  data-path-open={solved ? undefined : "true"}
   title={`${areaNames.join(" and ")} to ${entry.hint.right.name}${copies > 1 ? ` - hinted ${copies} times, so ${copies} path items` : ""}\n${label}${itemSummary}\nRight-click to remove hint`}
   oncontextmenu={(event) => { event.preventDefault(); removeHintLine(entry.hint.lineNumber); }}
 >

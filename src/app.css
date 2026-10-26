@@ -2286,7 +2286,8 @@ body.stream-mode .empty-state {
 
 .sphere-board[hidden],
 .sphere-canvas[hidden],
-.sea-grid[hidden] {
+.sea-grid[hidden],
+.sphere-filtered-cards {
   display: none;
 }
 

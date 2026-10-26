@@ -12,9 +12,17 @@
 // attributes to join the graph.
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-function collectNodes(canvas: HTMLElement): Map<string, HTMLElement> {
+/**
+ * The cards in sight, or with `includeFiltered` every card - the Filters menu
+ * keeps the ones it hides in a hidden holder rather than dropping them (see
+ * filteredPlacements in SphereBoard), so they still count towards the purple
+ * chain. Lines and hover only ever use the cards in sight.
+ */
+function collectNodes(canvas: HTMLElement, { includeFiltered = false } = {}): Map<string, HTMLElement> {
   return new Map(
-    [...canvas.querySelectorAll<HTMLElement>("[data-node-id]")].map((node) => [node.dataset.nodeId!, node])
+    [...canvas.querySelectorAll<HTMLElement>("[data-node-id]")]
+      .filter((node) => includeFiltered || !node.closest("[hidden]"))
+      .map((node) => [node.dataset.nodeId!, node])
   );
 }
 
@@ -97,11 +105,16 @@ function cachedRedundantLines(nodes: Map<string, HTMLElement>): Set<string> {
 /**
  * Ids of the cards painted purple by the last draw - the full chain from each
  * path hint's source cards up to its boss card, which is what the Filters
- * menu's "Paths" means by a purple card. Reported from here rather than
- * recomputed because it is decided during the draw, off the same graph the
- * edges are drawn from.
+ * menu's "Paths" means by a purple card - and of the cards that could still
+ * join one (potentialPathNodes). Reported from here rather than recomputed
+ * because it is decided during the draw, off the same graph the edges are
+ * drawn from.
  */
-export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom = 1): Set<string> {
+export function drawSphereEdges(
+  canvas: HTMLElement,
+  edges: SVGSVGElement,
+  zoom = 1
+): { chain: Set<string>; potential: Set<string> } {
   const canvasRect = canvas.getBoundingClientRect();
   const width = Math.max(canvas.scrollWidth, canvas.clientWidth);
   const height = Math.max(canvas.scrollHeight, canvas.clientHeight);
@@ -144,7 +157,58 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
   });
   edges.appendChild(fragment);
 
-  return markPathHintEdges(nodes, canvas, edges, shortcuts);
+  // Every card, filtered ones included: a hidden card that now lies on a path
+  // has to be found purple here, or it would never be shown again.
+  const allNodes = collectNodes(canvas, { includeFiltered: true });
+  return { chain: markPathHintEdges(allNodes, canvas, edges), potential: potentialPathNodes(allNodes, canvas) };
+}
+
+/**
+ * Cards that could still turn out to be on a boss path: below a candidate of
+ * a boss nothing reaches yet, on a branch that still opens somewhere nobody has
+ * checked - an area group further down. The Windfall Magic's Wallet and the
+ * Bombs that Wallet bought were that before Helmaroc King came into reach:
+ * hidden by the Paths filter, then the very chain drawn to him. Once everything
+ * down a branch is checked, its cards are a dead end and drop back out.
+ *
+ * An out-of-logic card counts as below a candidate too, while any boss is
+ * still open: nothing on the board says how it was reached, so whatever got
+ * you there - and so the card itself - may well be on that path. A Wallet in
+ * the Cliff Plateau chest before the Deku Leaf that opens it is recorded.
+ */
+function potentialPathNodes(nodes: Map<string, HTMLElement>, canvas: HTMLElement): Set<string> {
+  const { parents, children } = buildGraph(nodes);
+  // Everything with a way down to an unchecked location.
+  const leadsToUnchecked = new Set<string>();
+  const pending = [...nodes].filter(([, node]) => node.classList.contains("sphere-area-group")).map(([id]) => id);
+  while (pending.length) {
+    const currentId = pending.pop()!;
+    (parents.get(currentId) ?? []).forEach((parentId) => {
+      if (leadsToUnchecked.has(parentId)) return;
+      leadsToUnchecked.add(parentId);
+      pending.push(parentId);
+    });
+  }
+
+  const openPathCards = [...canvas.querySelectorAll<HTMLElement>(".sphere-path-prediction[data-path-open]")];
+  if (!openPathCards.length) return new Set();
+  const below = [
+    ...openPathCards.flatMap((pathCard) => (pathCard.dataset.pathSourceIds ?? "").split(",")),
+    ...[...nodes].filter(([, node]) => node.classList.contains("out-of-logic-placement")).map(([id]) => id)
+  ].filter((id) => nodes.has(id));
+
+  const potential = new Set<string>();
+  const visited = new Set(below);
+  while (below.length) {
+    const currentId = below.pop()!;
+    if (leadsToUnchecked.has(currentId)) potential.add(currentId);
+    (children.get(currentId) ?? []).forEach((childId) => {
+      if (visited.has(childId)) return;
+      visited.add(childId);
+      below.push(childId);
+    });
+  }
+  return potential;
 }
 
 /**
@@ -156,18 +220,16 @@ export function drawSphereEdges(canvas: HTMLElement, edges: SVGSVGElement, zoom 
  * through those ancestors - so only edges that actually lie between the
  * source and the boss are painted, not the source's whole subtree.
  */
-function markPathHintEdges(
-  nodes: Map<string, HTMLElement>,
-  canvas: HTMLElement,
-  edges: SVGSVGElement,
-  shortcuts: Set<string>
-): Set<string> {
+function markPathHintEdges(nodes: Map<string, HTMLElement>, canvas: HTMLElement, edges: SVGSVGElement): Set<string> {
   nodes.forEach((node) => {
     node.classList.remove("path-chain-location");
     delete node.dataset.pathTargetIds;
   });
 
-  const { parents, children } = buildGraph(nodes, shortcuts);
+  // Every line, the ones left off the board included: which cards lie between
+  // a source and its boss does not depend on them, and only lines actually
+  // drawn are painted below.
+  const { parents, children } = buildGraph(nodes);
   const pathEdges = new Set<string>();
   const pathNodeIds = new Set<string>();
   // A card with several candidates can't say which one is really its path

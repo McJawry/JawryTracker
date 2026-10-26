@@ -65,9 +65,10 @@ export interface SectionVisibility {
 }
 
 export interface SphereFilters {
-  /** Hide dead ends - paths that end in junk - that are not required. */
+  /** Show only the boss paths - the purple cards, and those that could still
+   *  join one (see sphere-usefulness.ts). */
   paths: boolean;
-  /** Also hide anything unrequired, whether or not its path is spent. */
+  /** The boss paths plus everything beating the seed depends on. */
   pathsAndRequired: boolean;
   /** Keep dungeon keys visible no matter what the other filters say. */
   showKeys: boolean;
