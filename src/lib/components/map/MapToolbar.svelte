@@ -43,6 +43,7 @@
   >
     &#x21aa;&#xfe0e;
   </button>
+  <TrackerSettingsMenu />
   {#if showMarkStarting}
     <button
       class="tool-button map-toolbar-button mark-starting-button"
@@ -56,6 +57,5 @@
       Mark starting
     </button>
   {/if}
-  <TrackerSettingsMenu />
   <MapMarkerToggles />
 </div>

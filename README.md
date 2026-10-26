@@ -81,8 +81,8 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 |---|---|
 | **↩︎** (red) | Undo the last action. Undo covers everything that changes the run: notes, checked locations, items, dungeon items, charts, placements, entrances and marked sectors, including actions taken in other windows. Typing in the notes undoes a line at a time. Settings, layout and menus aren't affected. The history lasts while the app is open. |
 | **↪︎** (green) | Redo the last undone action. |
-| **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
 | **⚙️** | Tracker settings: see below. Shows ⚠️ when the randomizer's `config.yaml` has changed since the last sync. |
+| **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
 | Ho Ho / Blue Chu checkboxes | Show or hide the Old Man Ho Ho and Blue Chu Jelly markers on the map, when the seed tracks them. |
 | **Mark sectors leading to a required boss** | Click sectors on the map to flag them with a marker. The marker spins once you can open the door on that sector, and settles once the boss behind it is found. Right-click the map to stop marking. |
 
