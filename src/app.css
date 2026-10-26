@@ -4608,10 +4608,10 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: #d01414;
 }
 
-/* The Sync button's warning: config.yaml has moved on since the last sync.
-   Sits inside the button so the row keeps its width - the message itself is
-   the button's tooltip. */
-.map-toolbar-button .sync-warning {
+/* The config warning: config.yaml has moved on since the last sync. Worn by
+   the Sync button and by the tracker settings button it sits behind - inside
+   the button, with the message itself in the button's tooltip. */
+.tool-button .sync-warning {
   margin-left: 4px;
   font-size: 0.9em;
   line-height: 1;
@@ -4738,8 +4738,9 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: var(--muted);
 }
 
-.tracker-settings-row .tool-button {
-  align-self: flex-start;
+.tracker-settings-buttons {
+  display: flex;
+  gap: 6px;
 }
 
 .tracker-settings-slider {

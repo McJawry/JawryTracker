@@ -45,10 +45,10 @@ what you have found, and shows where each boss path can still lead.
    to another computer.
 2. Open the **Main Tracker** settings menu (⚙️ in the toolbar), choose **Change folder** under
    *Randomizer folder*, and pick the folder your randomizer is in.
-3. Press **Sync**. The tracker reads the seed's `config.yaml` (and the randomizer's logic files
-   when it finds them) to learn your starting gear, excluded locations, required bosses and the
-   seed's settings. If you generate a new seed later, the Sync button shows ⚠️ until you sync
-   again. Your current run never changes on its own.
+3. Picking the folder syncs it: the tracker reads the seed's `config.yaml` (and the
+   randomizer's logic files when it finds them) to learn your starting gear, excluded locations, required bosses and the seed's
+   settings. If you generate a new seed later, ⚙️ and its **Sync** button show ⚠️ until you
+   press **Sync**. Your current run never changes on its own.
 4. Press **Start New Tracker** in the Control Panel when you start a new seed. If the seed gives
    you random starting items, the tracker switches to *Mark starting* mode so you can click them
    in (see [Toolbar](#toolbar)).
@@ -82,8 +82,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 | **↩︎** (red) | Undo the last action. Undo covers everything that changes the run: notes, checked locations, items, dungeon items, charts, placements, entrances and marked sectors, including actions taken in other windows. Typing in the notes undoes a line at a time. Settings, layout and menus aren't affected. The history lasts while the app is open. |
 | **↪︎** (green) | Redo the last undone action. |
 | **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
-| **Sync** | Re-reads `config.yaml` from your randomizer folder. Its tooltip shows the result of the last sync. |
-| **⚙️** | Tracker settings: see below. |
+| **⚙️** | Tracker settings: see below. Shows ⚠️ when the randomizer's `config.yaml` has changed since the last sync. |
 | Ho Ho / Blue Chu checkboxes | Show or hide the Old Man Ho Ho and Blue Chu Jelly markers on the map, when the seed tracks them. |
 | **Mark sectors leading to a required boss** | Click sectors on the map to flag them with a marker. The marker spins once you can open the door on that sector, and settles once the boss behind it is found. Right-click the map to stop marking. |
 
@@ -99,7 +98,8 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Display item on location list**: show the icon of the item recorded at each location in the
   location lists.
 - **Location tooltip size**: how large the requirement tooltip is drawn.
-- **Randomizer folder**: the folder **Sync** reads from.
+- **Randomizer folder**: **Change folder** picks the folder your randomizer is in and syncs
+  from it. **Sync** re-reads `config.yaml` from that folder, and the result shows underneath.
 
 ### Item Tracker
 
