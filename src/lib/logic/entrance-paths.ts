@@ -449,6 +449,83 @@ function sectorKey(name: string): string {
   return normalize(name).replace(/\s+sector$/, "");
 }
 
+let markerIslandCache: { world: unknown; entrances: TrackerEntrance[]; islands: Set<string> } | null = null;
+
+/**
+ * Whether a required boss's marker could ever sit on this sector, given what
+ * the seed shuffles.
+ *
+ * The chart puts the marker on the island a required boss is entered from
+ * (show_dungeon_markers_on_chart, by way of Area::findIslands). So the question
+ * is whether any arrangement the settings allow puts a boss arena behind this
+ * island: walk in from it without stepping onto another island or out to sea,
+ * where a shuffled door may lead to anything its pool leads to. With nothing
+ * shuffled that leaves the five dungeon islands and the fortress; shuffling the
+ * dungeons among themselves changes nothing, since their doors stay where they
+ * are; mixing them in with the caves or doors opens up every island that has
+ * one of those.
+ *
+ * Settings only, never what has been recorded - this is where markers can be,
+ * not where they are. With no world loaded every sector is allowed.
+ */
+export function canSectorHoldBossMarker(sector: string): boolean {
+  const islands = getBossMarkerIslands();
+  return !islands || islands.has(sectorKey(sector));
+}
+
+function getBossMarkerIslands(): Set<string> | null {
+  const world = data.sphereWorld;
+  if (!world) return null;
+  // Rebuilt with the shuffle settings, which hand back a new list when they change.
+  const entrances = getShuffledEntrances();
+  if (markerIslandCache?.world === world && markerIslandCache.entrances === entrances) return markerIslandCache.islands;
+
+  const areas = areasOf(world);
+  // A shuffled door leads wherever any door in its pool normally does. The
+  // way back out of an interior leads outwards, never further in.
+  const poolOf = new Map<string, string | null>();
+  const poolTargets = new Map<string, string[]>();
+  entrances.forEach((entrance) => {
+    poolOf.set(normalize(entrance.name), entrance.isReverse ? null : entrance.poolType);
+    if (entrance.isReverse) return;
+    if (!poolTargets.has(entrance.poolType)) poolTargets.set(entrance.poolType, []);
+    poolTargets.get(entrance.poolType)!.push(entrance.connected);
+  });
+
+  const arenas = bossArenaAreas();
+  const islands = new Set<string>();
+  Object.values(areas)
+    .filter(isIslandArea)
+    .forEach((island) => {
+      const home = sectorKey(island.name);
+      const seen = new Set([normalize(island.name)]);
+      const pending = [island.name];
+      while (pending.length) {
+        const current = pending.pop()!;
+        if (arenas.has(normalize(current))) {
+          islands.add(home);
+          return;
+        }
+        Object.values(areas[normalize(current)]?.exits ?? {}).forEach((exit) => {
+          const pool = poolOf.get(normalize(getEntranceName(current, exit.name)));
+          const next = pool === undefined ? [exit.name] : pool === null ? [] : (poolTargets.get(pool) ?? []);
+          next.forEach((name) => {
+            const area = areas[normalize(name)];
+            if (!area || seen.has(normalize(name))) return;
+            // Another island's ground, the sea or Hyrule: what is past there
+            // would be marked on that island, not this one.
+            if (area.hintRegion || (area.island && sectorKey(area.island) !== home)) return;
+            seen.add(normalize(name));
+            pending.push(name);
+          });
+        });
+      }
+    });
+
+  markerIslandCache = { world, entrances, islands };
+  return islands;
+}
+
 /**
  * Where each boss lives when nothing has been shuffled: the dungeons at their
  * own islands, and Helmaroc King in the fortress, which has no dungeon

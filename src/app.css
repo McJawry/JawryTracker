@@ -3015,6 +3015,24 @@ body.stream-mode .empty-state {
   cursor: pointer;
 }
 
+/* Marking required-boss sectors: one the seed's settings can never put a boss
+   behind is shaded and ignores the click, which leaves the candidates standing
+   out. Its own stacking context, so the shade covers the entrance badges
+   inside the cell but stays under the prompt floating over the map. */
+.tracker-area-cell.marker-blocked {
+  isolation: isolate;
+  cursor: not-allowed;
+}
+
+.tracker-area-cell.marker-blocked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgba(8, 14, 20, 0.6);
+  pointer-events: none;
+}
+
 .tracker-area-cell.drag-target {
   outline: 2px solid rgba(47, 123, 87, 0.9);
   outline-offset: -3px;

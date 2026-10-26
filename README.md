@@ -85,7 +85,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 | **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
 | **Clear dead** | Checks off every location that can't hold anything the seed needs (see [Clear dead](#clear-dead) below). One undo puts them all back, and the tooltip lists what the last press cleared. |
 | Ho Ho / Blue Chu checkboxes | Show or hide the Old Man Ho Ho and Blue Chu Jelly markers on the map, when the seed tracks them. |
-| **Mark sectors leading to a required boss** | Click sectors on the map to flag them with a marker. The marker spins once you can open the door on that sector, and settles once the boss behind it is found. Right-click the map to stop marking. |
+| **Mark sectors leading to a required boss** | Click sectors on the map to flag them with a marker. While you're marking, sectors where the seed's entrance settings can't put a required boss are shaded and can't be clicked. The marker spins once you can open the door on that sector, and settles once the boss behind it is found. Right-click the map to stop marking. |
 
 **Tracker settings (⚙️)**
 

@@ -25,7 +25,7 @@
   import { TRACKED_AREAS } from "$lib/gameData";
   import { getSectorHints, getStaticSectorIcons, getAreaHints } from "$lib/logic/map-icons";
   import { assignDungeonToSector } from "$lib/logic/entrances";
-  import { canOpenSectorDoor, isBossFoundOnSector } from "$lib/logic/entrance-paths";
+  import { canOpenSectorDoor, canSectorHoldBossMarker, isBossFoundOnSector } from "$lib/logic/entrance-paths";
   import MapIcon from "$lib/components/map/MapIcon.svelte";
 
   let {
@@ -86,6 +86,12 @@
   // dungeon found on a sector says nothing about where its boss went.
   const highlightFound = $derived(isHighlighted && isBossFoundOnSector(areaName));
   const canEnterHighlighted = $derived(isHighlighted && !highlightFound && canOpenSectorDoor(areaName));
+  // While marking, a sector the settings can never put a required boss behind
+  // is shaded and ignores the click, so the ones that can stand out. A marker
+  // already on one stays removable.
+  const markerBlocked = $derived(
+    ui.highlightSectorMode && targetKind === "sector" && !isHighlighted && !canSectorHoldBossMarker(areaName)
+  );
 
   const isPulsing = $derived(
     ui.pendingLocationForItemAssignment !== null &&
@@ -99,7 +105,7 @@
     // Marking a sector as leading to a required boss takes over the click -
     // the location list would otherwise open on top of what is being marked.
     if (ui.highlightSectorMode && targetKind === "sector") {
-      toggleSectorHighlight(areaName);
+      if (!markerBlocked) toggleSectorHighlight(areaName);
       return;
     }
     if (ui.pendingEntranceAssignment) {
@@ -153,8 +159,9 @@
   class="tracker-area-cell"
   class:pulsing={isPulsing}
   class:drag-target={dragOver || ui.pendingEntranceAssignment !== null || ui.itemDrag !== null}
+  class:marker-blocked={markerBlocked}
   style={background ? `background-image: url(${background})` : ""}
-  title={areaName}
+  title={markerBlocked ? `${areaName} - this seed's settings can't put a required boss here` : areaName}
   data-area-name={areaName}
   data-target-kind={targetKind}
   onclick={handleClick}
