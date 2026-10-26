@@ -60,6 +60,17 @@ interface SpherePlacementLike {
   location: string;
 }
 
+export interface HeldDungeonKeyPool {
+  /** The logic's name for it - "Earth Temple Small Key", "Earth Temple Big Key". */
+  item: string;
+  /** How many of it are held with no location. */
+  count: number;
+  dungeon: string;
+  bigKey: boolean;
+  /** At index n, the chests that could hold the next copy while n are held. */
+  itemPools: string[][];
+}
+
 export interface SphereCalculationInput {
   locations: string[];
   rules: Record<string, unknown>;
@@ -76,6 +87,12 @@ export interface SphereCalculationInput {
    * by the pare-down that decides which cards are Optional. calculate() only.
    */
   heldWithoutSphere?: string[];
+  /**
+   * Own-dungeon keys held with no location recorded. Each joins the spheres
+   * once every chest that could hold it has been reached, or once nothing
+   * more can be reached without it. calculate() only.
+   */
+  heldDungeonKeys?: HeldDungeonKeyPool[];
   /**
    * Locations nobody has checked yet. Until Ganondorf can be reached, a spare
    * copy is only Optional if these all stay reachable without it - what is in

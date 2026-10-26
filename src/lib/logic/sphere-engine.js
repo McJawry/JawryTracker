@@ -1198,9 +1198,43 @@
     return reachable;
   }
 
-  function calculateCore({ locations, rules, macros, world, placements, startingGear, options, entranceMappings, entranceConnections, chartMappings, includeDependencies = true, referencedItemKeys, startingIsland, additionalStartAreas, additionalEvents, reachabilityCache }) {
+  function calculateCore({ locations, rules, macros, world, placements, startingGear, heldDungeonKeys, options, entranceMappings, entranceConnections, chartMappings, includeDependencies = true, referencedItemKeys, startingIsland, additionalStartAreas, additionalEvents, reachabilityCache }) {
     const inventory = {};
     (startingGear || []).forEach((item) => addInventoryItem(inventory, item, ""));
+    // Own-dungeon keys held with nothing saying where they were found. Counted
+    // from the start, they opened the rooms behind their doors spheres before
+    // the key could have been had - a run's whole Earth Temple landed in the
+    // sphere it was entered. Instead one joins once every chest that could have
+    // held it has been reached, the map's "guaranteed key" rule.
+    const pendingKeys = (heldDungeonKeys || []).map((pool) => ({ ...pool, remaining: pool.count }));
+    const grantGuaranteedKeys = (reachable) => {
+      let granted = false;
+      pendingKeys.forEach((pool) => {
+        while (pool.remaining > 0) {
+          const candidates = pool.itemPools?.[inventory[canonicalInventoryName(pool.item)] || 0] || [];
+          if (!candidates.length || !candidates.every((location) => reachable.has(normalize(location)))) break;
+          addInventoryItem(inventory, pool.item, "");
+          pool.remaining -= 1;
+          granted = true;
+        }
+      });
+      return granted;
+    };
+    // Nothing more to reach and keys still owed: a key in hand came from
+    // somewhere already reached, so it is had by now. One per dungeon, small
+    // keys first - the big key may still be behind their doors.
+    const grantStalledKeys = () => {
+      const dungeons = new Set();
+      let granted = false;
+      [...pendingKeys].sort((first, second) => Number(first.bigKey) - Number(second.bigKey)).forEach((pool) => {
+        if (!pool.remaining || dungeons.has(pool.dungeon)) return;
+        dungeons.add(pool.dungeon);
+        addInventoryItem(inventory, pool.item, "");
+        pool.remaining -= 1;
+        granted = true;
+      });
+      return granted;
+    };
     const placementByLocation = new Map((placements || []).map((placement) => [normalize(placement.location), placement]));
     const locationSpheres = {};
     const placementSpheres = {};
@@ -1256,6 +1290,11 @@
 
       if (!newlyAccessible.length) {
         if (hasPendingBossMail) continue;
+        // Had by the end of the previous sphere, so this one runs again with it.
+        if (grantStalledKeys()) {
+          sphere -= 1;
+          continue;
+        }
         break;
       }
 
@@ -1264,11 +1303,12 @@
         locationSpheres[normalize(location)] = sphere;
       });
       const foundPlacements = newlyAccessible.map((location) => placementByLocation.get(normalize(location))).filter(Boolean);
-      if (!foundPlacements.length && !hasPendingBossMail) break;
       foundPlacements.forEach((placement) => {
         placementSpheres[placement.id] = sphere;
         addInventoryItem(inventory, placement.item, placement.location);
       });
+      const keysGranted = grantGuaranteedKeys(reachable);
+      if (!foundPlacements.length && !keysGranted && !hasPendingBossMail && !grantStalledKeys()) break;
     }
 
     const dependencies = {};
