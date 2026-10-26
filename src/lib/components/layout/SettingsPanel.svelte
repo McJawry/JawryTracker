@@ -299,14 +299,6 @@
       type="button"
       role="tab"
       class="settings-tab"
-      class:active={activeTab === "tracker"}
-      aria-selected={activeTab === "tracker"}
-      onclick={() => (activeTab = "tracker")}
-    >Tracker</button>
-    <button
-      type="button"
-      role="tab"
-      class="settings-tab"
       class:active={activeTab === "preference-presets"}
       aria-selected={activeTab === "preference-presets"}
       onclick={() => (activeTab = "preference-presets")}
@@ -475,12 +467,6 @@
       <input type="checkbox" bind:checked={settings.groupPopoutWindows} onchange={update} />
       <span>Group popout windows</span>
     </label>
-  </fieldset>
-  {/if}
-
-  {#if activeTab === "tracker"}
-  <fieldset class="settings-group">
-    <legend>Tracker</legend>
   </fieldset>
   {/if}
 
