@@ -183,13 +183,12 @@ async function syncFromFolder(folder: string): Promise<RandoSyncResult> {
  * Takes a seed's config from somewhere other than the randomizer folder - a
  * spoiler log's settings. The logic YAMLs still come from the folder when one
  * is set, since those track the randomizer build rather than the seed.
- * Returns what landed, in the same words a Sync reports.
  */
-export async function applySeedConfigText(configText: string): Promise<string[]> {
+export async function applySeedConfigText(configText: string): Promise<void> {
   // restoreRandoSync reads the config from settings.
   settings.randoConfigText = configText;
   await restoreRandoSync();
-  return finishConfigSync(configText);
+  finishConfigSync(configText);
 }
 
 /** The rest of a sync, once the logic has the new config. */

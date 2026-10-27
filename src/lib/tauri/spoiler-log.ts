@@ -82,15 +82,13 @@ function getRandomStartingItems(log: SpoilerLog): string[] {
 /**
  * In Race Mode, the sectors leading to the bosses the playthrough beats - the
  * marks the tracker reads the required bosses from. Unmarked, all six count as
- * required and Ganondorf never comes into reach. Returns how many.
+ * required and Ganondorf never comes into reach.
  */
-function markRequiredBossSectors(log: SpoilerLog): number {
-  if (normalize(String(data.sphereOptions.progression_dungeons ?? "")) !== "race mode") return 0;
+function markRequiredBossSectors(log: SpoilerLog): void {
+  if (normalize(String(data.sphereOptions.progression_dungeons ?? "")) !== "race mode") return;
   const arenas = new Set(log.defeatedBosses.map((boss) => normalize(`${boss} Battle Arena`)));
-  const sectors = data.sectors.filter((sector) => arenas.has(normalize(getBossBehindSector(sector))));
-  sphere.highlightedSectors = sectors;
+  sphere.highlightedSectors = data.sectors.filter((sector) => arenas.has(normalize(getBossBehindSector(sector))));
   saveSphereState();
-  return sectors.length;
 }
 
 /**
@@ -100,14 +98,12 @@ function markRequiredBossSectors(log: SpoilerLog): number {
  * the way, but its playthrough never lists them, and the tracker only knows
  * the jellies marked on the map. Without them the shop's fifteen stay out of
  * reach and the playthrough stops there. Which jellies the run collected the
- * log does not say, so just enough are marked, in map order. Returns how many.
+ * log does not say, so just enough are marked, in map order.
  */
-function markPotionShopJellies(log: SpoilerLog): number {
-  if (!log.placements.some((placement) => /potion shop 15 blue chu/i.test(placement.location))) return 0;
+function markPotionShopJellies(log: SpoilerLog): void {
+  if (!log.placements.some((placement) => /potion shop 15 blue chu/i.test(placement.location))) return;
   const needed = Math.max(0, 15 - getSphereBlueChuJellyCount());
-  const markers = BLUE_CHU_JELLY_SECTORS.map((sector, index) => `blue-chu-jelly:${sector}:${index}`).slice(0, needed);
-  setCheckedMany(markers, true);
-  return markers.length;
+  setCheckedMany(BLUE_CHU_JELLY_SECTORS.map((sector, index) => `blue-chu-jelly:${sector}:${index}`).slice(0, needed), true);
 }
 
 /** Replaces the run with the log's. */
@@ -119,65 +115,43 @@ export async function applySpoilerLog(log: SpoilerLog): Promise<{ ok: boolean; m
   clearRun();
   // First, so the entrances and items below are read against this seed's
   // shuffle settings and starting gear.
-  const synced = await applySeedConfigText(log.config);
+  await applySeedConfigText(log.config);
 
   sphere.randomStartingItems = getRandomStartingItems(log);
   saveSphereState();
   refreshSphereStartingGear();
 
-  // Before Clear dead below, which reads the foolish and not-required ones.
-  const notes = getHintNotes(log);
-  hintNotes.value = notes.join("\n");
+  // Before Clear dead below, which reads the not-required ones.
+  hintNotes.value = getHintNotes(log).join("\n");
   updateHintsFromNotes();
 
   const entrancesByName = new Map(getShuffledEntrances().map((entrance) => [normalize(entrance.name), entrance]));
   const missed: string[] = [];
-  let entrances = 0;
   log.entrances.forEach(({ entrance, target }) => {
     const source = entrancesByName.get(normalize(entrance));
     const destination = entrancesByName.get(normalize(target));
-    if (!source || !destination) {
-      missed.push(entrance);
-      return;
-    }
-    connectEntrance(source, destination);
-    entrances += 1;
+    if (source && destination) connectEntrance(source, destination);
+    else missed.push(entrance);
   });
 
   // After the entrances: which boss a sector leads to is read off them.
-  const bossMarks = markRequiredBossSectors(log);
-  const jellies = markPotionShopJellies(log);
+  markRequiredBossSectors(log);
+  markPotionShopJellies(log);
 
   const locationsByName = new Map(getAvailableLocations().map((location) => [normalize(location), location]));
-  let items = 0;
   log.placements.forEach(({ location, item }) => {
     const known = locationsByName.get(normalize(location));
-    if (!known || !recordFoundItem(toTrackerItem(item), known)) {
-      missed.push(`${item} at ${location}`);
-      return;
-    }
-    items += 1;
+    if (!known || !recordFoundItem(toTrackerItem(item), known)) missed.push(`${item} at ${location}`);
   });
 
   // Last, once everything it reads from is in: the marks, the entrances and
   // what has been found.
-  const dead = clearDeadLocations().locations.length;
+  clearDeadLocations();
 
   await saveTrackerAutosave();
 
-  // The sync's own words, less the two the log answers more exactly: which
-  // bosses are required, and which random starting items it gave out rather
-  // than how many it could have.
-  const parts = [
-    `${items} item${items === 1 ? "" : "s"}`,
-    `${entrances} entrance${entrances === 1 ? "" : "s"}`,
-    `${notes.length} hint${notes.length === 1 ? "" : "s"}`,
-    ...synced.filter((part) => !(bossMarks && /required boss/.test(part)) && !/random starting/.test(part))
-  ];
-  if (sphere.randomStartingItems.length) parts.push(`random starting: ${sphere.randomStartingItems.join(", ")}`);
-  if (bossMarks) parts.push(`${bossMarks} required boss sector${bossMarks === 1 ? "" : "s"} marked`);
-  if (jellies) parts.push(`${jellies} Blue Chu Jell${jellies === 1 ? "y" : "ies"} marked for the Potion Shop`);
-  parts.push(dead ? `${dead} dead location${dead === 1 ? "" : "s"} cleared` : "nothing dead to clear");
-  if (missed.length) parts.push(`not recorded: ${missed.join(", ")}`);
-  return { ok: true, message: `Loaded ${log.seed || "the spoiler log"} - ${parts.join(", ")}.` };
+  // The status line names the seed and nothing more, so anything that did not
+  // land goes to the console rather than nowhere.
+  if (missed.length) console.warn(`Spoiler log: not recorded - ${missed.join(", ")}`);
+  return { ok: true, message: `Loaded ${log.hash || log.seed || "the spoiler log"}.` };
 }

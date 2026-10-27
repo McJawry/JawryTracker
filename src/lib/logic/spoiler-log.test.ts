@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getHintNotes, parseSpoilerLog, toHintNote } from "./spoiler-log";
+import { getHintNotes, getSeedHash, parseSpoilerLog, toHintNote } from "./spoiler-log";
 
 /**
  * A spoiler log cut down to the parts the tracker reads, laid out the way the
@@ -73,6 +73,15 @@ const LOG = [
   ""
 ].join("\r\n");
 
+describe("getSeedHash", () => {
+  // Permalinks from real logs, against the hash the randomizer named each file with.
+  it("matches the randomizer's own hashes", () => {
+    expect(getSeedHash("MS4yLjAAQ3JlYXRpdmVFeGNpdGluZ1JvYWQA+r+MCQgIGKjAExgAUf/7gyIBEBIEAAYAA0ApwKOATABAAQAABQABzNMVAAAAAGolAQAAECAAQQb3BhkzmeMYAADFAAA+MJjsI9C9HbMHAAI=")).toBe("Korok Gohma");
+    expect(getSeedHash("MS4yLjAATXVsdGlwbGVTdXBlcmJTbm9iAPq/jAkICBiowBMYAFH//4MiARASBBgGAANAKcCjgEwAQAEAAAUAAczTFQAAAABoJQEAABAgAEEG9wYZM5njGAAAxAAAPjCY7CPQvR2zBwAC")).toBe("Willi Woods");
+    expect(getSeedHash("MS4yLjAARGFya0Zhc3RCb3VsZGVyAPq/jAkICBiowBMYAFH//4MiARASBBgGAANAKcCjgEwAQAEAAAUAAczTFQAAAABoJQEAABAgAEEG9wYZM5njGAAAxAAAPjCY7CPQvR2zBwAC")).toBe("Mesa Gyorg");
+  });
+});
+
 describe("parseSpoilerLog", () => {
   const log = parseSpoilerLog(LOG)!;
 
@@ -128,6 +137,12 @@ describe("parseSpoilerLog", () => {
   it("keeps a location hint's item when the seed does not mark importance", () => {
     expect(toHintNote("Ganon's Tower - Maze Chest rewards a Tingle Bottle.", false)).toBe("Tingle Bottle at Ganon's Tower - Maze Chest");
     expect(toHintNote("Some Island holds a mystery.", false)).toBe("Some Island holds a mystery");
+  });
+
+  it("works out the seed hash from the permalink, unless the seed is plandomized", () => {
+    expect(log.hash).toBe(getSeedHash("MS4yLjAA"));
+    const plando = parseSpoilerLog(LOG.replace("progression_dungeons:", "plandomizer: true\r\nprogression_dungeons:"))!;
+    expect(plando.hash).toBe("");
   });
 
   it("refuses text without a settings section", () => {

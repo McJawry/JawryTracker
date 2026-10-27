@@ -23,6 +23,13 @@ export interface SpoilerEntrance {
 export interface SpoilerLog {
   seed: string;
   /**
+   * The two names the randomizer shows for the seed ("Korok Gohma") and puts
+   * in the log's file name - worked out from the permalink, since the log
+   * itself never prints it. Empty for a plandomizer seed, whose hash also
+   * covers the plando file.
+   */
+  hash: string;
+  /**
    * The settings block, as config.yaml text, with the log's "Starting Island:"
    * line kept on the end - config.yaml never says where a randomized start
    * landed, and the tracker reads that line when it is there.
@@ -102,7 +109,64 @@ export function parseSpoilerLog(text: string): SpoilerLog | null {
     .map((line) => line.replace(/^They say that\s+/i, ""));
 
   const seed = /^seed:\s*(.+?)\s*$/m.exec(config)?.[1] ?? "";
-  return { seed, config, startingInventory, placements, defeatedBosses, entrances, hints };
+  const permalink = /^Permalink:\s*(\S+)\s*$/m.exec(config)?.[1] ?? "";
+  const hash = permalink && !/^plandomizer:\s*true\s*$/m.test(config) ? getSeedHash(permalink) : "";
+  return { seed, hash, config, startingInventory, placements, defeatedBosses, entrances, hints };
+}
+
+// The randomizer's seed hash (seedgen/seed.cpp, generate_seed_hash and
+// hash_for_config): two names drawn by a 64-bit Mersenne Twister seeded with
+// the FNV-1a hash of the permalink. For a seed with a spoiler log and no
+// plandomizer, the permalink it hashes is the one the log prints.
+const SEED_HASH_NAMES = [
+  "link", "zelda", "medli", "makar", "korok", "hollo", "kreeb", "kamo", "obli", "willi", "zora", "gonzo", "'hoy",
+  "aryll", "mila", "ganon", "rito", "sam", "vera", "missy", "dampa", "kane", "tetra", "valoo", "gohma", "poe",
+  "gyorg", "niko", "woods", "morth", "elma", "oakin", "drona", "irch", "aldo", "rown", "keese", "basht", "bisht",
+  "ilari", "ivan", "jan", "jin", "mesa", "joel", "abe", "zill", "zuko", "ankle", "lenzo", "anton", "linda", "fado",
+  "baito", "din", "nayru", "jabun"
+];
+
+const UINT64 = (1n << 64n) - 1n;
+
+/** FNV-1a, 64-bit - the randomizer's seedFromString (seedgen/random.cpp). */
+function fnv1a64(text: string): bigint {
+  let hash = 14695981039346656037n;
+  for (const byte of new TextEncoder().encode(text)) {
+    hash = ((hash ^ BigInt(byte)) * 1099511628211n) & UINT64;
+  }
+  return hash;
+}
+
+/** C++'s std::mt19937_64, as many draws as asked for from a fresh seed. */
+function mersenneTwister64(seed: bigint, draws: number): bigint[] {
+  const size = 312;
+  const state: bigint[] = [seed & UINT64];
+  for (let index = 1; index < size; index += 1) {
+    state.push((6364136223846793005n * (state[index - 1] ^ (state[index - 1] >> 62n)) + BigInt(index)) & UINT64);
+  }
+  const lowerMask = (1n << 31n) - 1n;
+  const upperMask = UINT64 ^ lowerMask;
+  for (let index = 0; index < size; index += 1) {
+    const bits = (state[index] & upperMask) | (state[(index + 1) % size] & lowerMask);
+    const shifted = bits & 1n ? (bits >> 1n) ^ 0xb5026f5aa96619e9n : bits >> 1n;
+    state[index] = state[(index + 156) % size] ^ shifted;
+  }
+  return state.slice(0, draws).map((value) => {
+    let y = value;
+    y ^= (y >> 29n) & 0x5555555555555555n;
+    y ^= (y << 17n) & 0x71d67fffeda60000n;
+    y ^= (y << 37n) & 0xfff7eee000000000n;
+    y ^= y >> 43n;
+    return y & UINT64;
+  });
+}
+
+export function getSeedHash(permalink: string): string {
+  const names = SEED_HASH_NAMES.length;
+  return mersenneTwister64(fnv1a64(permalink), 2)
+    .map((draw) => SEED_HASH_NAMES[Number(draw % BigInt(names))])
+    .map((name) => name.charAt(0).toUpperCase() + name.slice(1))
+    .join(" ");
 }
 
 const REQUIREMENT_SUFFIXES: Record<string, string> = { required: "r", "possibly required": "p", "not required": "n" };

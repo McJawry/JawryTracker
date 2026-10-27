@@ -258,7 +258,7 @@
     const { log, message } = await readSpoilerLogFile();
     autosaveStatus = message;
     if (!log) return;
-    const seed = log.seed ? `seed ${log.seed}` : "this spoiler log";
+    const seed = log.hash || (log.seed ? `seed ${log.seed}` : "this spoiler log");
     if (!confirm(`Replace the current run with ${seed}'s settings, entrances and playthrough?`)) return;
     autosaveStatus = "Loading spoiler log...";
     autosaveStatus = (await applySpoilerLog(log)).message;

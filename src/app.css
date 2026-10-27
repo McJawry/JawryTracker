@@ -283,13 +283,12 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   font-size: 0.78rem;
 }
 
+/* Wraps rather than cutting off: a loaded spoiler log reports what landed in
+   one long line, and the end of it was hidden behind an ellipsis. */
 .setting-status {
-  max-width: 130px;
-  overflow: hidden;
   color: var(--muted);
   font-size: 0.74rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .automatic-mode-prompt {
