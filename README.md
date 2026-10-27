@@ -384,7 +384,8 @@ Open **Settings** from the Control Panel.
     the app. Point it at that copy's folder or its `data` folder. Your run isn't included: to
     carry that over, copy the whole `data` folder before the first launch, or use the autosave
     (see [Saving your run](#saving-your-run)).
-- **Run saves**: named saves of your run. See [Saving your run](#saving-your-run).
+- **Load saves**: named saves of your run, and loading a spoiler log. See
+  [Saving your run](#saving-your-run).
 
 Presets and saves can live in the **app folder** (portable, beside the exe) or the **user
 folder** (`Documents/JawryTracker`, shared by every copy of the app on the computer).
@@ -398,10 +399,17 @@ folder** (`Documents/JawryTracker`, shared by every copy of the app on the compu
 - If the app ever starts with an empty run, it restores from `autosave.json`. To move a run to
   another copy of the app, copy that file into the other copy's `data` folder before starting it,
   or use **Load autosave file…**.
-- **Run saves → Save as** keeps a named copy that the autosave never overwrites. **Load run from
+- **Load saves → Save as** keeps a named copy that the autosave never overwrites. **Load run from
   savefile** brings it back.
 - **Refresh Autosave** re-reads this copy's `autosave.json`, for example after you swapped the
   file in by hand.
+- **Load spoiler log…** replaces the run with a spoiler log's seed:
+  - its settings, starting island and random starting items
+  - its entrances
+  - every item its playthrough finds, recorded at its location
+  - in Race Mode, the sectors leading to the bosses the playthrough beats
+  - if the playthrough buys from the Potion Shop, enough Blue Chu Jellies to make 15. The log
+    doesn't say which ones the run picked up, so the first ones on the map are marked.
 - The tracker keeps its working data in the `data` folder next to the exe. Keep that folder on a
   drive that stays connected while you play.
 

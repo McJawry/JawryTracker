@@ -35,6 +35,7 @@
     deleteRunSave,
     openRunSaveFolder
   } from "$lib/tauri/tracker-autosave";
+  import { applySpoilerLog, readSpoilerLogFile } from "$lib/tauri/spoiler-log";
   import {
     describeDataRoots,
     openDataRoot,
@@ -247,6 +248,22 @@
     if (result.ok) window.location.reload();
   }
 
+  /**
+   * A spoiler log as the run: its settings, entrances and the items its
+   * playthrough finds. Asked once the file is read, so the question can name
+   * the seed. Recorded through the trackers themselves, so every window picks
+   * it up as it would a change made by hand - no reload.
+   */
+  async function openSpoilerLog() {
+    const { log, message } = await readSpoilerLogFile();
+    autosaveStatus = message;
+    if (!log) return;
+    const seed = log.seed ? `seed ${log.seed}` : "this spoiler log";
+    if (!confirm(`Replace the current run with ${seed}'s settings, entrances and playthrough?`)) return;
+    autosaveStatus = "Loading spoiler log...";
+    autosaveStatus = (await applySpoilerLog(log)).message;
+  }
+
   async function deleteRun() {
     if (!selectedRun) return;
     if (!confirm(`Delete the saved run "${selectedRun}"?`)) return;
@@ -302,7 +319,7 @@
       class:active={activeTab === "run-saves"}
       aria-selected={activeTab === "run-saves"}
       onclick={() => (activeTab = "run-saves")}
-    >Run saves</button>
+    >Load saves</button>
   </div>
 
   {#if activeTab === "appearance"}
@@ -398,7 +415,7 @@
 
   {#if activeTab === "run-saves"}
   <fieldset class="settings-group">
-    <legend>Run saves</legend>
+    <legend>Load saves</legend>
     <p class="setting-hint">
       Checked locations, items, hints, notes and dungeon items mirror to
       <code>data/autosave.json</code> continuously. Saving under a name keeps a
@@ -454,6 +471,14 @@
       takes one from anywhere - use that for a file from another build, since
       each build has its own <code>data</code> folder and the running app
       keeps rewriting its copy.
+    </p>
+
+    <div class="setting-row">
+      <button class="tool-button" type="button" onclick={openSpoilerLog}>Load spoiler log...</button>
+    </div>
+    <p class="setting-hint">
+      Replaces the run with a spoiler log's settings, entrances and the items
+      its playthrough finds.
     </p>
 
     {#if autosaveStatus}<p class="setting-status">{autosaveStatus}</p>{/if}

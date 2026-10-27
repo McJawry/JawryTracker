@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { APP_VERSION, NEW_RUN_KEY } from "$lib/constants";
+  import { APP_VERSION } from "$lib/constants";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { ui, setMarkStartingMode } from "$lib/state/ui.svelte";
-  import { checked, saveChecked } from "$lib/state/checked.svelte";
-  import { sphere, resetSphereState } from "$lib/state/sphere.svelte";
-  import { hintNotes, saveHintNotes, setHints } from "$lib/state/hints.svelte";
-  import { resetDungeonItemsState } from "$lib/state/dungeon-items.svelte";
-  import { resetItemTrackerState } from "$lib/state/item-tracker.svelte";
+  import { clearRun } from "$lib/state/new-run";
   import { data } from "$lib/state/data.svelte";
   import { openPopoutWindow } from "$lib/tauri/popout-window";
   import { HIDEABLE_SECTIONS, SECTION_META } from "$lib/section-meta";
@@ -37,19 +33,7 @@
     const shouldReset = confirm("Start a new tracker? This clears notes, checked locations, items, and sphere placements.");
     if (!shouldReset) return;
 
-    // The one empty run allowed to replace a run in autosave.json.
-    localStorage.setItem(NEW_RUN_KEY, "1");
-    hintNotes.value = "";
-    saveHintNotes();
-    setHints([]);
-    Object.keys(checked).forEach((key) => delete checked[key]);
-    saveChecked();
-    resetSphereState();
-    resetItemTrackerState();
-    // Dungeon keys/maps/compasses are ownership too - the confirm above says
-    // "items", and leaving them behind carried the last run's inventory into
-    // the new one, where it kept feeding the sphere logic.
-    resetDungeonItemsState();
+    clearRun();
     // A fresh run is exactly when the seed's random starting items get
     // entered, so arm the mode rather than making the user find the button -
     // but only for a seed that hands any out (Start With Random Item, or its
