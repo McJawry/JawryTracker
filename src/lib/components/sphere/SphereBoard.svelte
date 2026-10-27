@@ -138,7 +138,8 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["open", "data-dependencies"]
+      // "hidden": the Locations toggle hides the area groups in place.
+      attributeFilter: ["open", "data-dependencies", "hidden"]
     });
     const resize = new ResizeObserver(redraw);
     resize.observe(canvas);
@@ -353,6 +354,21 @@
   ]);
   const groupsWillExpand = $derived(shouldExpandSphereGroups(areaGroupNodeIds));
 
+  // The Locations toggle hides the area groups rather than leaving them out.
+  // Which cards are purple, and which could still join a path, is read off
+  // every card on the board, hidden ones included - an area group left out of
+  // the DOM made a branch that only leads to unchecked locations look finished
+  // to the Paths filter, the way a card left out once stayed hidden for good.
+  // Rendered every time and hidden in place, the groups a new find opens up
+  // are hidden as they arrive. A column with nothing else in it goes too.
+  const showLocations = $derived(settings.showSphereLocations);
+  const sphereColumnHasCards = (column: SphereColumnData) =>
+    column.placements.length > 0 || (pathsBySphere.get(column.sphereNumber)?.length ?? 0) > 0;
+  const predictionColumnHasCards = (column: PredictionColumnData) =>
+    column.placements.length > 0 ||
+    (pathsByLevel.get(column.level)?.length ?? 0) > 0 ||
+    (column.level === 0 && (unplacedItems.length > 0 || knowledge.areaHints.length > 0));
+
   function startPan(event: PointerEvent) {
     if (event.button !== 0 || !boardElement) return;
     const board = boardElement;
@@ -430,6 +446,7 @@
           <button
             type="button"
             class="sphere-groups-toggle"
+            hidden={!showLocations}
             title={groupsWillExpand ? "Expand every area panel" : "Collapse every area panel"}
             onclick={() => toggleAllSphereGroups(areaGroupNodeIds)}
           >
@@ -441,11 +458,11 @@
         </article>
 
         {#each sphereColumns as column (column.sphereNumber)}
-          <article class="sphere-column">
+          <article class="sphere-column" hidden={!showLocations && !sphereColumnHasCards(column)}>
             <h3>Sphere {column.sphereNumber}</h3>
             {#if column.groups.length}
-              <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
-              <div class="sphere-area-groups">
+              <div class="sphere-available-heading" hidden={!showLocations}>Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
+              <div class="sphere-area-groups" hidden={!showLocations}>
                 {#each column.groups as group (group.area)}
                   <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} sphere={column.sphereNumber} dependencySource={calculation.dependencies} />
                 {/each}
@@ -471,11 +488,11 @@
         {/each}
 
         {#each predictionColumns as column (column.level)}
-          <article class="sphere-column sphere-prediction-column">
+          <article class="sphere-column sphere-prediction-column" hidden={!showLocations && !predictionColumnHasCards(column)}>
             <h3>{column.heading}</h3>
             {#if column.groups.length}
-              <div class="sphere-available-heading">Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
-              <div class="sphere-area-groups">
+              <div class="sphere-available-heading" hidden={!showLocations}>Available {column.groups.reduce((sum, g) => sum + g.locations.length, 0)}</div>
+              <div class="sphere-area-groups" hidden={!showLocations}>
                 {#each column.groups as group (group.area)}
                   <SphereAreaGroup area={group.area} locations={group.locations} bossIconsByLocation={pathBossIconsByLocation} sphere={`p${column.level}`} dependencySource={relativeAvailableDependencies} />
                 {/each}
@@ -485,7 +502,7 @@
                  count towards showing it: a column whose only content was a
                  solved path card (Molgera in "After sphere ?", say) rendered
                  its heading with an empty body and the card disappeared. -->
-            {#if column.placements.length || (pathsByLevel.get(column.level)?.length ?? 0) > 0 || (column.level === 0 && (unplacedItems.length || knowledge.areaHints.length))}
+            {#if predictionColumnHasCards(column)}
               <div class="sphere-prediction-list">
                 {#each column.placements as placement (placement.id)}
                   <SpherePlacementNode

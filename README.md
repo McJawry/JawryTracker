@@ -362,6 +362,10 @@ The **Filters** menu narrows the board to what matters:
   in go mode). Cards marked *Optional* are hidden.
 - **Show keys**: keeps dungeon keys visible whatever the other filters say.
 
+**Locations**, next to Path icons, hides the locations each sphere opens up, leaving only the
+items and their lines. A sphere with nothing else in it is hidden too. The Filters work the same
+either way: an item whose branch still leads to unchecked locations stays visible under Paths.
+
 The **Scale** slider zooms the board, and the spinner beside the Filters button shows while the
 sphere calculation is running.
 

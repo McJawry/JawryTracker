@@ -162,6 +162,8 @@ export interface Settings {
   sphereFilters: SphereFilters;
   /** Sphere board: the boss icons path hints put on locations. */
   showPathIcons: boolean;
+  /** Sphere board: the locations each sphere opens up, beside its items. */
+  showSphereLocations: boolean;
   /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
@@ -237,5 +239,6 @@ export const DEFAULT_SETTINGS: Settings = {
   sphereBoardZoom: 100,
   sphereFilters: { ...DEFAULT_SPHERE_FILTERS },
   showPathIcons: true,
+  showSphereLocations: true,
   popoutZoom: {}
 };

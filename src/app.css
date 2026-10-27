@@ -2287,7 +2287,11 @@ body.stream-mode .empty-state {
 .sphere-board[hidden],
 .sphere-canvas[hidden],
 .sea-grid[hidden],
-.sphere-filtered-cards {
+.sphere-filtered-cards,
+.sphere-column[hidden],
+.sphere-available-heading[hidden],
+.sphere-area-groups[hidden],
+.sphere-groups-toggle[hidden] {
   display: none;
 }
 
