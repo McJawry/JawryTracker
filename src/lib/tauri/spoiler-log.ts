@@ -1,11 +1,14 @@
-// Loads a spoiler log as the run: the seed's settings, its entrances and the
-// items its playthrough finds, recorded the way the trackers record them by
-// hand. Reading the file apart from applying it, so the caller can say which
+// Loads a spoiler log as the run: the seed's settings, its entrances, its
+// hints and the items its playthrough finds, recorded the way the trackers
+// record them by hand. Reading the file apart from applying it, so the caller can say which
 // seed it is about to replace the run with before anything changes.
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { WWRSphereEngine } from "$lib/logic";
-import { parseSpoilerLog, type SpoilerLog } from "$lib/logic/spoiler-log";
+import { getHintNotes, parseSpoilerLog, type SpoilerLog } from "$lib/logic/spoiler-log";
+import { hintNotes, updateHintsFromNotes } from "$lib/state/hints.svelte";
 import { recordFoundItem } from "$lib/logic/assignment";
+import { loadReferenceData } from "$lib/logic/data-loading";
+import { clearDeadLocations } from "$lib/logic/dead-locations";
 import { connectEntrance, getShuffledEntrances } from "$lib/logic/entrances";
 import { getBossBehindSector } from "$lib/logic/entrance-paths";
 import { data } from "$lib/state/data.svelte";
@@ -109,6 +112,10 @@ function markPotionShopJellies(log: SpoilerLog): number {
 
 /** Replaces the run with the log's. */
 export async function applySpoilerLog(log: SpoilerLog): Promise<{ ok: boolean; message: string }> {
+  // The Settings window, where this runs, never loads the reference data -
+  // nothing else there needs the location pool - and without it not one
+  // location in the log matched a location the tracker knows.
+  if (!data.loaded) await loadReferenceData();
   clearRun();
   // First, so the entrances and items below are read against this seed's
   // shuffle settings and starting gear.
@@ -117,6 +124,11 @@ export async function applySpoilerLog(log: SpoilerLog): Promise<{ ok: boolean; m
   sphere.randomStartingItems = getRandomStartingItems(log);
   saveSphereState();
   refreshSphereStartingGear();
+
+  // Before Clear dead below, which reads the foolish and not-required ones.
+  const notes = getHintNotes(log);
+  hintNotes.value = notes.join("\n");
+  updateHintsFromNotes();
 
   const entrancesByName = new Map(getShuffledEntrances().map((entrance) => [normalize(entrance.name), entrance]));
   const missed: string[] = [];
@@ -147,6 +159,10 @@ export async function applySpoilerLog(log: SpoilerLog): Promise<{ ok: boolean; m
     items += 1;
   });
 
+  // Last, once everything it reads from is in: the marks, the entrances and
+  // what has been found.
+  const dead = clearDeadLocations().locations.length;
+
   await saveTrackerAutosave();
 
   // The sync's own words, less the two the log answers more exactly: which
@@ -155,11 +171,13 @@ export async function applySpoilerLog(log: SpoilerLog): Promise<{ ok: boolean; m
   const parts = [
     `${items} item${items === 1 ? "" : "s"}`,
     `${entrances} entrance${entrances === 1 ? "" : "s"}`,
+    `${notes.length} hint${notes.length === 1 ? "" : "s"}`,
     ...synced.filter((part) => !(bossMarks && /required boss/.test(part)) && !/random starting/.test(part))
   ];
   if (sphere.randomStartingItems.length) parts.push(`random starting: ${sphere.randomStartingItems.join(", ")}`);
   if (bossMarks) parts.push(`${bossMarks} required boss sector${bossMarks === 1 ? "" : "s"} marked`);
   if (jellies) parts.push(`${jellies} Blue Chu Jell${jellies === 1 ? "y" : "ies"} marked for the Potion Shop`);
+  parts.push(dead ? `${dead} dead location${dead === 1 ? "" : "s"} cleared` : "nothing dead to clear");
   if (missed.length) parts.push(`not recorded: ${missed.join(", ")}`);
   return { ok: true, message: `Loaded ${log.seed || "the spoiler log"} - ${parts.join(", ")}.` };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSpoilerLog } from "./spoiler-log";
+import { getHintNotes, parseSpoilerLog, toHintNote } from "./spoiler-log";
 
 /**
  * A spoiler log cut down to the parts the tracker reads, laid out the way the
@@ -52,6 +52,24 @@ const LOG = [
   "",
   "All Locations:",
   "    Angular Isles - Cave Chest:                                           Boomerang",
+  "",
+  "",
+  "Hints:",
+  "    Forsaken Fortress Sector - Old Man Ho Ho:",
+  "        They say that Triforce Shard 2 (required) can be found at the Forsaken Fortress Sector.",
+  "    Horseshoe Island - Old Man Ho Ho:",
+  "        They say that Triforce Shard 2 (required) can be found at the Forsaken Fortress Sector.",
+  "    KoRL Hints:",
+  "        They say that Outset Island is on the path to Helmaroc King. (Progressive Bow at Outset Island - Under Link's House)",
+  "        They say that Outset Island is on the path to Helmaroc King. (Bombs at Outset Island - Mesa's House Chest)",
+  "        They say that visiting the Islet of Steel is a foolish choice.",
+  "        They say that Ganon's Tower - Maze Chest rewards a Tingle Bottle.",
+  "        They say that Windfall Island - Potion Shop 15 Blue Chu rewards a Progressive Bow (required).",
+  "    Kreeb Hints:",
+  "        They say that a Progressive Bow (possibly required) can be found at Outset Island, Headstone Island and the Tower of the Gods Sector.",
+  "",
+  "Charts for world 1:",
+  "    Triforce Chart 1:\tGreatfish Isle",
   ""
 ].join("\r\n");
 
@@ -87,6 +105,29 @@ describe("parseSpoilerLog", () => {
       { entrance: "Gale Isle Interior -> WT First Room", target: "Dragon Roost Pond Past Statues -> DRC First Room" },
       { entrance: "Tower of the Gods Sector -> TOTG Entrance Room", target: "Headstone Island Interior -> ET First Room" }
     ]);
+  });
+
+  it("reads every hint, in order, without who gave it", () => {
+    expect(log.hints).toHaveLength(8);
+    expect(log.hints[2]).toBe("Outset Island is on the path to Helmaroc King. (Progressive Bow at Outset Island - Under Link's House)");
+  });
+
+  it("writes the hints as hint notes, in order, leaving out word-for-word repeats but not path hints", () => {
+    // The fixture's settings have no hint_importance, so the Tingle Bottle keeps its line.
+    expect(getHintNotes({ ...log, config: `${log.config}\nhint_importance: true` })).toEqual([
+      "Triforce Shard 2 r at Forsaken Fortress Sector",
+      "Outset Island to Helmaroc King",
+      "Outset Island to Helmaroc King",
+      "no Islet of Steel",
+      "no Ganon's Tower - Maze Chest",
+      "Progressive Bow r at Windfall Island - Potion Shop 15 Blue Chu",
+      "Progressive Bow p at Outset Island, Headstone Island and Tower of the Gods Sector"
+    ]);
+  });
+
+  it("keeps a location hint's item when the seed does not mark importance", () => {
+    expect(toHintNote("Ganon's Tower - Maze Chest rewards a Tingle Bottle.", false)).toBe("Tingle Bottle at Ganon's Tower - Maze Chest");
+    expect(toHintNote("Some Island holds a mystery.", false)).toBe("Some Island holds a mystery");
   });
 
   it("refuses text without a settings section", () => {

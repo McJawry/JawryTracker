@@ -406,10 +406,16 @@ folder** (`Documents/JawryTracker`, shared by every copy of the app on the compu
 - **Load spoiler log…** replaces the run with a spoiler log's seed:
   - its settings, starting island and random starting items
   - its entrances
-  - every item its playthrough finds, recorded at its location
+  - its hints, written into the notes in the log's order. A hint several Old Man Ho Hos repeat
+    word for word is written once, but a repeated path hint stays: it means a second path item
+    in that area. A foolish area, and a location hinted to hold something the seed doesn't need,
+    are written as `no` lines.
+  - every item its playthrough finds, recorded at its location, with the location checked
   - in Race Mode, the sectors leading to the bosses the playthrough beats
   - if the playthrough buys from the Potion Shop, enough Blue Chu Jellies to make 15. The log
     doesn't say which ones the run picked up, so the first ones on the map are marked.
+
+  Then it runs [Clear dead](#clear-dead).
 - The tracker keeps its working data in the `data` folder next to the exe. Keep that folder on a
   drive that stays connected while you play.
 
