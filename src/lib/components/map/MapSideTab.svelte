@@ -2,20 +2,19 @@
   // Ported from renderMapSideTab()/renderDungeonEntranceList()
   // (dev/app/app.js:1095+, 1153+). Shards click to toggle and drag onto an
   // area to record a hint, using the same pointer-driven drag as the Item
-  // Tracker (logic/item-drag.ts). Entrance mappings support drag-and-drop
-  // (dev/app/app.js:1163-1169), plus a click-to-arm fallback from
-  // ui.svelte.ts (armEntranceAssignment/pendingEntranceAssignment) for
-  // input methods that don't drag well - SeaGrid.svelte's handleSectorClick/
-  // handleSectorDrop complete either one.
+  // Tracker (logic/item-drag.ts). Dungeon buttons drag onto their sector the
+  // same pointer-driven way (./dungeon-drag.ts), plus a click-to-arm fallback
+  // from ui.svelte.ts (armEntranceAssignment/pendingEntranceAssignment) that
+  // TrackerAreaCell's click completes.
   import { itemImage, miscImage } from "$lib/logic/images";
   import { getShardTrackingState, isStartingShard, setShardTrackingChecked } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { checked } from "$lib/state/checked.svelte";
   import { sphere } from "$lib/state/sphere.svelte";
   import { canBadgeDungeonToSector, clearDungeonAssignment, getEffectiveEntranceMappings } from "$lib/logic/entrances";
-  import { ui, armEntranceAssignment, clearPendingEntranceAssignment } from "$lib/state/ui.svelte";
+  import { ui, armEntranceAssignment } from "$lib/state/ui.svelte";
   import { DUNGEON_ENTRANCE_TRACKERS } from "$lib/gameData";
-  import { DUNGEON_DRAG_MIME } from "./dungeon-drag";
+  import { beginDungeonDrag } from "./dungeon-drag";
   import { beginItemDrag } from "$lib/logic/item-drag";
   import { answerArmedLocation } from "$lib/logic/assignment";
 
@@ -108,19 +107,14 @@
         class="dungeon-entrance"
         class:mapped={Boolean(mappedSector)}
         class:armed
-        draggable="true"
         title={armed
           ? `Click a sector on the map to place ${dungeon.name} - click again to cancel`
           : mappedSector
             ? `${dungeon.name} at ${mappedSector} - drag or click to move, right-click to clear`
             : `${dungeon.name} - drag onto its sector, or click then click the sector`}
-        onclick={() => armEntranceAssignment(dungeon.name)}
+        onpointerdown={(event) =>
+          beginDungeonDrag(dungeon.name, dungeon.abbreviation, event, () => armEntranceAssignment(dungeon.name))}
         oncontextmenu={(event) => { event.preventDefault(); clearDungeonAssignment(dungeon.name); }}
-        ondragstart={(event) => {
-          clearPendingEntranceAssignment();
-          event.dataTransfer?.setData(DUNGEON_DRAG_MIME, dungeon.name);
-          if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
-        }}
       >
         {dungeon.abbreviation}
       </button>

@@ -1087,6 +1087,19 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   max-height: 100%;
   object-fit: contain;
 }
+
+/* A dragged dungeon button, drawn like the badge it leaves on its sector. */
+.dungeon-drag-label {
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 3px;
+  background: rgba(22, 41, 49, 0.9);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
 .map-side-tab {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -3000,16 +3013,17 @@ body.stream-mode .empty-state {
   cursor: pointer;
 }
 
-/* Marking required-boss sectors: one the seed's settings can never put a boss
-   behind is shaded and ignores the click, which leaves the candidates standing
-   out. Its own stacking context, so the shade covers the entrance badges
-   inside the cell but stays under the prompt floating over the map. */
-.tracker-area-cell.marker-blocked {
+/* Marking required-boss sectors, or placing a dungeon: a sector the seed's
+   settings can never put it on is shaded and refuses it, which leaves the
+   candidates standing out. Its own stacking context, so the shade covers the
+   entrance badges inside the cell but stays under the prompt floating over
+   the map. */
+.tracker-area-cell.sector-blocked {
   isolation: isolate;
   cursor: not-allowed;
 }
 
-.tracker-area-cell.marker-blocked::after {
+.tracker-area-cell.sector-blocked::after {
   content: "";
   position: absolute;
   inset: 0;

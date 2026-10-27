@@ -16,15 +16,15 @@
     openLocationDropList,
     ui,
     clearPendingEntranceAssignment,
+    getDungeonBeingPlaced,
     setHighlightSectorMode,
     showHoveredRowName,
     clearHoveredRowName
   } from "$lib/state/ui.svelte";
   import { sphere, toggleSectorHighlight } from "$lib/state/sphere.svelte";
-  import { DUNGEON_DRAG_MIME } from "$lib/components/map/dungeon-drag";
   import { TRACKED_AREAS } from "$lib/gameData";
   import { getSectorHints, getStaticSectorIcons, getAreaHints } from "$lib/logic/map-icons";
-  import { assignDungeonToSector } from "$lib/logic/entrances";
+  import { assignDungeonToSector, canSectorHoldDungeon } from "$lib/logic/entrances";
   import { canOpenSectorDoor, canSectorHoldBossMarker, isBossFoundOnSector } from "$lib/logic/entrance-paths";
   import MapIcon from "$lib/components/map/MapIcon.svelte";
 
@@ -34,7 +34,6 @@
     background = "",
     label = "",
     fontSize = "0.68rem",
-    acceptsEntranceDrop = false,
     entranceBadges = [],
     onEntranceBadgeClear,
     hintIconsOutside = false
@@ -45,7 +44,6 @@
     background?: string;
     label?: string;
     fontSize?: string;
-    acceptsEntranceDrop?: boolean;
     entranceBadges?: Array<{ name: string; abbreviation: string }>;
     onEntranceBadgeClear?: (dungeonName: string) => void;
     /** The row draws this area's hint icons above the cell instead (AreaHintStrip). */
@@ -92,6 +90,17 @@
   const markerBlocked = $derived(
     ui.highlightSectorMode && targetKind === "sector" && !isHighlighted && !canSectorHoldBossMarker(areaName)
   );
+  // The same for a dungeon being placed, dragged or clicked then sector: a
+  // sector its entrance cannot be on is shaded and refuses it.
+  const placingDungeon = $derived(targetKind === "sector" ? getDungeonBeingPlaced() : "");
+  const entranceBlocked = $derived(Boolean(placingDungeon) && !canSectorHoldDungeon(placingDungeon, areaName));
+  const blockedReason = $derived(
+    markerBlocked
+      ? "this seed's settings can't put a required boss here"
+      : entranceBlocked
+        ? `this seed's settings can't put ${placingDungeon} here`
+        : ""
+  );
 
   const isPulsing = $derived(
     ui.pendingLocationForItemAssignment !== null &&
@@ -109,6 +118,8 @@
       return;
     }
     if (ui.pendingEntranceAssignment) {
+      // Stays armed: the click was on the map, not a change of mind.
+      if (entranceBlocked) return;
       assignDungeonToSector(ui.pendingEntranceAssignment, areaName);
       clearPendingEntranceAssignment();
       return;
@@ -136,41 +147,23 @@
     clearLocations(locations, { withDependents: true });
   }
 
-  let dragOver = $state(false);
-
-  function handleDragOver(event: DragEvent) {
-    if (!acceptsEntranceDrop || !event.dataTransfer?.types.includes(DUNGEON_DRAG_MIME)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    dragOver = true;
-  }
-
-  function handleDrop(event: DragEvent) {
-    if (!acceptsEntranceDrop) return;
-    const dungeonName = event.dataTransfer?.getData(DUNGEON_DRAG_MIME);
-    dragOver = false;
-    if (!dungeonName) return;
-    event.preventDefault();
-    assignDungeonToSector(dungeonName, areaName);
-  }
 </script>
 
+<!-- A dragged dungeon lands through its own pointerup (components/map/
+     dungeon-drag.ts), as a dragged item does (logic/item-drag.ts). -->
 <div
   class="tracker-area-cell"
   class:pulsing={isPulsing}
-  class:drag-target={dragOver || ui.pendingEntranceAssignment !== null || ui.itemDrag !== null}
-  class:marker-blocked={markerBlocked}
+  class:drag-target={ui.itemDrag !== null || (Boolean(placingDungeon) && !entranceBlocked)}
+  class:sector-blocked={Boolean(blockedReason)}
   style={background ? `background-image: url(${background})` : ""}
-  title={markerBlocked ? `${areaName} - this seed's settings can't put a required boss here` : areaName}
+  title={blockedReason ? `${areaName} - ${blockedReason}` : areaName}
   data-area-name={areaName}
   data-target-kind={targetKind}
   onclick={handleClick}
   oncontextmenu={handleContextMenu}
   onmouseenter={() => showHoveredRowName(areaName)}
   onmouseleave={clearHoveredRowName}
-  ondragover={handleDragOver}
-  ondragleave={() => (dragOver = false)}
-  ondrop={handleDrop}
 >
   {#if label}
     <div class="tracker-area-label" style="font-size: {fontSize}">{label}</div>

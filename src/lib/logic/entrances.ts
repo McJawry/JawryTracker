@@ -981,21 +981,43 @@ function getDungeonDoorEntranceOnSector(sector: string): TrackerEntrance | null 
  * dungeon-only note.
  */
 export function recordDungeonEntranceOnSector(dungeonName: string, sector: string): boolean {
-  const world = data.sphereWorld;
-  const source = getDungeonDoorEntranceOnSector(sector);
-  if (!world?.areas || !source) return false;
-
-  const wanted = normalize(dungeonName);
-  const target = getTargetEntrances(source).find(
-    (candidate) => normalize(world.areas[normalize(candidate.connected)]?.dungeon ?? "") === wanted
-  );
-  if (!target) return false;
+  const door = getDungeonDoorOnSector(dungeonName, sector);
+  if (!door) return false;
 
   // Replaces whatever that dungeon was last said to be behind, so moving it
   // does not leave the old door still claiming it.
   clearDungeonEntrance(dungeonName);
-  connectEntrance(source, target);
+  connectEntrance(door.source, door.target);
   return true;
+}
+
+/**
+ * The door on a sector, and the entrance into a dungeon it could open into -
+ * by the seed's settings alone. Not getTargetEntrances: that leaves out what
+ * another door already claims, and a dungeon already recorded somewhere is
+ * claimed by its own old door, so moving it found nothing to connect.
+ */
+function getDungeonDoorOnSector(dungeonName: string, sector: string): { source: TrackerEntrance; target: TrackerEntrance } | null {
+  const world = data.sphereWorld;
+  const source = getDungeonDoorEntranceOnSector(sector);
+  if (!world?.areas || !source) return null;
+  const wanted = normalize(dungeonName);
+  const target = getShuffledEntrances().find(
+    (candidate) =>
+      !candidate.isReverse &&
+      candidate.poolType === source.poolType &&
+      normalize(world.areas[normalize(candidate.connected)]?.dungeon ?? "") === wanted
+  );
+  return target ? { source, target } : null;
+}
+
+/**
+ * Whether the seed's settings let a dungeon's entrance be on this sector: it
+ * has a dungeon door whose pool the dungeon is in. What placing a dungeon
+ * shades the rest of the map by.
+ */
+export function canSectorHoldDungeon(dungeonName: string, sector: string): boolean {
+  return Boolean(getDungeonDoorOnSector(dungeonName, sector));
 }
 
 /** Removes the connection that puts this dungeon where it is, if there is one. */

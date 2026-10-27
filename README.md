@@ -215,7 +215,9 @@ The narrow column beside the map:
   - Drag one onto the map to record a hint.
   - The tooltip says whether the shard has been hinted.
 - **Dungeon entrances** (dungeon entrance randomizer): drag a dungeon's button onto the sector
-  its entrance is on, or click the button and then the sector. Right-click a button to clear it.
+  its entrance is on, or click the button and then the sector. While you place one, sectors
+  where the seed's settings can't put that dungeon are shaded and won't take it. Placing a
+  dungeon somewhere new moves it. Right-click a button to clear it.
 
 ### Dungeons and other areas
 
