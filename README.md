@@ -1,6 +1,6 @@
 # JawryTracker
 
-A Wind Waker Randomizer tracker with an expanded featureset.
+A Wind Waker HD Randomizer tracker with an expanded featureset.
 
 JawryTracker is a desktop tracker for the
 [Wind Waker HD Randomizer](https://github.com/SuperDude88/TWWHD-Randomizer). Alongside the
