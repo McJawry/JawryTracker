@@ -1,6 +1,6 @@
 {
   "name": "ww-rando-hint-tracker",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Wind Waker HD Randomizer Hint Tracker",
   "type": "module",
   "scripts": {

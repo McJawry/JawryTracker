@@ -48,7 +48,6 @@
     <TrackerAreaCell
       areaName={sector}
       targetKind="sector"
-      acceptsEntranceDrop
       entranceBadges={entrancesFor(sector)}
       onEntranceBadgeClear={clearDungeonAssignment}
     />

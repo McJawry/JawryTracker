@@ -176,7 +176,23 @@ async function syncFromFolder(folder: string): Promise<RandoSyncResult> {
   ]);
 
   applySphereLogic(configText, locations, macros, locationData, entrances);
+  return { ok: true, message: `Synced - ${finishConfigSync(configText).join(", ")}.` };
+}
 
+/**
+ * Takes a seed's config from somewhere other than the randomizer folder - a
+ * spoiler log's settings. The logic YAMLs still come from the folder when one
+ * is set, since those track the randomizer build rather than the seed.
+ */
+export async function applySeedConfigText(configText: string): Promise<void> {
+  // restoreRandoSync reads the config from settings.
+  settings.randoConfigText = configText;
+  await restoreRandoSync();
+  finishConfigSync(configText);
+}
+
+/** The rest of a sync, once the logic has the new config. */
+function finishConfigSync(configText: string): string[] {
   // Ported from the rest of applyRandoConfig() (dev/app/app.js:5681-5708) -
   // settings fields that live outside the sphere-logic pipeline.
   const hoHoHints = getYamlBoolean(configText, "ho_ho_triforce_hints") || getYamlBoolean(configText, "ho_ho_hints");
@@ -218,6 +234,5 @@ async function syncFromFolder(folder: string): Promise<RandoSyncResult> {
   // grid cells dark with no explanation.
   const unmatched = getUnmatchedStartingGear(data.sphereConfiguredStartingGear);
   if (unmatched.length) parts.push(`unrecognised: ${unmatched.join(", ")}`);
-
-  return { ok: true, message: `Synced - ${parts.join(", ")}.` };
+  return parts;
 }

@@ -12,3 +12,9 @@
     <img src={ui.itemDrag.image ?? itemImage(ui.itemDrag.itemName)} alt="" />
   </div>
 {/if}
+<!-- A dragged dungeon button has no icon, so it carries its own label. -->
+{#if ui.dungeonDrag}
+  <div class="manual-drag-ghost" style="left: {ui.dungeonDrag.x}px; top: {ui.dungeonDrag.y}px" aria-hidden="true">
+    <span class="dungeon-drag-label">{ui.dungeonDrag.label}</span>
+  </div>
+{/if}

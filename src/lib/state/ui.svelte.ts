@@ -16,6 +16,14 @@ export interface LocationDropListState {
   y: number;
 }
 
+export interface DungeonDragState {
+  dungeonName: string;
+  /** What the button says - "DRC" - which the drag ghost shows. */
+  label: string;
+  x: number;
+  y: number;
+}
+
 export interface ItemDragState {
   itemName: string;
   /**
@@ -65,6 +73,8 @@ export const ui: {
    * right-click-to-open-the-location-list is central to this flow.
    */
   itemDrag: ItemDragState | null;
+  /** A dungeon button being dragged onto its sector (components/map/dungeon-drag.ts). */
+  dungeonDrag: DungeonDragState | null;
   /**
    * Hovered location's requirement tooltip. Lives in global state because it
    * has to render at the app root: both it and the drag ghost are
@@ -105,6 +115,7 @@ export const ui: {
   pendingLocationForItemAssignment: readPendingLocation(),
   pendingEntranceAssignment: null,
   itemDrag: null,
+  dungeonDrag: null,
   requirementTooltip: null,
   markStartingMode: readMarkStartingMode(),
   highlightSectorMode: false,
@@ -162,6 +173,26 @@ export function moveItemDrag(x: number, y: number): void {
 
 export function endItemDrag(): void {
   ui.itemDrag = null;
+}
+
+export function startDungeonDrag(dungeonName: string, label: string, x: number, y: number): void {
+  ui.dungeonDrag = { dungeonName, label, x, y };
+}
+
+export function moveDungeonDrag(x: number, y: number): void {
+  if (ui.dungeonDrag) ui.dungeonDrag = { ...ui.dungeonDrag, x, y };
+}
+
+export function endDungeonDrag(): void {
+  ui.dungeonDrag = null;
+}
+
+/**
+ * The dungeon being placed on the map, by drag or by click-then-sector: what
+ * the sectors it cannot be on are shaded against.
+ */
+export function getDungeonBeingPlaced(): string {
+  return ui.dungeonDrag?.dungeonName ?? ui.pendingEntranceAssignment ?? "";
 }
 
 // Click-to-place stand-in for the original's drag-a-dungeon-onto-a-sector

@@ -265,6 +265,7 @@ const SHUFFLE_OPTION_KEYS = [
 interface LiveGraph {
   inbound: Map<string, string[]>;
   regions: Map<string, string[]>;
+  islands: Map<string, string[]>;
   /** Edge "from -> into" mapped to the entrance you walk through to use it,
    *  for edges that exist because you discovered them. */
   via: Map<string, string>;
@@ -286,7 +287,7 @@ function getLiveInboundAreas(world: SphereWorld): LiveGraph {
     return liveInboundCache.value;
   }
   const built = buildLiveInboundAreas(world);
-  const value: LiveGraph = { inbound: built.inbound, via: built.via, regions: new Map() };
+  const value: LiveGraph = { inbound: built.inbound, via: built.via, regions: new Map(), islands: new Map() };
   liveInboundCache = { world, signature, value };
   return value;
 }
@@ -419,6 +420,50 @@ export function findEntranceRegions(areaName: string): string[] {
   const result = outside.length ? outside : found;
   graph.regions.set(normalize(areaName), result);
   return result;
+}
+
+/**
+ * The islands an area is entered from, as upstream's Area::findIslands has it:
+ * walk back through whatever leads in until an island turns up, going through
+ * dungeons rather than stopping at them. A room deep in Dragon Roost Cavern
+ * answers with the island its front door stands on - which is where the
+ * randomizer files a dungeon when it decides whether an island is foolish, and
+ * where it puts a required boss's marker on the sea chart.
+ *
+ * Any other named region ends the walk without adding anything, except Hyrule,
+ * which upstream counts as part of the Tower of the Gods Sector. Only known
+ * doors are walked, so a dungeon behind an unrecorded one answers nothing.
+ */
+export function findEntranceIslands(areaName: string): string[] {
+  const world = data.sphereWorld;
+  if (!world?.areas || !areaName) return [];
+  const graph = getLiveInboundAreas(world);
+  const cached = graph.islands.get(normalize(areaName));
+  if (cached) return cached;
+
+  const islands: string[] = [];
+  const add = (island: string) => {
+    if (!islands.some((known) => normalize(known) === normalize(island))) islands.push(island);
+  };
+  const visited = new Set<string>([normalize(areaName)]);
+  const pending = [areaName];
+  while (pending.length) {
+    const current = pending.shift()!;
+    const area = world.areas[normalize(current)];
+    if (area?.hintRegion === "Hyrule") add("Tower of the Gods Sector");
+    if (area?.hintRegion) continue;
+    if (area?.island) {
+      add(area.island);
+      continue;
+    }
+    (graph.inbound.get(normalize(current)) ?? []).forEach((from) => {
+      if (visited.has(normalize(from))) return;
+      visited.add(normalize(from));
+      pending.push(from);
+    });
+  }
+  graph.islands.set(normalize(areaName), islands);
+  return islands;
 }
 
 /** Shuffled entrances grouped under the area heading they belong to. */
@@ -936,21 +981,43 @@ function getDungeonDoorEntranceOnSector(sector: string): TrackerEntrance | null 
  * dungeon-only note.
  */
 export function recordDungeonEntranceOnSector(dungeonName: string, sector: string): boolean {
-  const world = data.sphereWorld;
-  const source = getDungeonDoorEntranceOnSector(sector);
-  if (!world?.areas || !source) return false;
-
-  const wanted = normalize(dungeonName);
-  const target = getTargetEntrances(source).find(
-    (candidate) => normalize(world.areas[normalize(candidate.connected)]?.dungeon ?? "") === wanted
-  );
-  if (!target) return false;
+  const door = getDungeonDoorOnSector(dungeonName, sector);
+  if (!door) return false;
 
   // Replaces whatever that dungeon was last said to be behind, so moving it
   // does not leave the old door still claiming it.
   clearDungeonEntrance(dungeonName);
-  connectEntrance(source, target);
+  connectEntrance(door.source, door.target);
   return true;
+}
+
+/**
+ * The door on a sector, and the entrance into a dungeon it could open into -
+ * by the seed's settings alone. Not getTargetEntrances: that leaves out what
+ * another door already claims, and a dungeon already recorded somewhere is
+ * claimed by its own old door, so moving it found nothing to connect.
+ */
+function getDungeonDoorOnSector(dungeonName: string, sector: string): { source: TrackerEntrance; target: TrackerEntrance } | null {
+  const world = data.sphereWorld;
+  const source = getDungeonDoorEntranceOnSector(sector);
+  if (!world?.areas || !source) return null;
+  const wanted = normalize(dungeonName);
+  const target = getShuffledEntrances().find(
+    (candidate) =>
+      !candidate.isReverse &&
+      candidate.poolType === source.poolType &&
+      normalize(world.areas[normalize(candidate.connected)]?.dungeon ?? "") === wanted
+  );
+  return target ? { source, target } : null;
+}
+
+/**
+ * Whether the seed's settings let a dungeon's entrance be on this sector: it
+ * has a dungeon door whose pool the dungeon is in. What placing a dungeon
+ * shades the rest of the map by.
+ */
+export function canSectorHoldDungeon(dungeonName: string, sector: string): boolean {
+  return Boolean(getDungeonDoorOnSector(dungeonName, sector));
 }
 
 /** Removes the connection that puts this dungeon where it is, if there is one. */

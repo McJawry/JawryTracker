@@ -18,3 +18,11 @@ export function setChecked(key: string, value: boolean): void {
   checked[key] = value;
   saveChecked();
 }
+
+/** Several at once, written out once - every write is a storage event in each
+ *  other window. */
+export function setCheckedMany(keys: string[], value: boolean): void {
+  if (!keys.length) return;
+  keys.forEach((key) => (checked[key] = value));
+  saveChecked();
+}

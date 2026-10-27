@@ -123,7 +123,6 @@ export interface Settings {
   parsedHintsFilters: boolean;
   automaticMode: boolean;
   automaticLastLocation: boolean;
-  chromeHidden: boolean;
   mapSize: number | null;
   mapIconSize: number;
   hintPanelWidth: number;
@@ -162,6 +161,8 @@ export interface Settings {
   sphereFilters: SphereFilters;
   /** Sphere board: the boss icons path hints put on locations. */
   showPathIcons: boolean;
+  /** Sphere board: the locations each sphere opens up, beside its items. */
+  showSphereLocations: boolean;
   /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
@@ -217,7 +218,6 @@ export const DEFAULT_SETTINGS: Settings = {
   parsedHintsFilters: true,
   automaticMode: false,
   automaticLastLocation: false,
-  chromeHidden: false,
   mapSize: null,
   mapIconSize: 100,
   hintPanelWidth: 360,
@@ -237,5 +237,6 @@ export const DEFAULT_SETTINGS: Settings = {
   sphereBoardZoom: 100,
   sphereFilters: { ...DEFAULT_SPHERE_FILTERS },
   showPathIcons: true,
+  showSphereLocations: true,
   popoutZoom: {}
 };

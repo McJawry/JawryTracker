@@ -46,7 +46,6 @@
   --map-side-tab-width: 46px;
   --hint-panel-width: 360px;
   --hint-arrow-position: 50%;
-  --hidden-chrome-map-size: clamp(360px, calc(100vh - 285px), 620px);
   --shadow: 0 12px 30px rgba(27, 35, 40, 0.12);
 }
 
@@ -82,10 +81,6 @@ body.popout-window {
   overflow-x: hidden;
 }
 
-body.chrome-hidden {
-  --auto-map-size: var(--hidden-chrome-map-size);
-}
-
 button,
 textarea {
   font: inherit;
@@ -105,10 +100,6 @@ textarea {
   min-height: 100vh;
   padding: 12px;
   overflow-x: auto;
-}
-
-body.chrome-hidden .section-control-panel {
-  display: none;
 }
 
 .top-bar {
@@ -207,15 +198,6 @@ h2 {
   color: var(--accent-dark);
 }
 
-.show-chrome-button {
-  display: none;
-  justify-self: start;
-}
-
-body.chrome-hidden .show-chrome-button {
-  display: inline-flex;
-}
-
 /* Fixed single-column layout. This used to be
    `grid-template-columns: repeat(auto-fit, minmax(128px, max-content))`, which
    re-flowed the controls into a different number of columns every time the
@@ -283,13 +265,12 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   font-size: 0.78rem;
 }
 
+/* Wraps rather than cutting off: a loaded spoiler log reports what landed in
+   one long line, and the end of it was hidden behind an ellipsis. */
 .setting-status {
-  max-width: 130px;
-  overflow: hidden;
   color: var(--muted);
   font-size: 0.74rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .automatic-mode-prompt {
@@ -1105,6 +1086,19 @@ body.never-hide-stream-backdrop .stream-backdrop-setting {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+/* A dragged dungeon button, drawn like the badge it leaves on its sector. */
+.dungeon-drag-label {
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 3px;
+  background: rgba(22, 41, 49, 0.9);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 .map-side-tab {
   display: grid;
@@ -2287,7 +2281,11 @@ body.stream-mode .empty-state {
 .sphere-board[hidden],
 .sphere-canvas[hidden],
 .sea-grid[hidden],
-.sphere-filtered-cards {
+.sphere-filtered-cards,
+.sphere-column[hidden],
+.sphere-available-heading[hidden],
+.sphere-area-groups[hidden],
+.sphere-groups-toggle[hidden] {
   display: none;
 }
 
@@ -3013,6 +3011,25 @@ body.stream-mode .empty-state {
   background-size: cover;
   background-position: center;
   cursor: pointer;
+}
+
+/* Marking required-boss sectors, or placing a dungeon: a sector the seed's
+   settings can never put it on is shaded and refuses it, which leaves the
+   candidates standing out. Its own stacking context, so the shade covers the
+   entrance badges inside the cell but stays under the prompt floating over
+   the map. */
+.tracker-area-cell.sector-blocked {
+  isolation: isolate;
+  cursor: not-allowed;
+}
+
+.tracker-area-cell.sector-blocked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgba(8, 14, 20, 0.6);
+  pointer-events: none;
 }
 
 .tracker-area-cell.drag-target {
@@ -4608,10 +4625,11 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: #d01414;
 }
 
-/* The Sync button's warning: config.yaml has moved on since the last sync.
-   Sits inside the button so the row keeps its width - the message itself is
-   the button's tooltip. */
-.map-toolbar-button .sync-warning {
+/* The config warning: config.yaml has moved on since the last sync. Worn by
+   the Sync button and by the tracker settings button it sits behind - inside
+   the button, with the message itself in the button's tooltip. */
+.tool-button .sync-warning,
+.tracker-settings-label .sync-warning {
   margin-left: 4px;
   font-size: 0.9em;
   line-height: 1;
@@ -4738,8 +4756,9 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: var(--muted);
 }
 
-.tracker-settings-row .tool-button {
-  align-self: flex-start;
+.tracker-settings-buttons {
+  display: flex;
+  gap: 6px;
 }
 
 .tracker-settings-slider {

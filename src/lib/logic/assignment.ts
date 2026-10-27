@@ -169,6 +169,33 @@ export function answerArmedLocation(itemName: string, location: string, acquire:
 }
 
 /**
+ * A find read from somewhere rather than clicked in - a spoiler log's
+ * playthrough. Recorded the way answerArmedLocation records a new find, with
+ * the counting each tracker's click would have done: the shard column for a
+ * shard, the dungeon row for a key, map or compass. Returns false, recording
+ * nothing, for an item the seed never hides anywhere.
+ */
+export function recordFoundItem(itemName: string, location: string): boolean {
+  if (!assignPaletteEntryToLocation(itemName, location)) return false;
+  const shard = getTriforceShardNumber(itemName);
+  if (shard) {
+    setShardTrackingChecked(shard, true);
+    return true;
+  }
+  const dungeonItem = /^(.+) (Small Key|Big Key|Boss Key|Dungeon Map|Compass)$/.exec(itemName);
+  if (dungeonItem) {
+    const [, dungeon, kind] = dungeonItem;
+    if (kind === "Small Key") {
+      cycleSmallKeys(dungeon, 1);
+      return true;
+    }
+    const flag = kind === "Dungeon Map" ? "map" : kind === "Compass" ? "compass" : "bigKey";
+    if (!getDungeonItems(dungeon)[flag]) toggleDungeonFlag(dungeon, flag);
+  }
+  return true;
+}
+
+/**
  * The answer to "replace which one?" with a placed copy: that copy was found
  * here instead, so its old location is unchecked along with losing the card -
  * the find recorded there is the one being corrected.

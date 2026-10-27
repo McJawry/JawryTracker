@@ -106,6 +106,26 @@
     ["Mailbox - Letter from Tingle", "Forsaken Fortress - Helmaroc King Heart Container"]
   ].map(([mailLocation, bossLocation]) => [normalize(mailLocation), normalize(bossLocation)]));
 
+  // The randomizer's playthrough counts a required boss's "Defeated" event as
+  // found in the sphere its arena is reached and held from the next, like an
+  // item (World::isSphereEvent, Search.cpp) - which is what puts Ganondorf a
+  // sphere after the last required boss rather than in the same one. Every
+  // other event still counts the moment it is reachable.
+  const SPHERE_EVENT_BOSSES = ["Gohma", "Kalle Demos", "Gohdan", "Helmaroc King", "Jalhalla", "Molgera"];
+  // Where calculateCore keeps the ones it has handed over, in the inventory so
+  // the reachability cache tells the before and after apart.
+  const SPHERE_EVENT_PREFIX = "@event ";
+
+  function getSphereEvents(options) {
+    return new Set(SPHERE_EVENT_BOSSES
+      .filter((boss) => Boolean(getOptionValue(options || {}, `${boss} Required`).value))
+      .map((boss) => normalize(`${boss} Defeated`)));
+  }
+
+  function withoutSphereEvents(inventory) {
+    return Object.fromEntries(Object.entries(inventory).filter(([key]) => !key.startsWith(SPHERE_EVENT_PREFIX)));
+  }
+
   function stripComment(line) {
     let quoted = false;
     let result = "";
@@ -971,6 +991,15 @@
     const events = seed?.events
       ? new Set(seed.events)
       : new Set((contextBase.additionalEvents || []).map(normalize));
+    // A required boss's "Defeated" event counts from the sphere after its
+    // arena is reached, like an item found there (see calculateCore). Until
+    // then it is only noted as reached; once the calculation hands it over it
+    // sits in the inventory under SPHERE_EVENT_PREFIX.
+    const sphereEvents = contextBase.sphereEvents;
+    const reachedSphereEvents = new Set(seed?.reachedSphereEvents || []);
+    sphereEvents?.forEach((eventKey) => {
+      if (contextBase.inventory?.[SPHERE_EVENT_PREFIX + eventKey]) events.add(eventKey);
+    });
     const entranceState = buildEntranceConnections({ ...contextBase, world });
     const context = { ...contextBase, world, accessibleAreas, events, entranceState };
     let eventChanged = true;
@@ -1012,8 +1041,13 @@
 
         members.events.forEach((event) => {
           const eventKey = normalize(event.name);
-          if (events.has(eventKey)) return;
+          if (events.has(eventKey) || reachedSphereEvents.has(eventKey)) return;
           if (evaluateExpression(event.need, context)) {
+            // Held back, it changes nothing else this time round.
+            if (sphereEvents?.has(eventKey)) {
+              reachedSphereEvents.add(eventKey);
+              return;
+            }
             events.add(eventKey);
             eventChanged = true;
           } else {
@@ -1042,7 +1076,7 @@
       }
     }
 
-    return { accessibleAreas, events };
+    return { accessibleAreas, events, reachedSphereEvents };
   }
 
   // A canonical string key for an inventory snapshot - used to memoize reachability.
@@ -1076,6 +1110,7 @@
         if (out) {
           out.accessibleAreas = cached.accessibleAreas;
           out.events = cached.events;
+          out.reachedSphereEvents = cached.reachedSphereEvents;
         }
         return cached.locationSet;
       }
@@ -1085,6 +1120,7 @@
     if (out) {
       out.accessibleAreas = reachability.accessibleAreas;
       out.events = reachability.events;
+      out.reachedSphereEvents = reachability.reachedSphereEvents;
     }
     const context = { ...contextBase, ...reachability, world, rules };
     const locationSet = new Set((locations || []).filter((location) => {
@@ -1100,6 +1136,7 @@
       reachabilityCache.set(getInventoryCacheKey(contextBase.inventory), {
         accessibleAreas: reachability.accessibleAreas,
         events: reachability.events,
+        reachedSphereEvents: reachability.reachedSphereEvents,
         locationSet
       });
     }
@@ -1198,9 +1235,43 @@
     return reachable;
   }
 
-  function calculateCore({ locations, rules, macros, world, placements, startingGear, options, entranceMappings, entranceConnections, chartMappings, includeDependencies = true, referencedItemKeys, startingIsland, additionalStartAreas, additionalEvents, reachabilityCache }) {
+  function calculateCore({ locations, rules, macros, world, placements, startingGear, heldDungeonKeys, options, entranceMappings, entranceConnections, chartMappings, includeDependencies = true, referencedItemKeys, startingIsland, additionalStartAreas, additionalEvents, reachabilityCache }) {
     const inventory = {};
     (startingGear || []).forEach((item) => addInventoryItem(inventory, item, ""));
+    // Own-dungeon keys held with nothing saying where they were found. Counted
+    // from the start, they opened the rooms behind their doors spheres before
+    // the key could have been had - a run's whole Earth Temple landed in the
+    // sphere it was entered. Instead one joins once every chest that could have
+    // held it has been reached, the map's "guaranteed key" rule.
+    const pendingKeys = (heldDungeonKeys || []).map((pool) => ({ ...pool, remaining: pool.count }));
+    const grantGuaranteedKeys = (reachable) => {
+      let granted = false;
+      pendingKeys.forEach((pool) => {
+        while (pool.remaining > 0) {
+          const candidates = pool.itemPools?.[inventory[canonicalInventoryName(pool.item)] || 0] || [];
+          if (!candidates.length || !candidates.every((location) => reachable.has(normalize(location)))) break;
+          addInventoryItem(inventory, pool.item, "");
+          pool.remaining -= 1;
+          granted = true;
+        }
+      });
+      return granted;
+    };
+    // Nothing more to reach and keys still owed: a key in hand came from
+    // somewhere already reached, so it is had by now. One per dungeon, small
+    // keys first - the big key may still be behind their doors.
+    const grantStalledKeys = () => {
+      const dungeons = new Set();
+      let granted = false;
+      [...pendingKeys].sort((first, second) => Number(first.bigKey) - Number(second.bigKey)).forEach((pool) => {
+        if (!pool.remaining || dungeons.has(pool.dungeon)) return;
+        dungeons.add(pool.dungeon);
+        addInventoryItem(inventory, pool.item, "");
+        pool.remaining -= 1;
+        granted = true;
+      });
+      return granted;
+    };
     const placementByLocation = new Map((placements || []).map((placement) => [normalize(placement.location), placement]));
     const locationSpheres = {};
     const placementSpheres = {};
@@ -1225,7 +1296,18 @@
       // no sphere would own - they read "?" against a perfectly blue location.
       additionalStartAreas,
       additionalEvents,
+      sphereEvents: getSphereEvents(options),
       world
+    };
+    // A required boss beaten this sphere counts from the next one.
+    const takeReachedSphereEvents = (reachabilityOut) => {
+      let taken = false;
+      (reachabilityOut.reachedSphereEvents || []).forEach((eventKey) => {
+        if (inventory[SPHERE_EVENT_PREFIX + eventKey]) return;
+        inventory[SPHERE_EVENT_PREFIX + eventKey] = 1;
+        taken = true;
+      });
+      return taken;
     };
 
     let previousReachability = null;
@@ -1234,6 +1316,7 @@
       const reachabilityOut = {};
       const reachable = getReachableLocationSet(reachabilityLocations, rules, world, { ...contextBase, inventory }, previousReachability, reachabilityOut, reachabilityCache);
       previousReachability = reachabilityOut;
+      const eventsTaken = takeReachedSphereEvents(reachabilityOut);
       DELAYED_BOSS_MAIL_PREREQUISITES.forEach((bossLocationKey) => {
         if (!bossAvailabilitySpheres.has(bossLocationKey) && reachable.has(bossLocationKey)) {
           bossAvailabilitySpheres.set(bossLocationKey, sphere);
@@ -1255,7 +1338,12 @@
       });
 
       if (!newlyAccessible.length) {
-        if (hasPendingBossMail) continue;
+        if (hasPendingBossMail || eventsTaken) continue;
+        // Had by the end of the previous sphere, so this one runs again with it.
+        if (grantStalledKeys()) {
+          sphere -= 1;
+          continue;
+        }
         break;
       }
 
@@ -1264,11 +1352,12 @@
         locationSpheres[normalize(location)] = sphere;
       });
       const foundPlacements = newlyAccessible.map((location) => placementByLocation.get(normalize(location))).filter(Boolean);
-      if (!foundPlacements.length && !hasPendingBossMail) break;
       foundPlacements.forEach((placement) => {
         placementSpheres[placement.id] = sphere;
         addInventoryItem(inventory, placement.item, placement.location);
       });
+      const keysGranted = grantGuaranteedKeys(reachable);
+      if (!foundPlacements.length && !keysGranted && !eventsTaken && !hasPendingBossMail && !grantStalledKeys()) break;
     }
 
     const dependencies = {};
@@ -1287,8 +1376,13 @@
       locationsBySphere.get(sphere).push(locationKey);
     });
 
+    // "Does this location need that item" has no sphere in it, so the boss
+    // events are worked out afresh here rather than taken as held: held, a
+    // Ganondorf asked without the Earth Temple's big key still had Jalhalla
+    // beaten and never named the key.
+    const dependencyContext = { ...contextBase, sphereEvents: undefined };
     locationsBySphere.forEach((locationKeys, sphere) => {
-      const inventoryForSphere = inventoryBeforeSphere[sphere] || {};
+      const inventoryForSphere = withoutSphereEvents(inventoryBeforeSphere[sphere] || {});
       const candidateGroups = new Map();
       (placements || []).forEach((placement) => {
         if (placementSpheres[placement.id] === undefined || placementSpheres[placement.id] >= sphere) return;
@@ -1303,7 +1397,7 @@
         if (referencedItemKeys && !/(?:small|big|boss) key$/.test(itemKey) && !referencedItemKeys.has(itemKey)) return;
         const representative = candidatePlacements[0];
         const reducedInventory = removeInventoryItem(inventoryForSphere, representative.item, representative.location);
-        const reachable = getReachableLocationSet(locations, rules, world, { ...contextBase, inventory: reducedInventory });
+        const reachable = getReachableLocationSet(locations, rules, world, { ...dependencyContext, inventory: reducedInventory });
         // Spare copies: a run holding three Bows where two are wanted misses
         // none of them one at a time, so nothing came out as depending on a Bow
         // at all - not even the two that are carrying the requirement between
@@ -1316,7 +1410,7 @@
           candidatePlacements.forEach(() => {
             stripped = removeInventoryItem(stripped, representative.item, representative.location);
           });
-          withoutTheGroup = getReachableLocationSet(locations, rules, world, { ...contextBase, inventory: stripped });
+          withoutTheGroup = getReachableLocationSet(locations, rules, world, { ...dependencyContext, inventory: stripped });
         }
         locationKeys.forEach((locationKey) => {
           if (reachable.has(locationKey) && (!withoutTheGroup || withoutTheGroup.has(locationKey))) return;

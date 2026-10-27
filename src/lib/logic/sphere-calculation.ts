@@ -4,7 +4,7 @@
 // getSphereReachabilityWithOwnDungeonKeys, isLogicRequiredItemForLocation,
 // getSphereCalculationInput, getSphereLogicStartingGear,
 // calculateSphereProgression, getSphereBlueChuJellyCount).
-import { WWRSphereEngine, type SphereCalculationInput, type SphereCalculationResult } from "$lib/logic";
+import { WWRSphereEngine, type HeldDungeonKeyPool, type SphereCalculationInput, type SphereCalculationResult } from "$lib/logic";
 import { DUNGEON_ENTRANCE_TRACKERS, DUNGEON_KEY_LOGIC, MAX_LOGIC_ITEM_COPIES, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
 import { getAreaFromLocation } from "$lib/logic/data-loading";
 import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
@@ -148,7 +148,8 @@ function nameGenericCopies(items: string[]): string[] {
  * An item held with no location recorded whose sphere is still known: a
  * Triforce shard, whose record *is* the shard column - it never gets a location
  * by design - and a dungeon key kept to its own dungeon, which the key logic
- * accounts for from the dungeon rather than from where it was found.
+ * accounts for from the dungeon rather than from where it was found (see
+ * getHeldDungeonKeyPools).
  */
 function hasKnownSourceWithoutLocation(entry: UnplacedItem): boolean {
   return isTriforceShardItem(entry.item) || isOwnDungeonKeyForPath(entry.logicItem ?? entry.item);
@@ -334,8 +335,20 @@ export function isBossRequired(bossName: string): boolean {
  * savewarp destinations needs that input itself.
  */
 export function getSphereProgressionInput(placements: SpherePlacement[]): SphereCalculationInput {
+  const input = getSphereCalculationInput(placements);
+  const heldKeys = getUnplacedAcquiredItems()
+    .map((entry) => entry.logicItem ?? entry.item)
+    .filter(isOwnDungeonKeyForPath);
+  // Out of the starting gear: they join the spheres from the dungeon instead.
+  const startingGear = [...(input.startingGear ?? [])];
+  heldKeys.forEach((item) => {
+    const index = startingGear.findIndex((gear) => getSphereInventoryItemKey(gear) === getSphereInventoryItemKey(item));
+    if (index >= 0) startingGear.splice(index, 1);
+  });
   return {
-    ...getSphereCalculationInput(placements),
+    ...input,
+    startingGear,
+    heldDungeonKeys: getHeldDungeonKeyPools(heldKeys, placements),
     // Out of the spheres, still in the question of which cards are Optional -
     // see calculate() in sphere-engine.js.
     heldWithoutSphere: namedItemInventory(placements).unknownSources.map((source) => source.item),
@@ -878,6 +891,44 @@ export function getOwnDungeonKeyPotentialPools(): Map<string, OwnDungeonKeyPool>
   return pools;
 }
 
+/**
+ * A door inside the dungeon that you have found but not written down could
+ * lead to another chest a key might be in, so no key is guaranteed while one is
+ * outstanding. Upstream's check, and a no-op until boss or miniboss entrances
+ * are shuffled - a dungeon's own front door belongs to the island it stands on,
+ * not to the dungeon.
+ */
+function hasUnrecordedDungeonDoor(dungeon: string): boolean {
+  return getEntrancesForArea(dungeon).some((entrance) => !getEntranceConnection(entrance) && isSphereAreaAccessible(entrance.parent));
+}
+
+/**
+ * Own-dungeon keys held with no location, in the shape calculate() takes them:
+ * how many of each, and the chests that could hold the next copy.
+ */
+function getHeldDungeonKeyPools(heldKeys: string[], placements: SpherePlacement[]): HeldDungeonKeyPool[] {
+  if (!heldKeys.length) return [];
+  const pools = getOwnDungeonKeyPotentialPools();
+  // A chest with something else written into it did not hold the key.
+  const recorded = new Set(placements.map((placement) => normalize(placement.location)));
+  const counts = new Map<string, { item: string; count: number }>();
+  heldKeys.forEach((item) => {
+    const itemKey = getSphereInventoryItemKey(item);
+    const entry = counts.get(itemKey) ?? { item, count: 0 };
+    entry.count += 1;
+    counts.set(itemKey, entry);
+  });
+  return [...counts].map(([itemKey, { item, count }]) => {
+    const pool = pools.get(itemKey);
+    // No pools at all leaves the key to be handed over once the run stalls.
+    const itemPools =
+      pool && !hasUnrecordedDungeonDoor(pool.dungeon)
+        ? pool.itemPools.map((locations) => locations.filter((location) => !recorded.has(normalize(location))))
+        : [];
+    return { item, count, dungeon: pool?.dungeon ?? item, bigKey: /big key$/.test(itemKey), itemPools };
+  });
+}
+
 const ownDungeonKeyReachabilityCache = new Map<string, Set<string>>();
 
 export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options: ReachabilityOptions = {}): Set<string> {
@@ -918,14 +969,7 @@ export function getSphereReachabilityWithOwnDungeonKeys(items: string[], options
     changed = false;
     keyPools.forEach(({ item, count, itemPools, dungeon }, itemKey) => {
       let ownedCount = effectiveItems.filter((candidate) => getSphereInventoryItemKey(candidate) === itemKey).length;
-      // A door inside the dungeon that you have found but not written down
-      // could lead to another chest the key might be in, so nothing is
-      // guaranteed while one is outstanding. Upstream's check, and a no-op
-      // until boss or miniboss entrances are shuffled - a dungeon's own front
-      // door belongs to the island it stands on, not to the dungeon.
-      const unrecordedDoor = getEntrancesForArea(dungeon).some(
-        (entrance) => !getEntranceConnection(entrance) && isSphereAreaAccessible(entrance.parent)
-      );
+      const unrecordedDoor = hasUnrecordedDungeonDoor(dungeon);
       while (!unrecordedDoor && ownedCount < count) {
         const potentialLocations = itemPools[ownedCount] || [];
         // Checked counts as reached: you have been there, whatever the logic
