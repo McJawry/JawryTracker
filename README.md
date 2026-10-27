@@ -24,7 +24,7 @@ what you have found, and shows where each boss path can still lead.
   - [Writing hints](#writing-hints)
   - [Sphere Tracking notes](#sphere-tracking-notes)
 - [Hint Panel](#hint-panel)
-- [Sphere Board](#sphere-board)
+- [Sphere Tracker](#sphere-tracker)
   - [Columns](#columns)
   - [Cards](#cards)
   - [Lines](#lines)
@@ -43,14 +43,11 @@ what you have found, and shows where each boss path can still lead.
 1. Download the latest release and put `JawryTracker.exe` in a folder of its own. The app
    keeps its data in a `data` folder beside the exe, so the whole folder can be moved or copied
    to another computer.
-2. Open the **Main Tracker** settings menu (⚙️ in the toolbar, which shows ⚠️ until a folder
-   is set), choose **Change folder** under *Randomizer app folder*, and pick the folder your
-   randomizer is in.
-3. Picking the folder syncs it: the tracker reads the seed's `config.yaml` (and the
-   randomizer's logic files when it finds them) to learn your starting gear, excluded
-   locations, required bosses and the seed's settings. If you generate a new seed later, ⚙️
-   and its **Sync** button show ⚠️ until you press **Sync**. Your current run never changes on
-   its own.
+2. Open the **Main Tracker** settings menu (⚙️ in the toolbar, which shows ⚠️ until a folder is
+   set), choose **Change folder** under *Randomizer app folder*, and pick the folder where the randomizer app is located.
+3. Picking the folder syncs it: the tracker reads the settings from `config.yaml` to learn your starting gear, excluded locations, required bosses and the seed's
+   settings. If you generate a new seed later, ⚙️ and its **Sync** button show ⚠️ until you
+   press **Sync**. Your current run never changes on its own.
 4. Press **Start New Tracker** in the Control Panel when you start a new seed. If the seed gives
    you random starting items, the tracker switches to *Mark starting* mode so you can click them
    in (see [Toolbar](#toolbar)).
@@ -59,7 +56,7 @@ what you have found, and shows where each boss path can still lead.
 
 ## Windows and layout
 
-The tracker is split into sections: **Control Panel**, **Main Tracker**, **Sphere Board**,
+The tracker is split into sections: **Control Panel**, **Main Tracker**, **Sphere Tracker**,
 **Notes** and **Hint Panel**.
 
 - **Control Panel** shows the version and holds **Start New Tracker** and **Settings**.
@@ -70,7 +67,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
   bar's ⬚ button pops the section out into its own window and × hides it.
 - Popped-out windows remember their size and position. With **Group popout windows** on
   (Settings → General), focusing any tracker window brings the others forward with it.
-- The sphere board and popped-out windows have their own scale sliders.
+- The sphere tracker and popped-out windows have their own scale sliders.
 
 ---
 
@@ -90,7 +87,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 
 **Tracker settings (⚙️)**
 
-- **Sphere calculation**: turns the sphere logic on or off. With it off, the Sphere Board shows
+- **Sphere calculation**: turns the sphere logic on or off. With it off, the Sphere Tracker shows
   a message instead.
 - **Right click clears dependent locations**: when you right-click an area to clear it, also
   clear the locations that can only be reached through it. This works like the randomizer
@@ -100,9 +97,9 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Display item on location list**: show the icon of the item recorded at each location in the
   location lists.
 - **Location tooltip size**: how large the requirement tooltip is drawn.
-- **Randomizer app folder** (⚠️ while none is set): **Change folder** picks the folder your
-  randomizer is in and syncs from it. **Sync** re-reads `config.yaml` from that folder, and the
-  result shows underneath.
+- **Randomizer app folder** (⚠️ while none is set): **Change folder** picks the folder the
+  randomizer app is in and syncs from it. **Sync** re-reads `config.yaml` from that folder, and
+  the result shows underneath.
 
 #### Clear dead
 
@@ -130,7 +127,7 @@ The inventory grid is where you track what you own.
 
 - **Left-click** an item to get it, or to advance it to its next stage (swords, bows, wallets
   and other progressive items).
-- **Right-click** to step it back or remove it. If you hold several copies and at least one of
+- **Right-click** to step it back or remove it. If you hold multiple of an upgradeable item and at least one of
   them is recorded at a location, a picker asks which copy you meant, so the right location is
   freed.
 - **Drag** an item onto a map cell to record a hint for it. This adds `Item at Area` to your
@@ -188,18 +185,18 @@ toggles it, and right-clicking it starts recording an item.
   entrance, then choose where it led. **×** forgets a recorded entrance, and **Filter** narrows
   long lists.
 - Ho Ho and Blue Chu markers for a sector are marked here, even on sectors with no locations.
-- **Escape** or your mouse's back button goes back a step, then closes the list.
+- Clicking **x Close**, pressing **Escape** on the keyboard or your mouse's back button goes back a step, then closes the list.
 
 ### Recording where an item was found
 
-Right-click a location to arm it, either in a location list or on the Sphere Board. Then click
+In a location list, right-click a location to arm it, then click
 what was there:
 
 - an item in the Item Tracker
 - a shard in the shard column
 - a dungeon key, map or compass
 - a chart in the chart menu
-- an acquired item on the Sphere Board that has no location yet
+- an acquired item on the Sphere Tracker that has no location yet
 
 The item is recorded at that location, counted as acquired, and the location is marked checked.
 If you already hold every copy of that item, the tracker asks which copy it was and moves it.
@@ -261,19 +258,18 @@ closest item, area, location or boss, so short forms work.
 | `hookshot at needle rock` | **Item hint**: the Hookshot is somewhere in an area. `in` and `on` work too. |
 | `bombs in windfall jail maze chest` | **Location hint**: when the text matches a single location, the hint points at that location. |
 | `sword r at headstone` | Item hint marked **required**. Add `r`, `p` or `n` after the item for *required*, *possibly required* or *not required*. |
-| `outset is foolish` | **Foolish area** (`barren` works too). |
 | `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. |
 
 Common abbreviations work for areas, for example **FF**, **DRI**, **DRC**, **FW**, **FH**,
 **GT**, **NFI** and **SFI**, and for bosses, for example **KD**. A line the tracker can't read
 confidently shows up under **Review** in the Hint Panel.
 
-Right-clicking a hint card in the Hint Panel, or a hint card on the Sphere Board, deletes its
+Right-clicking a hint card in the Hint Panel, or a hint card on the Sphere Tracker, deletes its
 line from the notes.
 
 ### Sphere Tracking notes
 
-Each line is `Item at Location`. The tab lists everything recorded on the map and the board, and
+Each line is `Item at Location`. The tab lists everything recorded on the map and the sphere tracker, and
 you can edit it as text to add, change or remove placements in bulk.
 
 ---
@@ -291,9 +287,9 @@ The Hint Panel shows your notes as cards: what was hinted on one side, where it 
 
 ---
 
-## Sphere Board
+## Sphere Tracker
 
-The Sphere Board lays out your recorded finds in **logical spheres**, the order the logic says
+The Sphere Tracker lays out your recorded finds in **logical spheres**, the order the logic says
 you could have collected them in. It shows what each item opened, and where each boss path can
 still go.
 
@@ -375,8 +371,9 @@ The **Filters** menu narrows the board to what matters:
 items and their lines. A sphere with nothing else in it is hidden too. The Filters work the same
 either way: an item whose branch still leads to unchecked locations stays visible under Paths.
 
-The **Scale** slider zooms the board, and the spinner beside the Filters button shows while the
-sphere calculation is running.
+The **Scale** slider zooms the board.
+
+A spinning circle is displayed in the corner when the sphere calculation is running.
 
 ---
 
@@ -389,7 +386,7 @@ Open **Settings** from the Control Panel.
   - Page background and panel colors, item icon size and hint arrow position.
   - **Stream mode** makes the Hint Panel see-through and paints a **stream backdrop** color
     behind the hint panel, item grid and dungeon row, ready for a chroma key.
-  - **Presets** has built-in color sets: *Light mode*, *Dark mode* and *McJawry's Favorite*.
+  - **Presets** has built-in color sets.
   - **Custom Color Presets** saves your own.
 - **Layout**:
   - Save and load window layouts, or **Reset layout to default**.
@@ -444,8 +441,8 @@ folder** (`Documents/JawryTracker`, shared by every copy of the app on the compu
 | Shard column | Mark found | Mark as starting gear | Onto the map: record a hint |
 | Dungeon key, map, compass | Add / cycle | Step back | Onto the map: record a hint |
 | Dungeon entrance button | Arm, then click a sector | Clear | Onto its sector |
-| Sphere Board placement card | | Remove placement, un-acquire | |
-| Sphere Board area group location | Arm for recording an item | | |
+| Sphere Tracker placement card | | Remove placement, un-acquire | |
+| Sphere Tracker area group location | Arm for recording an item | | |
 | Hint card / path card | Cycle requirement (on the tag) | Delete the hint line | |
 
 **Escape** or the mouse back button steps back out of a location list.
