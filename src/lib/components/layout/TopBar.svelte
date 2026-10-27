@@ -23,11 +23,6 @@
     });
   }
 
-  function hideChrome() {
-    settings.chromeHidden = true;
-    saveSettings();
-  }
-
   // Moved here from the (now removed) Summary panel section.
   function startNewTracker() {
     const shouldReset = confirm("Start a new tracker? This clears notes, checked locations, items, and sphere placements.");
@@ -98,20 +93,19 @@
 
 <header class="top-bar">
   <div class="top-bar-row">
-    <!-- Start New Tracker sits with the title rather than on the row below,
-         which leaves that row wide enough for every panel entry to fit on one
-         line instead of wrapping onto a second. -->
+    <!-- Start New Tracker and Settings sit with the title rather than on the
+         row below, which leaves that row wide enough for every panel entry to
+         fit on one line instead of wrapping onto a second. -->
     <div class="top-bar-identity">
       <div>
         <h1>JawryTracker</h1>
         <p>v{APP_VERSION}</p>
       </div>
       <button class="danger-button" type="button" onclick={startNewTracker}>Start New Tracker</button>
+      <button class="tool-button" type="button" onclick={openSettingsPopout}>Settings</button>
     </div>
     <div class="top-actions">
       <span>{ui.dataStatus}</span>
-      <button class="tool-button" type="button" onclick={openSettingsPopout}>Settings</button>
-      <button class="tool-button" type="button" onclick={hideChrome}>Hide title/settings</button>
     </div>
   </div>
 

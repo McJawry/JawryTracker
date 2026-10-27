@@ -43,13 +43,14 @@ what you have found, and shows where each boss path can still lead.
 1. Download the latest release and put `JawryTracker.exe` in a folder of its own. The app
    keeps its data in a `data` folder beside the exe, so the whole folder can be moved or copied
    to another computer.
-2. Open the **Main Tracker** settings menu (⚙️ in the toolbar, which shows ⚠️ until a folder is
-   set), choose **Change folder** under *Randomizer app folder*, and pick the folder your
+2. Open the **Main Tracker** settings menu (⚙️ in the toolbar, which shows ⚠️ until a folder
+   is set), choose **Change folder** under *Randomizer app folder*, and pick the folder your
    randomizer is in.
 3. Picking the folder syncs it: the tracker reads the seed's `config.yaml` (and the
-   randomizer's logic files when it finds them) to learn your starting gear, excluded locations, required bosses and the seed's
-   settings. If you generate a new seed later, ⚙️ and its **Sync** button show ⚠️ until you
-   press **Sync**. Your current run never changes on its own.
+   randomizer's logic files when it finds them) to learn your starting gear, excluded
+   locations, required bosses and the seed's settings. If you generate a new seed later, ⚙️
+   and its **Sync** button show ⚠️ until you press **Sync**. Your current run never changes on
+   its own.
 4. Press **Start New Tracker** in the Control Panel when you start a new seed. If the seed gives
    you random starting items, the tracker switches to *Mark starting* mode so you can click them
    in (see [Toolbar](#toolbar)).
@@ -61,8 +62,7 @@ what you have found, and shows where each boss path can still lead.
 The tracker is split into sections: **Control Panel**, **Main Tracker**, **Sphere Board**,
 **Notes** and **Hint Panel**.
 
-- **Control Panel** shows the version and holds **Start New Tracker**, **Settings** and **Hide
-  title/settings**. Hiding it leaves a **Show title/settings** button to bring it back.
+- **Control Panel** shows the version and holds **Start New Tracker** and **Settings**.
 - Under **Panels**, each section has two buttons. **Dock** shows it in the main window's
   layout, and **Undock** opens it in its own window. They are independent, so a section can be
   docked, undocked, both, or neither.
@@ -100,8 +100,9 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Display item on location list**: show the icon of the item recorded at each location in the
   location lists.
 - **Location tooltip size**: how large the requirement tooltip is drawn.
-- **Randomizer app folder**: **Change folder** picks the folder your randomizer is in and syncs
-  from it. **Sync** re-reads `config.yaml` from that folder, and the result shows underneath.
+- **Randomizer app folder** (⚠️ while none is set): **Change folder** picks the folder your
+  randomizer is in and syncs from it. **Sync** re-reads `config.yaml` from that folder, and the
+  result shows underneath.
 
 #### Clear dead
 
@@ -299,6 +300,11 @@ still go.
 - **Start**: your starting gear.
 - **Sphere 0, 1, 2 …**: each column holds the items found at locations reachable in that sphere,
   plus **Available** area groups listing the unchecked locations reachable there.
+  - A dungeon key counted on the dungeon row but not recorded at a chest still opens its doors.
+    It counts from the sphere where every chest that could have held it has been reached, which
+    can be later than the key really came. Record it at its chest for the exact sphere.
+  - A required boss counts as beaten from the sphere after its arena is reached, as in the
+    spoiler log. So nothing that needs it, like Ganondorf, can come earlier than that sphere.
 - **Sphere ?**: items with no known sphere. That includes items acquired without a location,
   hinted items and shards, and out-of-logic finds.
 - **After sphere ?**, **2 steps after ?** …: locations and items that open up once the unknowns

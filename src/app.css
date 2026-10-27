@@ -46,7 +46,6 @@
   --map-side-tab-width: 46px;
   --hint-panel-width: 360px;
   --hint-arrow-position: 50%;
-  --hidden-chrome-map-size: clamp(360px, calc(100vh - 285px), 620px);
   --shadow: 0 12px 30px rgba(27, 35, 40, 0.12);
 }
 
@@ -82,10 +81,6 @@ body.popout-window {
   overflow-x: hidden;
 }
 
-body.chrome-hidden {
-  --auto-map-size: var(--hidden-chrome-map-size);
-}
-
 button,
 textarea {
   font: inherit;
@@ -105,10 +100,6 @@ textarea {
   min-height: 100vh;
   padding: 12px;
   overflow-x: auto;
-}
-
-body.chrome-hidden .section-control-panel {
-  display: none;
 }
 
 .top-bar {
@@ -205,15 +196,6 @@ h2 {
 .danger-button:hover {
   border-color: var(--accent);
   color: var(--accent-dark);
-}
-
-.show-chrome-button {
-  display: none;
-  justify-self: start;
-}
-
-body.chrome-hidden .show-chrome-button {
-  display: inline-flex;
 }
 
 /* Fixed single-column layout. This used to be

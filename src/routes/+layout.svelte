@@ -206,7 +206,6 @@
     // popout (the Hint Panel's stream backdrop) without hitting them all.
     document.body.dataset.popout = page.url.searchParams.get("popout") ?? "";
     document.body.classList.toggle("stream-mode", settings.streamMode);
-    document.body.classList.toggle("chrome-hidden", settings.chromeHidden);
     document.body.classList.toggle("hide-parsed-filters", !settings.parsedHintsFilters);
   });
 

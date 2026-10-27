@@ -123,7 +123,6 @@ export interface Settings {
   parsedHintsFilters: boolean;
   automaticMode: boolean;
   automaticLastLocation: boolean;
-  chromeHidden: boolean;
   mapSize: number | null;
   mapIconSize: number;
   hintPanelWidth: number;
@@ -219,7 +218,6 @@ export const DEFAULT_SETTINGS: Settings = {
   parsedHintsFilters: true,
   automaticMode: false,
   automaticLastLocation: false,
-  chromeHidden: false,
   mapSize: null,
   mapIconSize: 100,
   hintPanelWidth: 360,

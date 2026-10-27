@@ -7,7 +7,6 @@
   // all of that behavior). This file just lays out the rows/columns.
   import DockableSection from "./DockableSection.svelte";
   import { layoutState } from "$lib/state/layout.svelte";
-  import { settings, saveSettings } from "$lib/state/settings.svelte";
 </script>
 
 <main class="app-shell">
@@ -25,13 +24,5 @@
       {/each}
     </div>
   {/each}
-
-  <button
-    class="tool-button show-chrome-button"
-    type="button"
-    onclick={() => { settings.chromeHidden = false; saveSettings(); }}
-  >
-    Show title/settings
-  </button>
 </main>
 
