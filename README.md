@@ -43,8 +43,9 @@ what you have found, and shows where each boss path can still lead.
 1. Download the latest release and put `JawryTracker.exe` in a folder of its own. The app
    keeps its data in a `data` folder beside the exe, so the whole folder can be moved or copied
    to another computer.
-2. Open the **Main Tracker** settings menu (⚙️ in the toolbar), choose **Change folder** under
-   *Randomizer folder*, and pick the folder your randomizer is in.
+2. Open the **Main Tracker** settings menu (⚙️ in the toolbar, which shows ⚠️ until a folder is
+   set), choose **Change folder** under *Randomizer app folder*, and pick the folder your
+   randomizer is in.
 3. Picking the folder syncs it: the tracker reads the seed's `config.yaml` (and the
    randomizer's logic files when it finds them) to learn your starting gear, excluded locations, required bosses and the seed's
    settings. If you generate a new seed later, ⚙️ and its **Sync** button show ⚠️ until you
@@ -81,7 +82,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 |---|---|
 | **↩︎** (red) | Undo the last action. Undo covers everything that changes the run: notes, checked locations, items, dungeon items, charts, placements, entrances and marked sectors, including actions taken in other windows. Typing in the notes undoes a line at a time. Settings, layout and menus aren't affected. The history lasts while the app is open. |
 | **↪︎** (green) | Redo the last undone action. |
-| **⚙️** | Tracker settings: see below. Shows ⚠️ when the randomizer's `config.yaml` has changed since the last sync. |
+| **⚙️** | Tracker settings: see below. Shows ⚠️ when no randomizer folder is set, or when the randomizer's `config.yaml` has changed since the last sync. |
 | **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
 | **Clear dead** | Checks off every location that can't hold anything the seed needs (see [Clear dead](#clear-dead) below). One undo puts them all back, and the tooltip lists what the last press cleared. |
 | Ho Ho / Blue Chu checkboxes | Show or hide the Old Man Ho Ho and Blue Chu Jelly markers on the map, when the seed tracks them. |
@@ -99,7 +100,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Display item on location list**: show the icon of the item recorded at each location in the
   location lists.
 - **Location tooltip size**: how large the requirement tooltip is drawn.
-- **Randomizer folder**: **Change folder** picks the folder your randomizer is in and syncs
+- **Randomizer app folder**: **Change folder** picks the folder your randomizer is in and syncs
   from it. **Sync** re-reads `config.yaml` from that folder, and the result shows underneath.
 
 #### Clear dead

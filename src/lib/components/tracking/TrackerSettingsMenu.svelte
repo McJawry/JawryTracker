@@ -39,6 +39,16 @@
     await refreshRandoConfigChanged();
   }
 
+  // Worn on the button, since what it is about sits inside the panel. No
+  // folder comes first: there is nothing to have synced from.
+  const warning = $derived(
+    !settings.randoFolderPath
+      ? "No randomizer folder set"
+      : randoConfig.changedSinceSync
+        ? "Randomizer config has changed since last sync!"
+        : ""
+  );
+
   function handleWindowPointerDown(event: PointerEvent): void {
     if (open && menuEl && !menuEl.contains(event.target as Node)) open = false;
   }
@@ -53,17 +63,16 @@
 
 <span class="tracker-settings-menu" bind:this={menuEl}>
   <!-- Icon rather than a label: the row had two pixels to spare, and the
-       marker group beside it already uses icon buttons. Wears the config
-       warning too, since the Sync button it belongs to is inside the panel. -->
+       marker group beside it already uses icon buttons. -->
   <button
     type="button"
     class="tool-button map-toolbar-button tracker-settings-button"
     aria-expanded={open}
     aria-label="Tracker settings"
-    title={randoConfig.changedSinceSync ? "Tracker settings\n⚠️ Randomizer config has changed since last sync!" : "Tracker settings"}
+    title={warning ? `Tracker settings\n⚠️ ${warning}` : "Tracker settings"}
     onclick={() => (open = !open)}
   >
-    &#x2699;&#xfe0f;{#if randoConfig.changedSinceSync}<span class="sync-warning" aria-label="Randomizer config has changed since last sync">&#x26a0;&#xfe0f;</span>{/if}
+    &#x2699;&#xfe0f;{#if warning}<span class="sync-warning" aria-label={warning}>&#x26a0;&#xfe0f;</span>{/if}
   </button>
   {#if open}
     <div class="tracker-settings-panel">
@@ -113,7 +122,9 @@
       </label>
 
       <div class="tracker-settings-row">
-        <span class="tracker-settings-label">Randomizer folder</span>
+        <span class="tracker-settings-label">
+          Randomizer app folder{#if !settings.randoFolderPath}<span class="sync-warning" title="No randomizer folder set" aria-label="No randomizer folder set">&#x26a0;&#xfe0f;</span>{/if}
+        </span>
         <span class="tracker-settings-path" title={settings.randoFolderPath || "No folder selected yet"}>
           {settings.randoFolderPath || "Not set"}
         </span>

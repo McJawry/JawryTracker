@@ -4633,7 +4633,8 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
 /* The config warning: config.yaml has moved on since the last sync. Worn by
    the Sync button and by the tracker settings button it sits behind - inside
    the button, with the message itself in the button's tooltip. */
-.tool-button .sync-warning {
+.tool-button .sync-warning,
+.tracker-settings-label .sync-warning {
   margin-left: 4px;
   font-size: 0.9em;
   line-height: 1;
