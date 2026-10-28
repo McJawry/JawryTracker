@@ -27,6 +27,7 @@
     "core:event:allow-listen",
     "dialog:allow-open",
     "dialog:allow-save",
+    "dialog:allow-message",
     {
       "identifier": "fs:allow-read-text-file",
       "allow": [

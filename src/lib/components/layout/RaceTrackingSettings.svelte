@@ -15,6 +15,7 @@
   import { loadReferenceData } from "$lib/logic/data-loading";
   import { checkRelayRoom, relayBase } from "$lib/tauri/relay-socket";
   import { applySeedConfigText } from "$lib/tauri/rando-sync";
+  import { confirmAction } from "$lib/tauri/confirm-dialog";
 
   const MAX_RUNNERS = 4;
 
@@ -35,13 +36,10 @@
         "or load the seed's spoiler log, then create the room.";
       return;
     }
-    if (
-      !confirm(
-        "Hosting replaces this tracker's run with the runners' combined runs as they come in. " +
-          "Save it under Load saves first if you want to keep it.\n\nCreate a race room?"
-      )
-    )
-      return;
+    const question =
+      "Hosting replaces this tracker's run with the runners' combined runs as they come in. " +
+      "Save it under Load saves first if you want to keep it.\n\nCreate a race room?";
+    if (!(await confirmAction(question))) return;
     busy = true;
     message = "Creating a room...";
     try {
@@ -87,7 +85,7 @@
     const question = differs
       ? `This tracker's seed settings don't match the host's. Joining syncs them to the host's, and then ${sent}\n\nSync and join the race?`
       : `This tracker's seed settings match the host's. From now on, ${sent}\n\nJoin the race?`;
-    if (!confirm(question)) {
+    if (!(await confirmAction(question))) {
       message = "";
       return;
     }
@@ -112,12 +110,12 @@
     message = "";
   }
 
-  function leaveRace() {
+  async function leaveRace() {
     const question =
       session?.role === "host"
         ? "End the race? This tracker keeps the combined run, and the stream displays go blank."
         : "Leave the race? This tracker stops sending to the host.";
-    if (confirm(question)) setRaceSession(null);
+    if (await confirmAction(question)) setRaceSession(null);
   }
 
   async function copy(text: string) {

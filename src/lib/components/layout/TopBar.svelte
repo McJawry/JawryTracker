@@ -5,6 +5,7 @@
   import { clearRun } from "$lib/state/new-run";
   import { data } from "$lib/state/data.svelte";
   import { openPopoutWindow } from "$lib/tauri/popout-window";
+  import { confirmAction } from "$lib/tauri/confirm-dialog";
   import { HIDEABLE_SECTIONS, SECTION_META } from "$lib/section-meta";
   import { markDocked, markUndocked, undockedState } from "$lib/state/undocked.svelte";
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -24,9 +25,8 @@
   }
 
   // Moved here from the (now removed) Summary panel section.
-  function startNewTracker() {
-    const shouldReset = confirm("Start a new tracker? This clears notes, checked locations, items, and sphere placements.");
-    if (!shouldReset) return;
+  async function startNewTracker() {
+    if (!(await confirmAction("Start a new tracker? This clears notes, checked locations, items, and sphere placements."))) return;
 
     clearRun();
     // A fresh run is exactly when the seed's random starting items get
