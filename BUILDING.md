@@ -15,6 +15,11 @@ Needed once per machine:
   (Rust needs the MSVC linker on Windows)
 - **WebView2 runtime** — preinstalled on Windows 11
 
+Keep the clone's folder path short - under about 140 characters, like
+`C:\dev\JawryTracker`. The Rust build adds more than 100 characters of its own
+folders below it, and Windows refuses paths over 260: a clone that's too deep
+fails its first build with `LNK1104: cannot open file`.
+
 Then install the JS dependencies:
 
 ```
@@ -39,9 +44,13 @@ everything from their own folder, so they work in any clone.
 
 | File | What it does |
 |---|---|
-| `Start JawryTracker Dev.bat` | Starts the dev server and opens the debug client against it. The first time, it runs `npm install` and builds the client, which takes several minutes. After that it only rebuilds the client when the Rust code has changed. |
+| `Start JawryTracker Dev.bat` | Starts the dev server and opens the debug client against it. The first time, it runs `npm install` and builds the client, which takes several minutes. After that it runs `npm install` again only when `package-lock.json` has changed, and rebuilds the client only when the Rust code has. |
 | `Stop JawryTracker Dev.bat` | Closes the debug client and stops the dev server. |
 | `Build JawryTracker Release.bat` | Makes a release build. See [Making a release build](#making-a-release-build). |
+
+After a `git pull` with the dev server running, changes under `src/` show up
+in the client by themselves. Anything else the pull changed - the Rust code,
+`tauri.conf.json`, the packages - needs Stop and Start.
 
 The debug client keeps its own `data` folder in `src-tauri/target/debug`, so
 a dev run never mixes with a release copy's.

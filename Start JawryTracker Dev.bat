@@ -8,6 +8,9 @@ rem
 rem Everything is found from this file's own folder, so it works in any
 rem clone. On a new machine it installs the JavaScript packages and builds
 rem the client the first time; see BUILDING.md for what to install first.
+rem After a pull it does the same for whatever the pull changed: the packages
+rem when package-lock.json differs from what was last installed, the client
+rem when the Rust code does.
 
 set "PROJECT=%~dp0"
 set "PROJECT=%PROJECT:~0,-1%"
@@ -28,18 +31,33 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if exist "node_modules\" goto installed
-echo Installing the JavaScript packages - first run only...
+rem The lock file as it was at the last install is kept beside the packages,
+rem so a pull that changes them is noticed even though node_modules exists.
+fc /b "package-lock.json" "node_modules\.installed-package-lock.json" >nul 2>&1
+if not errorlevel 1 goto installed
+rem The running dev server holds some package files open, so they can't be
+rem replaced under it.
+curl.exe -s -o nul -m 2 %SERVER_URL%
+if not errorlevel 1 (
+  echo The JavaScript packages need updating, but the dev server is running.
+  echo Run Stop JawryTracker Dev.bat, then start again.
+  pause
+  exit /b 1
+)
+echo Installing the JavaScript packages...
 call npm install
 if errorlevel 1 (
   echo npm install failed - see the messages above.
   pause
   exit /b 1
 )
+copy /y "package-lock.json" "node_modules\.installed-package-lock.json" >nul
 :installed
 
 rem A running client holds its exe open, so it can't be rebuilt under it.
-tasklist /fi "imagename eq tauri-app.exe" /nh | find /i "tauri-app.exe" >nul
+rem findstr rather than find, and timeout below by its full path: run from
+rem Git Bash, Git's own find and timeout come first on the PATH.
+tasklist /fi "imagename eq tauri-app.exe" /nh | findstr /i "tauri-app.exe" >nul
 if not errorlevel 1 (
   echo The dev client is already running.
   goto server
@@ -73,7 +91,7 @@ if %TRIES% geq 60 (
   pause
   exit /b 1
 )
-timeout /t 1 /nobreak >nul
+"%SystemRoot%\System32\timeout.exe" /t 1 /nobreak >nul
 goto wait
 
 :ready

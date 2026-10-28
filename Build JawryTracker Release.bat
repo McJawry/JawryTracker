@@ -11,13 +11,23 @@ rem server can stay open while this runs.
 
 cd /d "%~dp0"
 
-if exist "node_modules\" goto installed
-echo Installing the JavaScript packages - first run only...
+rem Same check as Start JawryTracker Dev.bat: the packages are installed
+rem again whenever package-lock.json differs from the last install.
+fc /b "package-lock.json" "node_modules\.installed-package-lock.json" >nul 2>&1
+if not errorlevel 1 goto installed
+curl.exe -s -o nul -m 2 http://localhost:1420/
+if not errorlevel 1 (
+  echo The JavaScript packages need updating, but the dev server is running.
+  echo Run Stop JawryTracker Dev.bat, then build again.
+  goto done
+)
+echo Installing the JavaScript packages...
 call npm install
 if errorlevel 1 (
   echo npm install failed - see the messages above.
   goto done
 )
+copy /y "package-lock.json" "node_modules\.installed-package-lock.json" >nul
 :installed
 
 node scripts\build-check.mjs
