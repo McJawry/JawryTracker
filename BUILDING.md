@@ -32,6 +32,20 @@ npm install
 | `npm run build:app` | Full release build, then copies the artifacts into `builds/`. |
 | `npm run collect` | Re-copies artifacts from a build you already made. No compiling. |
 
+### Windows shortcuts
+
+Three batch files in the repo root do the same with a double-click. They find
+everything from their own folder, so they work in any clone.
+
+| File | What it does |
+|---|---|
+| `Start JawryTracker Dev.bat` | Starts the dev server and opens the debug client against it. The first time, it runs `npm install` and builds the client, which takes several minutes. After that it only rebuilds the client when the Rust code has changed. |
+| `Stop JawryTracker Dev.bat` | Closes the debug client and stops the dev server. |
+| `Build JawryTracker Release.bat` | Makes a release build. See [Making a release build](#making-a-release-build). |
+
+The debug client keeps its own `data` folder in `src-tauri/target/debug`, so
+a dev run never mixes with a release copy's.
+
 ### Notes on `tauri dev`
 
 - Changes under `src/` hot-reload instantly.
@@ -57,7 +71,7 @@ npm run build:app
 
 No environment variables or signing keys are needed.
 
-`Build JawryTracker Release.bat` (in `APP\`, beside the dev start/stop
+`Build JawryTracker Release.bat` (in the repo root, beside the dev start/stop
 scripts) does the same, but only when `package.json`'s version differs from
 the most recent build in `builds/` - `scripts/build-check.mjs` decides. For a
 version that was built at some earlier point, it asks before overwriting that

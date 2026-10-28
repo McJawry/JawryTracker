@@ -1,0 +1,3 @@
+# cmd.exe misreads labels and gotos in batch files saved with LF endings,
+# so they keep CRLF whatever a clone's own line-ending setting is.
+*.bat text eol=crlf
