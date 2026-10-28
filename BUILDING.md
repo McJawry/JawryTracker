@@ -15,6 +15,9 @@ Needed once per machine:
   (Rust needs the MSVC linker on Windows)
 - **WebView2 runtime** — preinstalled on Windows 11
 
+On Windows, `Start JawryTracker Dev.bat` checks for all four and offers to
+install whichever are missing with winget (`scripts/check-prerequisites.bat`).
+
 Keep the clone's folder path short - under about 140 characters, like
 `C:\dev\JawryTracker`. The Rust build adds more than 100 characters of its own
 folders below it, and Windows refuses paths over 260: a clone that's too deep
@@ -44,7 +47,7 @@ everything from their own folder, so they work in any clone.
 
 | File | What it does |
 |---|---|
-| `Start JawryTracker Dev.bat` | Starts the dev server and opens the debug client against it. The first time, it runs `npm install` and builds the client, which takes several minutes. After that it runs `npm install` again only when `package-lock.json` has changed, and rebuilds the client only when the Rust code has. |
+| `Start JawryTracker Dev.bat` | Starts the dev server and opens the debug client against it. The first time, it offers to install any of the tools above that are missing, runs `npm install` and builds the client, which takes several minutes. After that it runs `npm install` again only when `package-lock.json` has changed, and rebuilds the client only when the Rust code has. |
 | `Stop JawryTracker Dev.bat` | Closes the debug client and stops the dev server. |
 | `Build JawryTracker Release.bat` | Makes a release build. See [Making a release build](#making-a-release-build). |
 

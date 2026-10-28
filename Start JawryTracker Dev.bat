@@ -6,8 +6,8 @@ rem without a rebuild. The client itself is rebuilt first when the Rust side
 rem has changed - with nothing changed, that check takes a moment.
 rem
 rem Everything is found from this file's own folder, so it works in any
-rem clone. On a new machine it installs the JavaScript packages and builds
-rem the client the first time; see BUILDING.md for what to install first.
+rem clone. On a new machine it offers to install the tools the build needs,
+rem then installs the JavaScript packages and builds the client.
 rem After a pull it does the same for whatever the pull changed: the packages
 rem when package-lock.json differs from what was last installed, the client
 rem when the Rust code does.
@@ -18,15 +18,10 @@ set "CLIENT_DIR=%PROJECT%\src-tauri\target\debug"
 set "SERVER_URL=http://localhost:1420/"
 cd /d "%PROJECT%"
 
-where node >nul 2>&1
+rem Node.js, the C++ Build Tools, WebView2 and Rust: offers to install
+rem whichever are missing.
+call "%PROJECT%\scripts\check-prerequisites.bat"
 if errorlevel 1 (
-  echo Node.js is not installed - see BUILDING.md.
-  pause
-  exit /b 1
-)
-where cargo >nul 2>&1
-if errorlevel 1 (
-  echo The Rust toolchain is not installed - see BUILDING.md.
   pause
   exit /b 1
 )

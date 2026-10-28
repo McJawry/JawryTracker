@@ -11,6 +11,9 @@ rem server can stay open while this runs.
 
 cd /d "%~dp0"
 
+call "scripts\check-prerequisites.bat"
+if errorlevel 1 goto done
+
 rem Same check as Start JawryTracker Dev.bat: the packages are installed
 rem again whenever package-lock.json differs from the last install.
 fc /b "package-lock.json" "node_modules\.installed-package-lock.json" >nul 2>&1
