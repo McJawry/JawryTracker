@@ -86,7 +86,7 @@
       "Start a new tracker first if it still holds another seed.";
     const question = differs
       ? `This tracker's seed settings don't match the host's. Joining syncs them to the host's, and then ${sent}\n\nSync and join the race?`
-      : `From now on, ${sent}\n\nJoin the race?`;
+      : `This tracker's seed settings match the host's. From now on, ${sent}\n\nJoin the race?`;
     if (!confirm(question)) {
       message = "";
       return;
