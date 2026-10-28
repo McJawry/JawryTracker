@@ -61,6 +61,18 @@ check("both runners' operators join", !runner1.error && !runner2.error);
 const online = await waitFor(host, (data) => data.type === "presence" && data.slot === 2 && data.online);
 check("the host hears runners come online", Boolean(online));
 
+// The host's seed settings, which every runner's tracker plays by.
+const config = "logic_obscurity: none\nrace_mode: true\n";
+host.socket.send(JSON.stringify({ type: "state", store: "config", value: config }));
+const hostConfig = await waitFor(runner1, (data) => data.type === "host" && data.store === "config");
+check("runners hear the host's seed settings", hostConfig?.data.value === config);
+const checked = await (await fetch(`${base}/rooms/${room}?role=runner&slot=1&key=${slotKeys[0]}`)).json();
+check("a runner code check includes them, to take before joining", checked.config === config);
+const lateRunner = await connect(`${room}/socket?role=runner&slot=2&key=${slotKeys[1]}`);
+const onJoin = await waitFor(lateRunner, (data) => data.type === "host" && data.store === "config");
+check("a runner joining later gets them straight away", onJoin?.data.value === config);
+lateRunner.socket.close();
+
 const intruder = await connect(`${room}/socket?role=runner&slot=1&key=WRONGKEY0000`);
 check("a wrong slot key is refused", Boolean(intruder.error));
 

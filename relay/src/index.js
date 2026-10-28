@@ -2,8 +2,9 @@
 // stream host, one Durable Object per match room.
 //
 //   POST /rooms?slots=2                        -> { room, hostKey, slotKeys }
-//   GET  /rooms/<room>?role=runner&slot=1&key=… -> { room, slots }, or 403/404:
-//                                                 checks a code before joining
+//   GET  /rooms/<room>?role=runner&slot=1&key=… -> { room, slots, config }, or
+//                                                 403/404: checks a code before
+//                                                 joining
 //   GET  /rooms/<room>/socket?role=host&key=…   -> WebSocket, receives every slot
 //   GET  /rooms/<room>/socket?role=runner&slot=1&key=…
 //                                              -> WebSocket, sends that slot
@@ -14,6 +15,11 @@
 // later starts from the current run, and passes the change on to every host
 // and viewer as { type: "state", slot, store, value, at }. Hosts and viewers also
 // hear { type: "presence", slot, online } as runners come and go.
+//
+// The host sends the other way too, the same message: its seed config, which
+// every runner's tracker plays by. Runners get it as { type: "host", store,
+// value } when they connect and whenever it changes, and the code check
+// includes it, so a tracker can take it before it joins.
 import { DurableObject } from "cloudflare:workers";
 
 // No 0/O or 1/I: codes are read out over voice chat.
@@ -95,10 +101,13 @@ export class MatchRoom extends DurableObject {
 
   /** Whether a role, slot and key would be let in - the status code says why not. */
   async check(role, slot, key) {
-    const stored = await this.ctx.storage.get(["room", "hostKey", "slotKeys"]);
+    const stored = await this.ctx.storage.get(["room", "hostKey", "slotKeys", "host:config"]);
     if (!stored.get("room")) return new Response("No such room", { status: 404 });
     if (!this.allows(stored, role, slot, key)) return new Response("Wrong room key", { status: 403 });
-    return Response.json({ room: stored.get("room"), slots: stored.get("slotKeys").length });
+    const answer = { room: stored.get("room"), slots: stored.get("slotKeys").length };
+    // The seed settings to take before joining. Not for viewers, who only watch.
+    if (role !== "viewer") answer.config = stored.get("host:config") ?? "";
+    return Response.json(answer);
   }
 
   allows(stored, role, slot, key) {
@@ -124,6 +133,9 @@ export class MatchRoom extends DurableObject {
     server.serializeAttachment({ role, slot: role === "runner" ? slot : null });
     if (role === "runner") {
       this.broadcast({ type: "presence", slot, online: true });
+      (await this.ctx.storage.list({ prefix: "host:" })).forEach((value, key) =>
+        server.send(JSON.stringify({ type: "host", store: key.slice("host:".length), value }))
+      );
     } else {
       server.send(
         JSON.stringify({
@@ -140,8 +152,8 @@ export class MatchRoom extends DurableObject {
 
   async webSocketMessage(socket, message) {
     const { role, slot } = socket.deserializeAttachment() ?? {};
-    // Hosts and viewers only listen.
-    if (role !== "runner") return;
+    // Viewers only listen.
+    if (role !== "runner" && role !== "host") return;
     if (typeof message !== "string" || message.length > MAX_MESSAGE_BYTES) {
       socket.send(JSON.stringify({ type: "error", message: "Message too large" }));
       return;
@@ -153,6 +165,17 @@ export class MatchRoom extends DurableObject {
       return;
     }
     if (update?.type !== "state" || typeof update.store !== "string" || typeof update.value !== "string") return;
+
+    if (role === "host") {
+      await this.ctx.storage.put(`host:${update.store}`, update.value);
+      const out = JSON.stringify({ type: "host", store: update.store, value: update.value });
+      this.ctx.getWebSockets("runner").forEach((runner) => {
+        try {
+          runner.send(out);
+        } catch {}
+      });
+      return;
+    }
 
     const at = Date.now();
     await this.ctx.storage.put({ [`slot:${slot}:${update.store}`]: update.value, [`updated:${slot}`]: at });

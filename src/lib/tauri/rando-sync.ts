@@ -15,6 +15,7 @@ import { sphere, saveSphereState } from "$lib/state/sphere.svelte";
 import { applySphereLogic, loadBundledSphereLogic, getRandomStartingItemCount } from "$lib/logic/sphere-logic-loading";
 import { getYamlBoolean, getYamlListSection } from "$lib/logic/yaml-helpers";
 import { getUnmatchedStartingGear } from "$lib/logic/starting-gear-items";
+import { race } from "$lib/state/race.svelte";
 import { isTauriRuntime } from "./is-tauri";
 
 const normalize = WWRSphereEngine.normalize;
@@ -89,8 +90,9 @@ export interface RandoSyncResult {
 export async function refreshRandoConfigChanged(): Promise<void> {
   const folder = isTauriRuntime() ? settings.randoFolderPath : null;
   const synced = settings.randoConfigText;
-  // Nothing synced yet means nothing to have drifted from.
-  if (!folder || !synced) {
+  // Nothing synced yet means nothing to have drifted from - and a runner in a
+  // race plays by the host's config, not the folder's.
+  if (!folder || !synced || followsHostConfig()) {
     randoConfig.changedSinceSync = false;
     return;
   }
@@ -159,13 +161,26 @@ export async function restoreRandoSync(): Promise<void> {
   }
 }
 
+/**
+ * A runner in a race plays by the host's seed config (tauri/race-link), which
+ * a Sync must not swap for the folder's. Their logic still comes from the
+ * folder, since that follows the randomizer build rather than the seed.
+ */
+function followsHostConfig(): boolean {
+  return race.session?.role === "runner" && Boolean(settings.randoConfigText?.trim());
+}
+
 async function syncFromFolder(folder: string): Promise<RandoSyncResult> {
-  const configPath = await join(folder, "config.yaml");
+  const followingHost = followsHostConfig();
   let configText: string;
-  try {
-    configText = await readTextFile(configPath);
-  } catch {
-    return { ok: false, message: "config.yaml not found in the selected folder." };
+  if (followingHost) {
+    configText = settings.randoConfigText!;
+  } else {
+    try {
+      configText = await readTextFile(await join(folder, "config.yaml"));
+    } catch {
+      return { ok: false, message: "config.yaml not found in the selected folder." };
+    }
   }
 
   const [locations, macros, locationData, entrances] = await Promise.all([
@@ -176,7 +191,9 @@ async function syncFromFolder(folder: string): Promise<RandoSyncResult> {
   ]);
 
   applySphereLogic(configText, locations, macros, locationData, entrances);
-  return { ok: true, message: `Synced - ${finishConfigSync(configText).join(", ")}.` };
+  const parts = finishConfigSync(configText);
+  if (followingHost) return { ok: true, message: "Synced the logic. The seed settings stay the host's while you're in a race." };
+  return { ok: true, message: `Synced - ${parts.join(", ")}.` };
 }
 
 /**

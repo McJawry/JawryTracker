@@ -10,6 +10,10 @@
 // (logic/race-merge.ts) and writes the result to storage, where every window
 // picks it up as it would a change made in another window. It also tells the
 // stream display server (src-tauri/src/race_display.rs) which room to follow.
+//
+// The host's seed config is the race's: the host's tracker shares it, and a
+// runner's tracker takes it - before joining (RaceTrackingSettings.svelte),
+// whenever the host's changes, and back again if its own drifts.
 import { untrack } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { CHECKED_KEY, ITEM_STORAGE_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
@@ -51,13 +55,14 @@ export function initRaceLink(): void {
     });
 
     // The same stores the autosave effect in +layout.svelte watches, plus the
-    // config and the one preference that changes what the items show.
+    // config and the one preference that changes what the items show. A host
+    // sends only the config.
     let sendTimer: ReturnType<typeof setTimeout> | undefined;
     $effect(() => {
       JSON.stringify([checked, sphere, hintNotes.value, itemTrackerState, dungeonItemsState]);
       settings.randoConfigText;
       settings.genericTriforceShards;
-      if (race.session?.role !== "runner") return;
+      if (!race.session) return;
       clearTimeout(sendTimer);
       sendTimer = setTimeout(sendChangedStores, SEND_DELAY_MS);
     });
@@ -71,6 +76,7 @@ function follow(session: RaceSession | null) {
   connection = null;
   connectedTo = signature;
   lastSent.clear();
+  hostConfig = null;
   slotStores = {};
   clearTimeout(mergeTimer);
 
@@ -100,24 +106,35 @@ function follow(session: RaceSession | null) {
       onOpen: () => {
         setRaceStatus({ connected: true, message: "Connected" });
         // The room may have missed changes while the connection was down,
-        // so a runner sends everything again.
+        // so everything is sent again.
         lastSent.clear();
-        if (session.role === "runner") sendChangedStores();
+        sendChangedStores();
       },
       onDrop: () => setRaceStatus({ connected: false, message: "Connection lost - reconnecting..." }),
       onRefused: (reason) => setRaceStatus({ connected: false, message: reason }),
       onMessage: (message) => {
         if (session.role === "host") receive(message);
+        else if (message.type === "host" && message.store === "config") {
+          // A host without a config has none to share.
+          hostConfig = message.value.trim() ? message.value : null;
+          keepHostConfig();
+        }
       }
     }
   );
 }
 
-// --- Runner ---------------------------------------------------------------
+// --- Sending ----------------------------------------------------------------
 
 const lastSent = new Map<string, string>();
 
-function currentStores(): Record<RaceStore, string> {
+/** A runner's whole run. A host shares only its seed config. */
+function currentStores(role: RaceSession["role"]): Partial<Record<RaceStore, string>> {
+  // The config from memory rather than storage: taking the host's writes it
+  // to storage only once the logic has loaded, and sending the old one in
+  // between would flag a disagreement that isn't there.
+  const config = settings.randoConfigText ?? "";
+  if (role === "host") return { config };
   const save = currentAutosave();
   return {
     notes: save.notes,
@@ -125,17 +142,37 @@ function currentStores(): Record<RaceStore, string> {
     items: JSON.stringify(save.items),
     sphere: JSON.stringify(save.sphere ?? {}),
     dungeonItems: JSON.stringify(save.dungeonItems ?? {}),
-    config: save.config ?? "",
+    config,
     display: JSON.stringify({ genericTriforceShards: settings.genericTriforceShards })
   };
 }
 
 function sendChangedStores() {
-  if (!connection || race.session?.role !== "runner") return;
-  Object.entries(currentStores()).forEach(([store, value]) => {
+  const role = race.session?.role;
+  if (!connection || !role) return;
+  // Putting the host's config back changes the config again, which comes
+  // back here - sent then.
+  if (role === "runner" && keepHostConfig()) return;
+  Object.entries(currentStores(role)).forEach(([store, value]) => {
     if (lastSent.get(store) === value) return;
     if (connection!.send({ type: "state", store, value })) lastSent.set(store, value);
   });
+}
+
+// --- Runner ---------------------------------------------------------------
+
+/** The host's seed config, once the room has passed it on. */
+let hostConfig: string | null = null;
+
+/**
+ * Takes the host's seed config if this tracker isn't on it - when the host
+ * changes theirs, or when this one's changes under it, from a Sync mid-race
+ * say. True when it had to.
+ */
+function keepHostConfig(): boolean {
+  if (hostConfig === null || (settings.randoConfigText ?? "") === hostConfig) return false;
+  applySeedConfigText(hostConfig).catch((error) => console.error("Could not take the host's seed config", error));
+  return true;
 }
 
 // --- Host -----------------------------------------------------------------
@@ -189,11 +226,12 @@ async function applyMergedRun() {
   // Until a runner has sent anything, the host keeps the empty run hosting
   // started from.
   if (!Object.keys(slotStores).length) return;
-  const merged = mergeRaceRuns(slotStores);
+  const merged = mergeRaceRuns(slotStores, settings.randoConfigText ?? "");
   setRaceStatus({ conflicts: merged.conflicts });
 
-  // The config first: taking it on trims the random starting items to the
-  // seed's count, which would otherwise cut into the run written after it.
+  // Only a host without seed settings of its own takes a runner's. The config
+  // goes first: taking it on trims the random starting items to the seed's
+  // count, which would otherwise cut into the run written after it.
   if (merged.config.trim() && merged.config !== settings.randoConfigText) {
     try {
       await applySeedConfigText(merged.config);

@@ -4,11 +4,17 @@
   // reached from here - a tracker that never races shows none of it. The
   // connection itself runs in the main window (tauri/race-link.svelte.ts);
   // this tab only sets the session up and shows how it is going.
+  //
+  // The host's seed settings are the race's, so a host needs some to share,
+  // and a runner's tracker takes them before it joins.
   import { DEFAULT_RACE_RELAY, RACE_DISPLAY_ORIGIN } from "$lib/constants";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
+  import { data } from "$lib/state/data.svelte";
   import { race, setRaceSession, formatRunnerCode, parseRunnerCode } from "$lib/state/race.svelte";
   import { clearRun } from "$lib/state/new-run";
+  import { loadReferenceData } from "$lib/logic/data-loading";
   import { checkRelayRoom, relayBase } from "$lib/tauri/relay-socket";
+  import { applySeedConfigText } from "$lib/tauri/rando-sync";
 
   const MAX_RUNNERS = 4;
 
@@ -23,6 +29,12 @@
   const runnerSlots = $derived(session?.role === "host" ? Array.from({ length: session.slot }, (_, index) => index + 1) : []);
 
   async function hostRace() {
+    if (!settings.randoConfigText?.trim()) {
+      message =
+        "This tracker has no seed settings to share yet. Sync them from the ⚙️ menu in the Main Tracker, " +
+        "or load the seed's spoiler log, then create the room.";
+      return;
+    }
     if (
       !confirm(
         "Hosting replaces this tracker's run with the runners' combined runs as they come in. " +
@@ -60,14 +72,40 @@
       message = check.message;
       return;
     }
-    if (
-      !confirm(
-        `Everything in this tracker is sent to the host as runner ${code.slot}'s run until you leave the race. ` +
-          "Start a new tracker first if it still holds another seed.\n\nJoin the race?"
-      )
-    ) {
+    const hostConfig = check.config ?? "";
+    if (!hostConfig.trim()) {
+      message = "The host's tracker hasn't shared its seed settings yet. Try again in a moment.";
+      return;
+    }
+
+    // A tracker on other seed settings than the host's would work out a
+    // different seed's logic, so joining syncs them first - or doesn't join.
+    const differs = hostConfig.trim() !== (settings.randoConfigText ?? "").trim();
+    const sent =
+      `everything in this tracker is sent to the host as runner ${code.slot}'s run until you leave the race. ` +
+      "Start a new tracker first if it still holds another seed.";
+    const question = differs
+      ? `This tracker's seed settings don't match the host's. Joining syncs them to the host's, and then ${sent}\n\nSync and join the race?`
+      : `From now on, ${sent}\n\nJoin the race?`;
+    if (!confirm(question)) {
       message = "";
       return;
+    }
+
+    if (differs) {
+      busy = true;
+      message = "Syncing the host's seed settings...";
+      try {
+        // The logic they're read into maps onto the location list, which
+        // this window doesn't load on its own.
+        if (!data.loaded) await loadReferenceData();
+        await applySeedConfigText(hostConfig);
+      } catch (error) {
+        busy = false;
+        message = `Couldn't sync the seed settings: ${error instanceof Error ? error.message : String(error)}`;
+        return;
+      }
+      busy = false;
     }
     setRaceSession({ role: "runner", relay: settings.raceRelayUrl, room: code.room, key: code.key, slot: code.slot });
     runnerCode = "";
@@ -121,7 +159,10 @@
       </label>
       <button class="tool-button" type="button" disabled={busy} onclick={hostRace}>Create race room</button>
     </div>
-    <p class="setting-hint">Replaces this tracker's run with the runners' combined runs.</p>
+    <p class="setting-hint">
+      Replaces this tracker's run with the runners' combined runs. Runners take this tracker's seed settings, so sync them
+      first.
+    </p>
   </fieldset>
 
   <fieldset class="settings-group">
@@ -200,7 +241,9 @@
         </ul>
       {/if}
     {:else}
-      <p class="setting-hint">This tracker's run is sent to the host as you track.</p>
+      <p class="setting-hint">
+        This tracker's run is sent to the host as you track. It keeps the host's seed settings until you leave the race.
+      </p>
     {/if}
 
     <div class="setting-row">

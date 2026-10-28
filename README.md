@@ -441,8 +441,8 @@ stream host's. All of it is in **Settings → Race Tracking**, and a tracker tha
 shows none of it.
 
 - **Hosting**:
-  - Pick how many runners (2 to 4) and **Create race room**. This replaces your run, so save it
-    first if you want to keep it.
+  - Sync your seed settings first: runners take the host's. Then pick how many runners (2 to 4)
+    and **Create race room**. This replaces your run, so save it first if you want to keep it.
   - Send each runner's tracker operator their **runner code**.
   - Your tracker combines the runners' runs into one: every item placement, checked location,
     entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
@@ -457,8 +457,10 @@ shows none of it.
   to the next, so the OBS scene only needs setting up once. It shows while your tracker is
   hosting.
 - **Tracking for a runner**: paste the runner code into **Track for a runner** and press
-  **Join**. From then on, your run is sent to the host as you track. Start a new tracker before
-  joining if it still holds another seed.
+  **Join**. If your seed settings differ from the host's, joining syncs them to the host's
+  first. From then on, your run is sent to the host as you track, and your tracker keeps the
+  host's seed settings until you leave: a Sync from the ⚙️ menu only updates the logic. Start a
+  new tracker before joining if it still holds another seed.
 - **End race** or **Leave race** disconnects. The host keeps the combined run.
 - Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
   two days after they're created.

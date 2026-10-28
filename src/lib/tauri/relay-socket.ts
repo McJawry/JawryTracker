@@ -24,6 +24,8 @@ export type RelayMessage =
     }
   | { type: "state"; slot: number; store: string; value: string; at: number }
   | { type: "presence"; slot: number; online: boolean }
+  /** To runners: something the host shares - its seed config. */
+  | { type: "host"; store: string; value: string }
   | { type: "error"; message: string };
 
 export interface RelayHandlers {
@@ -56,7 +58,10 @@ function roomQuery(target: RelayTarget): string {
   return query.toString();
 }
 
-export type RoomCheck = { ok: true; slots: number } | { ok: false; message: string; unreachable?: boolean };
+export type RoomCheck =
+  /** `config` is the host's seed config, for a host or runner to take before joining. */
+  | { ok: true; slots: number; config?: string }
+  | { ok: false; message: string; unreachable?: boolean };
 
 /** Whether a target would be let into its room - asked before joining, and after a drop. */
 export async function checkRelayRoom(target: RelayTarget): Promise<RoomCheck> {
@@ -69,8 +74,8 @@ export async function checkRelayRoom(target: RelayTarget): Promise<RoomCheck> {
   if (response.status === 404) return { ok: false, message: "There's no race room with that code. Rooms expire after two days." };
   if (response.status === 403) return { ok: false, message: "That code's key doesn't match its room." };
   if (!response.ok) return { ok: false, message: `The relay answered ${response.status}.`, unreachable: true };
-  const { slots } = await response.json();
-  return { ok: true, slots };
+  const { slots, config } = await response.json();
+  return { ok: true, slots, config };
 }
 
 export function openRelayConnection(target: RelayTarget, handlers: RelayHandlers): RelayConnection {

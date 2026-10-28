@@ -113,7 +113,20 @@ describe("mergeRaceRuns", () => {
     expect(merged.sphere.randomStartingItems).toEqual(["Progressive Sword", "Hookshot", "Progressive Sword"]);
   });
 
-  it("uses the first seed config, and flags a runner on different settings", () => {
+  it("plays by the host's seed config, and flags a runner on other settings", () => {
+    const merged = mergeRaceRuns(
+      {
+        1: runner({ config: "seed: A\n" }),
+        2: runner({ config: "seed: B\n" }),
+        3: runner({})
+      },
+      "seed: A\n"
+    );
+    expect(merged.config).toBe("seed: A\n");
+    expect(merged.conflicts).toEqual(["Runner 2's seed settings differ from the host's"]);
+  });
+
+  it("without the host's, uses the first runner's config, and flags a runner on different settings", () => {
     const merged = mergeRaceRuns({
       1: runner({}),
       2: runner({ config: "seed: A\n" }),

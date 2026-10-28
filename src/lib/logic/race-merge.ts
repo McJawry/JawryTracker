@@ -21,7 +21,7 @@ export interface MergedRaceRun {
   items: Record<string, number>;
   sphere: SphereState;
   dungeonItems: Record<string, DungeonItems>;
-  /** The seed's config.yaml - the first runner's that has one. */
+  /** The seed's config.yaml: the host's, or without one the first runner's. */
   config: string;
   /** Where the runners' trackers disagree, worded for the host. */
   conflicts: string[];
@@ -169,8 +169,11 @@ export function toSphereState(value: unknown): SphereState {
   };
 }
 
-/** Runner slots in order, each holding the latest value of each store it has sent. */
-export function mergeRaceRuns(slots: Record<number, RaceSlotStores>): MergedRaceRun {
+/**
+ * Runner slots in order, each holding the latest value of each store it has
+ * sent, and the host's own seed config - which every runner should be on.
+ */
+export function mergeRaceRuns(slots: Record<number, RaceSlotStores>, hostConfig = ""): MergedRaceRun {
   const runners: Runner[] = Object.entries(slots)
     .map(([slot, stores]) => ({ slot: Number(slot), label: `Runner ${slot}`, stores }))
     .sort((a, b) => a.slot - b.slot);
@@ -211,12 +214,14 @@ export function mergeRaceRuns(slots: Record<number, RaceSlotStores>): MergedRace
     sphereOf(runner).highlightedSectors.forEach((sector) => highlightedSectors.add(sector));
   });
 
+  // The host's seed config is the race's. Only a host without one falls back
+  // on a runner's.
   const configs = runners.filter((runner) => runner.stores.config?.trim());
-  const config = configs[0]?.stores.config ?? "";
-  configs.slice(1).forEach((runner) => {
-    if (runner.stores.config!.trim() !== config.trim()) {
-      conflicts.push(`${runner.label}'s seed settings differ from ${configs[0].label}'s`);
-    }
+  const fromHost = Boolean(hostConfig.trim());
+  const config = fromHost ? hostConfig : (configs[0]?.stores.config ?? "");
+  const owner = fromHost ? "the host's" : `${configs[0]?.label}'s`;
+  configs.forEach((runner) => {
+    if (runner.stores.config!.trim() !== config.trim()) conflicts.push(`${runner.label}'s seed settings differ from ${owner}`);
   });
 
   return {
