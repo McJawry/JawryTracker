@@ -3658,6 +3658,76 @@ body.stream-mode .empty-state {
   font-weight: 600;
 }
 
+/* Race Tracking tab. The relay address is tucked away: a race only works if
+   everyone in it uses the same one, so it is rarely the thing to change. */
+.race-relay {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+
+.race-relay summary {
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.race-relay > :not(summary) {
+  margin-top: 8px;
+}
+
+.race-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.race-room {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.race-runner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.race-runner-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.race-runner-detail {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.race-presence {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa3aa;
+}
+
+.race-presence.online {
+  background: #2f9e44;
+}
+
+.race-conflicts {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+}
+
 /* Hidden-section restore control: shows the section name, and swaps to
    Dock / Undock on hover or keyboard focus. Sized so the swap doesn't shift
    the surrounding row.

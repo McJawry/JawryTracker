@@ -33,6 +33,7 @@ what you have found, and shows where each boss path can still lead.
   - [Filters](#filters)
 - [Settings](#settings)
 - [Saving your run](#saving-your-run)
+- [Race Tracking](#race-tracking)
 - [Mouse and keyboard reference](#mouse-and-keyboard-reference)
 - [Building from source](#building-from-source)
 
@@ -394,6 +395,8 @@ Open **Settings** from the Control Panel.
     the app. Point it at that copy's folder or its `data` folder. Your run isn't included: to
     carry that over, copy the whole `data` folder before the first launch, or use the autosave
     (see [Saving your run](#saving-your-run)).
+- **Race Tracking**: links trackers for a race shown on one stream. See
+  [Race Tracking](#race-tracking).
 - **Load saves**: named saves of your run, and loading a spoiler log. See
   [Saving your run](#saving-your-run).
 
@@ -428,6 +431,40 @@ folder** (`Documents/JawryTracker`, shared by every copy of the app on the compu
   Then it runs [Clear dead](#clear-dead).
 - The tracker keeps its working data in the `data` folder next to the exe. Keep that folder on a
   drive that stays connected while you play.
+
+---
+
+## Race Tracking
+
+For a race shown on one stream: each runner's tracker operator links their JawryTracker to the
+stream host's. All of it is in **Settings → Race Tracking**, and a tracker that isn't racing
+shows none of it.
+
+- **Hosting**:
+  - Pick how many runners (2 to 4) and **Create race room**. This replaces your run, so save it
+    first if you want to keep it.
+  - Send each runner's tracker operator their **runner code**.
+  - Your tracker combines the runners' runs into one: every item placement, checked location,
+    entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
+    shows everything known about the seed. Changes you make yourself are replaced by the next
+    update.
+  - If two trackers record different items at the same location, the newer one is kept and the
+    tab lists the disagreement.
+  - The tab shows which runners are connected and when each last sent an update.
+- **Stream display**: each runner has an address like `http://127.0.0.1:4747/?stream=1`. Add it
+  to OBS as a **Browser Source**. It shows that runner's own items and dungeon row on a
+  transparent background, scaled to the source's size. The address stays the same from one race
+  to the next, so the OBS scene only needs setting up once. It shows while your tracker is
+  hosting.
+- **Tracking for a runner**: paste the runner code into **Track for a runner** and press
+  **Join**. From then on, your run is sent to the host as you track. Start a new tracker before
+  joining if it still holds another seed.
+- **End race** or **Leave race** disconnects. The host keeps the combined run.
+- Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
+  two days after they're created.
+- Races go through a small relay server, the `relay` folder in this repository. Trackers use a
+  public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))
+  and enter its address under **Relay server**. Everyone in a race has to use the same one.
 
 ---
 

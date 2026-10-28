@@ -26,6 +26,10 @@
   // would record its own window size as the app's, and would try to reopen
   // its sibling popouts.
   const isPopout = $derived(Boolean(page.url.searchParams.get("popout")));
+  // A race's stream display, running in OBS rather than the tracker: it has
+  // no run, preferences or windows of its own, and must never write storage
+  // (see tauri/race-stream.ts), so none of the start-up below applies.
+  const isStream = page.url.searchParams.has("stream");
 
   // Layout/scaling lives in a real preferences file so it survives restarts
   // and closing/hiding panels. Auto-save only arms after the initial load so
@@ -35,6 +39,7 @@
   let windowHeight = $state(0);
 
   onMount(() => {
+    if (isStream) return;
     initStorageSync();
     initStorageHeal();
     void initWindowGroupSync();
@@ -202,6 +207,7 @@
       document.documentElement.style.removeProperty("--user-map-size");
     }
     document.body.classList.toggle("popout-window", isPopout);
+    document.body.classList.toggle("race-stream", isStream);
     // Which section this popout holds, so stylesheets can target one
     // popout (the Hint Panel's stream backdrop) without hitting them all.
     document.body.dataset.popout = page.url.searchParams.get("popout") ?? "";

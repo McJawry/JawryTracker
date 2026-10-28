@@ -1,0 +1,12 @@
+name = "jawrytracker-relay"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "MatchRoom"
+
+# SQLite-backed: the only kind of Durable Object the Workers Free plan allows.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MatchRoom"]

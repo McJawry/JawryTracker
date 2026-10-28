@@ -4,7 +4,17 @@
 // one writes to localStorage - so re-hydrating the matching reactive state
 // module from that event gives every window live updates for free, without
 // a custom cross-window IPC broadcast layer.
-import { STORAGE_KEY, CHECKED_KEY, SETTINGS_KEY, SPHERE_STORAGE_KEY, ITEM_STORAGE_KEY, MARK_STARTING_KEY, PENDING_LOCATION_KEY } from "$lib/constants";
+import {
+  STORAGE_KEY,
+  CHECKED_KEY,
+  SETTINGS_KEY,
+  SPHERE_STORAGE_KEY,
+  ITEM_STORAGE_KEY,
+  MARK_STARTING_KEY,
+  PENDING_LOCATION_KEY,
+  RACE_SESSION_KEY,
+  RACE_STATUS_KEY
+} from "$lib/constants";
 import { sphere, loadSphereState } from "$lib/state/sphere.svelte";
 import { reloadMarkStartingModeFromStorage, reloadPendingLocationFromStorage } from "$lib/state/ui.svelte";
 import { settings, readStoredSettings, mergeSettings } from "$lib/state/settings.svelte";
@@ -15,6 +25,7 @@ import { LAYOUT_KEY, reloadLayoutFromStorage } from "$lib/state/layout.svelte";
 import { UNDOCKED_KEY, reloadUndockedFromStorage } from "$lib/state/undocked.svelte";
 import { DUNGEON_ITEMS_KEY, reloadDungeonItemsFromStorage } from "$lib/state/dungeon-items.svelte";
 import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
+import { reloadRaceSessionFromStorage, reloadRaceStatusFromStorage } from "$lib/state/race.svelte";
 import { restoreRandoSync } from "./rando-sync";
 
 let initialized = false;
@@ -104,6 +115,14 @@ export function reloadFromStorage(key: string, newValue: string | null): void {
     // spheres from the one the item was clicked in.
     case DUNGEON_ITEMS_KEY:
       reloadDungeonItemsFromStorage();
+      break;
+    // Race Tracking is set up in the Settings window and run by the main
+    // window: the session goes one way, the status the other.
+    case RACE_SESSION_KEY:
+      reloadRaceSessionFromStorage();
+      break;
+    case RACE_STATUS_KEY:
+      reloadRaceStatusFromStorage();
       break;
   }
 }

@@ -36,6 +36,7 @@
     openRunSaveFolder
   } from "$lib/tauri/tracker-autosave";
   import { applySpoilerLog, readSpoilerLogFile } from "$lib/tauri/spoiler-log";
+  import RaceTrackingSettings from "./RaceTrackingSettings.svelte";
   import {
     describeDataRoots,
     openDataRoot,
@@ -316,6 +317,14 @@
       type="button"
       role="tab"
       class="settings-tab"
+      class:active={activeTab === "race-tracking"}
+      aria-selected={activeTab === "race-tracking"}
+      onclick={() => (activeTab = "race-tracking")}
+    >Race Tracking</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
       class:active={activeTab === "run-saves"}
       aria-selected={activeTab === "run-saves"}
       onclick={() => (activeTab = "run-saves")}
@@ -483,6 +492,10 @@
 
     {#if autosaveStatus}<p class="setting-status">{autosaveStatus}</p>{/if}
   </fieldset>
+  {/if}
+
+  {#if activeTab === "race-tracking"}
+  <RaceTrackingSettings />
   {/if}
 
   {#if activeTab === "general"}
