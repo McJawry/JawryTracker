@@ -9,7 +9,9 @@
 // The host's tracker combines every runner's run into its own
 // (logic/race-merge.ts) and writes the result to storage, where every window
 // picks it up as it would a change made in another window. It also tells the
-// stream display server (src-tauri/src/race_display.rs) which room to follow.
+// stream display server (src-tauri/src/race_display.rs) which room to follow,
+// and how to show it: the grid layout's cells, and which bosses the runs
+// between them have shown the seed asks for - every runner races the same ones.
 //
 // The host's seed config is the race's: the host's tracker shares it, and a
 // runner's tracker takes it - before joining (RaceTrackingSettings.svelte),
@@ -19,6 +21,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { CHECKED_KEY, ITEM_STORAGE_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 import { mergeRaceRuns, RACE_STORES, type RaceSlotStores, type RaceStore } from "$lib/logic/race-merge";
 import { describeHintLine } from "$lib/logic/hint-canonical";
+import { planRaceStreamGrid } from "$lib/logic/race-stream-grid";
+import { getBossRequirements } from "$lib/logic/dead-locations";
 import { race, resetRaceStatus, setRaceStatus, type RaceRunnerStatus, type RaceSession } from "$lib/state/race.svelte";
 import { checked } from "$lib/state/checked.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
@@ -26,6 +30,7 @@ import { hintNotes } from "$lib/state/hints.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { DUNGEON_ITEMS_KEY, dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { settings } from "$lib/state/settings.svelte";
+import { data } from "$lib/state/data.svelte";
 import { currentAutosave } from "./tracker-autosave";
 import { reloadFromStorage } from "./storage-sync";
 import { applySeedConfigText } from "./rando-sync";
@@ -36,6 +41,8 @@ import { isTauriRuntime } from "./is-tauri";
 const SEND_DELAY_MS = 250;
 // Host: a runner's change arrives a store at a time, so this waits for the rest.
 const MERGE_DELAY_MS = 150;
+// Host: the stream displays only ask every few seconds anyway.
+const DISPLAY_DELAY_MS = 300;
 
 let started = false;
 let connection: RelayConnection | null = null;
@@ -66,6 +73,26 @@ export function initRaceLink(): void {
       if (!race.session) return;
       clearTimeout(sendTimer);
       sendTimer = setTimeout(sendChangedStores, SEND_DELAY_MS);
+    });
+
+    // What the stream displays are told turns on the layout and on everything
+    // the bosses are worked out from: the hints, the marks, the entrances and
+    // the seed's logic.
+    let displayTimer: ReturnType<typeof setTimeout> | undefined;
+    $effect(() => {
+      JSON.stringify([sphere, checked]);
+      hintNotes.value;
+      data.sphereOptions;
+      settings.randoConfigText;
+      settings.raceStreamGrid;
+      settings.raceGridColumns;
+      settings.raceGridRows;
+      settings.raceStreamGenericShards;
+      if (race.session?.role !== "host") return;
+      clearTimeout(displayTimer);
+      displayTimer = setTimeout(() => {
+        if (race.session?.role === "host") void serveRaceDisplay(race.session);
+      }, DISPLAY_DELAY_MS);
     });
   });
 }
@@ -249,12 +276,33 @@ async function applyMergedRun() {
   writeStore(DUNGEON_ITEMS_KEY, JSON.stringify(merged.dungeonItems));
 }
 
+/** What the stream displays read from /race.json: the room, and how to show it. */
+function describeDisplay(session: RaceSession): string {
+  const room = { relay: session.relay, room: session.room, genericShards: settings.raceStreamGenericShards };
+  if (!settings.raceStreamGrid) return JSON.stringify(room);
+  const { columns, rows, cells } = planRaceStreamGrid(settings.randoConfigText ?? "", settings.raceGridColumns, settings.raceGridRows);
+  let bosses = {};
+  try {
+    bosses = getBossRequirements();
+  } catch (error) {
+    // Before the seed's logic has loaded, nothing is known about them.
+    console.error("Could not work out the required bosses", error);
+  }
+  return JSON.stringify({ ...room, grid: { columns, rows, cells }, bosses });
+}
+
+let servedDisplay: string | null = null;
+
 /** Points the stream display server at a room, or at nothing once the race is over. */
 async function serveRaceDisplay(session: RaceSession | null) {
   if (!isTauriRuntime()) return;
+  const display = session ? describeDisplay(session) : null;
+  if (display === servedDisplay) return;
+  servedDisplay = display;
   try {
-    await invoke("serve_race_display", { race: session ? JSON.stringify({ relay: session.relay, room: session.room }) : null });
+    await invoke("serve_race_display", { race: display });
   } catch (error) {
+    servedDisplay = null;
     if (session) setRaceStatus({ display: `The stream display can't be served: ${error}` });
   }
 }

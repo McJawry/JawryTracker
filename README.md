@@ -462,6 +462,23 @@ shows none of it.
   transparent background, scaled to the source's size. The address stays the same from one race
   to the next, so the OBS scene only needs setting up once. It shows while your tracker is
   hosting.
+- **Grid layout**: turn on **Grid layout** under **Browser sources** to show each runner's
+  items as a grid of square black cells instead, like race restreams use. Set how many columns
+  and rows it has, and the tab says whether this seed's items fit.
+  - The grid is always 800 pixels wide, so it looks the same on every stream. The tab gives the
+    size to set each Browser Source to in OBS, like `800 × 398` for 8 by 4.
+  - The items are the ones the seed's settings leave to find. Items the seed starts you with
+    in full are left out, as is the sword in swordless. The bosses are along the bottom in race
+    mode. If the grid is too small, the least important items are left out first.
+  - Items not found yet are dimmed. The Triforce shows the runner's shards the way their
+    tracker does, as pieces or as a count.
+  - Every runner races the same bosses, so the host works them out from all the runs
+    together. Path hints, chart marks and the seed's number of required dungeons show which
+    bosses are required. Bosses that aren't required are dimmed and crossed out. A runner's
+    beaten bosses get a green check.
+- **Generic Triforce shards**: turn it on under **Browser sources** to make every runner's
+  Triforce show a shard count, in either layout, even when their tracker shows which shards
+  they have.
 - **Tracking for a runner**: paste the runner code into **Track for a runner** and press
   **Join**. If your seed settings differ from the host's, joining syncs them to the host's
   first. From then on, your run is sent to the host as you track, and your tracker keeps the

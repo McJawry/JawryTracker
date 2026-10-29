@@ -3728,6 +3728,14 @@ body.stream-mode .empty-state {
   font-size: 11px;
 }
 
+.race-grid-size {
+  gap: 16px;
+}
+
+.race-grid-size input {
+  width: 56px;
+}
+
 /* Hidden-section restore control: shows the section name, and swaps to
    Dock / Undock on hover or keyboard focus. Sized so the swap doesn't shift
    the surrounding row.

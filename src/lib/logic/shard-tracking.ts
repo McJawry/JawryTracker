@@ -60,6 +60,17 @@ export function isStartingShard(number: number): boolean {
   return settings.startingGearShards.includes(number) || data.sphereStartingGear.some((gear) => getTriforceShardNumber(gear) === number);
 }
 
+/**
+ * The shards a Triforce shows piece by piece, when shards aren't just being
+ * counted: each one crossed off in the shard column, and the run's starting
+ * shards, marked as such.
+ */
+export function getShownTriforceShards(): Array<{ number: number; starting: boolean }> {
+  return Array.from({ length: TRIFORCE_SHARD_COUNT }, (_, index) => index + 1)
+    .map((number) => ({ number, starting: isStartingShard(number) }))
+    .filter(({ number, starting }) => starting || getShardTrackingState(number).isChecked);
+}
+
 /** Whether an item is a Triforce shard at all, numbered or generic. */
 export function isTriforceShardItem(item: string): boolean {
   return /^triforce shard( [1-8])?$/.test(WWRSphereEngine.normalize(item));

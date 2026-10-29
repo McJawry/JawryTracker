@@ -13,6 +13,13 @@
   import { race, setRaceSession, formatRunnerCode, parseRunnerCode } from "$lib/state/race.svelte";
   import { clearRun } from "$lib/state/new-run";
   import { loadReferenceData } from "$lib/logic/data-loading";
+  import {
+    getRaceGridSize,
+    planRaceStreamGrid,
+    RACE_GRID_MAX_COLUMNS,
+    RACE_GRID_MAX_ROWS,
+    RACE_GRID_WIDTH
+  } from "$lib/logic/race-stream-grid";
   import { checkRelayRoom, relayBase } from "$lib/tauri/relay-socket";
   import { applySeedConfigText } from "$lib/tauri/rando-sync";
   import { confirmAction } from "$lib/tauri/confirm-dialog";
@@ -28,6 +35,22 @@
   const session = $derived(race.session);
   const status = $derived(race.status);
   const runnerSlots = $derived(session?.role === "host" ? Array.from({ length: session.slot }, (_, index) => index + 1) : []);
+
+  // What the browser sources' grid holds for this seed, so the host can size
+  // it to fit - and how big the Browser Sources have to be to show it.
+  const gridPlan = $derived(planRaceStreamGrid(settings.randoConfigText ?? "", settings.raceGridColumns, settings.raceGridRows));
+  const gridSize = $derived(getRaceGridSize(gridPlan.columns, gridPlan.rows));
+  const gridSummary = $derived.by(() => {
+    if (gridPlan.leftOut.length) return `Too small for this seed. Left out: ${gridPlan.leftOut.join(", ")}.`;
+    const filled = gridPlan.cells.filter((cell) => cell.kind !== "blank").length;
+    return filled === gridPlan.cells.length ? "This seed fills every cell." : `This seed fills ${filled} of the ${gridPlan.cells.length} cells.`;
+  });
+
+  function saveGridSize() {
+    settings.raceGridColumns = gridPlan.columns;
+    settings.raceGridRows = gridPlan.rows;
+    saveSettings();
+  }
 
   async function hostRace() {
     if (!settings.randoConfigText?.trim()) {
@@ -229,7 +252,7 @@
       {/each}
       <p class="setting-hint">
         Send each runner's tracker operator their code. Add each address to OBS as a Browser Source - it shows that runner's
-        items on a transparent background, and keeps working from one race to the next.
+        items, and keeps working from one race to the next.
       </p>
       {#if status.display}<p class="setting-status">{status.display}</p>{/if}
       {#if status.conflicts.length}
@@ -248,6 +271,44 @@
       <button class="tool-button" type="button" onclick={leaveRace}>{session.role === "host" ? "End race" : "Leave race"}</button>
     </div>
   </fieldset>
+
+  {#if session.role === "host"}
+    <fieldset class="settings-group">
+      <legend>Browser sources</legend>
+      <label class="setting-toggle">
+        <input type="checkbox" bind:checked={settings.raceStreamGrid} onchange={saveSettings} />
+        <span>Grid layout</span>
+      </label>
+      <p class="setting-hint">
+        Shows each runner's items as a grid of square cells, always {RACE_GRID_WIDTH} pixels wide, instead of the
+        tracker's item grid on a transparent background. The items are the ones this seed's settings leave to find. Bosses the race doesn't need
+        are crossed out once the runners' hints or chart marks show which ones they are, and a runner's beaten bosses get
+        a check.
+      </p>
+      {#if settings.raceStreamGrid}
+        <div class="setting-row race-grid-size">
+          <label class="setting-control">
+            <span>Columns</span>
+            <input type="number" min="1" max={RACE_GRID_MAX_COLUMNS} bind:value={settings.raceGridColumns} onchange={saveGridSize} />
+          </label>
+          <label class="setting-control">
+            <span>Rows</span>
+            <input type="number" min="1" max={RACE_GRID_MAX_ROWS} bind:value={settings.raceGridRows} onchange={saveGridSize} />
+          </label>
+        </div>
+        <p class="setting-status">{gridSummary}</p>
+        <p class="setting-status">Set each Browser Source in OBS to {RACE_GRID_WIDTH} × {gridSize.height}.</p>
+      {/if}
+      <label class="setting-toggle">
+        <input type="checkbox" bind:checked={settings.raceStreamGenericShards} onchange={saveSettings} />
+        <span>Generic Triforce shards</span>
+      </label>
+      <p class="setting-hint">
+        Every runner's Triforce shows how many shards they have, even when their tracker shows which ones. Turned off,
+        each shows them the way that runner's tracker does.
+      </p>
+    </fieldset>
+  {/if}
 {/if}
 
 {#if message}<p class="setting-status">{message}</p>{/if}

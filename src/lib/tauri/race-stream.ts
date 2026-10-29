@@ -5,14 +5,18 @@
 // start from. Which race to follow comes from the host's tracker, which
 // serves it at /race.json (src-tauri/src/race_display.rs) for as long as it
 // hosts one - the page keeps asking, so a new race is picked up without
-// touching OBS. `?room=` (and `?relay=`) in the address follow a room
-// directly instead.
+// touching OBS. The host's tracker also says there how to show it - as the
+// grid layout or not, counting the shards or not - and which bosses the race
+// is known to ask for, so a change there reaches OBS within a few seconds too. `?room=` (and `?relay=`)
+// in the address follow a room directly instead, shown the tracker's way.
 //
 // Nothing here is ever saved. Every source on a stream shares one browser
 // profile, so a display that wrote its runner's run to storage would hand it
 // to every other display there.
 import { RACE_DISPLAY_ORIGIN } from "$lib/constants";
 import { toSphereState, type RaceStore } from "$lib/logic/race-merge";
+import type { RaceGridCell } from "$lib/logic/race-stream-grid";
+import type { BossRequirement } from "$lib/logic/dead-locations";
 import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
 import { checked } from "$lib/state/checked.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
@@ -30,6 +34,19 @@ interface DisplayedRace {
   room: string;
 }
 
+/** How the host wants the runner shown: as a grid, with what is known of the bosses. */
+export interface RaceDisplayLayout {
+  grid: { columns: number; rows: number; cells: RaceGridCell[] };
+  bosses: Record<string, BossRequirement>;
+}
+
+interface HostedRace extends DisplayedRace {
+  grid?: RaceDisplayLayout["grid"];
+  bosses?: RaceDisplayLayout["bosses"];
+  /** Count every runner's Triforce shards, whichever way their tracker shows them. */
+  genericShards?: boolean;
+}
+
 function replaceContents<T>(target: Record<string, T>, next: Record<string, T>) {
   Object.keys(target).forEach((key) => delete target[key]);
   Object.assign(target, next);
@@ -45,6 +62,14 @@ function parseRecord<T>(value: string): Record<string, T> {
 }
 
 let configQueue = Promise.resolve();
+
+// The runner's own way of showing the shards, and whether the host overrides it.
+let runnerGenericShards = false;
+let hostGenericShards = false;
+
+function showGenericShards() {
+  settings.genericTriforceShards = hostGenericShards || runnerGenericShards;
+}
 
 /** One store of the runner's run, into this page's state - never into storage. */
 function applyStore(store: RaceStore, value: string) {
@@ -75,7 +100,8 @@ function applyStore(store: RaceStore, value: string) {
       });
       break;
     case "display":
-      settings.genericTriforceShards = Boolean(parseRecord(value).genericTriforceShards);
+      runnerGenericShards = Boolean(parseRecord(value).genericTriforceShards);
+      showGenericShards();
       break;
   }
 }
@@ -98,7 +124,7 @@ function applyRun(stores: Record<string, string>) {
   STORES.forEach((store) => applyStore(store, typeof stores[store] === "string" ? stores[store] : EMPTY_STORES[store]));
 }
 
-async function readHostedRace(): Promise<DisplayedRace | null> {
+async function readHostedRace(): Promise<HostedRace | null> {
   try {
     const response = await fetch(`${RACE_DISPLAY_ORIGIN}/race.json`, { cache: "no-store" });
     const race = JSON.parse((await response.text()) || "null");
@@ -108,8 +134,12 @@ async function readHostedRace(): Promise<DisplayedRace | null> {
   }
 }
 
-/** Shows runner `slot` of whatever race is on, for as long as the page is open. */
-export function followRaceDisplay(slot: number): () => void {
+/**
+ * Shows runner `slot` of whatever race is on, for as long as the page is open.
+ * `onLayout` hears how the host wants it shown whenever that changes - null
+ * for the tracker's own layout.
+ */
+export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLayout | null) => void): () => void {
   const params = new URL(window.location.href).searchParams;
   const pinned = params.get("room") ? { room: params.get("room")!.toUpperCase(), relay: params.get("relay") || settings.raceRelayUrl } : null;
 
@@ -140,11 +170,22 @@ export function followRaceDisplay(slot: number): () => void {
     );
   }
 
+  let layout = "null";
+  function show(next: RaceDisplayLayout | null) {
+    const signature = JSON.stringify(next);
+    if (signature === layout) return;
+    layout = signature;
+    onLayout(next);
+  }
+
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   async function poll() {
     const race = await readHostedRace();
     if (stopped) return;
     follow(race);
+    hostGenericShards = Boolean(race?.genericShards);
+    showGenericShards();
+    show(race?.grid?.cells ? { grid: race.grid, bosses: race.bosses ?? {} } : null);
     pollTimer = setTimeout(poll, RACE_POLL_MS);
   }
 

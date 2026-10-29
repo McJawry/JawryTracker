@@ -176,6 +176,18 @@ export interface Settings {
   /** The relay Race Tracking connects through. */
   raceRelayUrl: string;
   /**
+   * The race's browser sources show each runner's items as a grid of cells,
+   * this many across and down, rather than as the tracker's own item grid.
+   */
+  raceStreamGrid: boolean;
+  raceGridColumns: number;
+  raceGridRows: number;
+  /**
+   * The race's browser sources count every runner's Triforce shards, as
+   * genericTriforceShards does, whichever way their own tracker shows them.
+   */
+  raceStreamGenericShards: boolean;
+  /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
    * otherwise puts a floor under.
@@ -251,5 +263,9 @@ export const DEFAULT_SETTINGS: Settings = {
   showPathIcons: true,
   showSphereLocations: true,
   raceRelayUrl: DEFAULT_RACE_RELAY,
+  raceStreamGrid: false,
+  raceGridColumns: 8,
+  raceGridRows: 4,
+  raceStreamGenericShards: false,
   popoutZoom: {}
 };

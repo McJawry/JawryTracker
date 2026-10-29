@@ -2,17 +2,21 @@
   // One runner's items for a race stream: the OBS Browser Source the Race
   // Tracking tab hands out (?stream=<runner>). The tracker's own item grid and
   // dungeon row, read-only, on a transparent page, scaled to whatever size the
-  // source is given. Follows the race by itself - see tauri/race-stream.ts.
+  // source is given - or, when the host turns it on, the grid layout
+  // (RaceStreamGrid.svelte). Follows the race by itself - see
+  // tauri/race-stream.ts.
   import { onMount } from "svelte";
   import TrackingItemGrid from "$lib/components/tracking/TrackingItemGrid.svelte";
   import TrackingBossChecklist from "$lib/components/tracking/TrackingBossChecklist.svelte";
+  import RaceStreamGrid from "./RaceStreamGrid.svelte";
   import { loadReferenceData } from "$lib/logic/data-loading";
   import "$lib/logic/hint-parsing"; // registers the hints parser (side effect)
-  import { followRaceDisplay } from "$lib/tauri/race-stream";
+  import { followRaceDisplay, type RaceDisplayLayout } from "$lib/tauri/race-stream";
 
   let { slot }: { slot: number } = $props();
 
   let loaded = $state(false);
+  let layout: RaceDisplayLayout | null = $state(null);
   let windowWidth = $state(0);
   let windowHeight = $state(0);
   let content: HTMLDivElement | undefined = $state();
@@ -25,7 +29,7 @@
     void loadReferenceData().then(() => {
       if (unmounted) return;
       loaded = true;
-      stop = followRaceDisplay(slot);
+      stop = followRaceDisplay(slot, (next) => (layout = next));
     });
     return () => {
       unmounted = true;
@@ -57,7 +61,9 @@
 <svelte:window bind:innerWidth={windowWidth} bind:innerHeight={windowHeight} />
 
 <main class="race-stream-display">
-  {#if loaded}
+  {#if loaded && layout}
+    <RaceStreamGrid {layout} />
+  {:else if loaded}
     <div class="race-stream-content" bind:this={content} style="zoom: {scale}">
       <TrackingItemGrid />
       <div class="tracking-area-row">
