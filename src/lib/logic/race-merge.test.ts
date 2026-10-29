@@ -90,6 +90,66 @@ describe("mergeRaceRuns", () => {
     expect(merged.notes).toBe("Paths\nWindfall to Gohma\n\nno Outset\nDragon Roost to Molgera");
   });
 
+  it("merges lines that mean the same hint, in the spelling it is told", () => {
+    // Stands in for the hint parser: each shorthand and its full spelling.
+    const spellings: Record<string, string> = {
+      "diamond to jalh": "Diamond Steppe Island to Jalhalla",
+      "diamond steppe island to jalhalla": "Diamond Steppe Island to Jalhalla",
+      "et to gohma": "ET to Gohma",
+      "earth temple to gohma": "ET to Gohma"
+    };
+    const describe = (line: string) => {
+      const text = spellings[line.trim().toLowerCase()] ?? line.trim();
+      return { text, key: text.toLowerCase(), tagged: false };
+    };
+    const merged = mergeRaceRuns(
+      {
+        1: runner({ notes: "diamond to jalh\nearth temple to gohma\nfree text stays" }),
+        2: runner({ notes: "Diamond Steppe Island to Jalhalla\net to gohma\nNeedle to Molgera" })
+      },
+      "",
+      describe
+    );
+    expect(merged.notes).toBe("Diamond Steppe Island to Jalhalla\nET to Gohma\nfree text stays\nNeedle to Molgera");
+  });
+
+  it("gives a hint the requirement tag another runner wrote for it", () => {
+    const describe = (line: string) => {
+      const tagged = / r at /.test(line);
+      return { text: line.trim(), key: line.trim().replace(" r at ", " at "), tagged };
+    };
+    const merged = mergeRaceRuns(
+      { 1: runner({ notes: "Hookshot at Windfall Island" }), 2: runner({ notes: "Hookshot r at Windfall Island" }) },
+      "",
+      describe
+    );
+    expect(merged.notes).toBe("Hookshot r at Windfall Island");
+  });
+
+  describe("the same hint more than once", () => {
+    const merge = (one: string, two: string) =>
+      mergeRaceRuns({ 1: runner({ notes: one }), 2: runner({ notes: two }) }).notes.split("\n");
+
+    it("is one hint when each runner wrote it once", () => {
+      expect(merge("Windfall to Gohma", "Windfall to Gohma")).toEqual(["Windfall to Gohma"]);
+    });
+
+    it("is two when one runner wrote it twice", () => {
+      expect(merge("Windfall to Gohma\nOutset to Molgera", "Windfall to Gohma\nWindfall to Gohma")).toEqual([
+        "Windfall to Gohma",
+        "Outset to Molgera",
+        "Windfall to Gohma"
+      ]);
+    });
+
+    it("is still two when each runner wrote it twice", () => {
+      expect(merge("Windfall to Gohma\nWindfall to Gohma", "Windfall to Gohma\nWindfall to Gohma")).toEqual([
+        "Windfall to Gohma",
+        "Windfall to Gohma"
+      ]);
+    });
+  });
+
   it("keeps a hint as often as the runner who has it most", () => {
     const merged = mergeRaceRuns({
       1: runner({ notes: "Windfall to Gohma" }),

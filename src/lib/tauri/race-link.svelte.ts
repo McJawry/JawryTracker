@@ -18,6 +18,7 @@ import { untrack } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { CHECKED_KEY, ITEM_STORAGE_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 import { mergeRaceRuns, RACE_STORES, type RaceSlotStores, type RaceStore } from "$lib/logic/race-merge";
+import { describeHintLine } from "$lib/logic/hint-canonical";
 import { race, resetRaceStatus, setRaceStatus, type RaceRunnerStatus, type RaceSession } from "$lib/state/race.svelte";
 import { checked } from "$lib/state/checked.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
@@ -226,7 +227,9 @@ async function applyMergedRun() {
   // Until a runner has sent anything, the host keeps the empty run hosting
   // started from.
   if (!Object.keys(slotStores).length) return;
-  const merged = mergeRaceRuns(slotStores, settings.randoConfigText ?? "");
+  // Lines that mean the same hint merge, in one spelling - full names, the
+  // dungeons abbreviated - rather than whichever shorthand a runner typed.
+  const merged = mergeRaceRuns(slotStores, settings.randoConfigText ?? "", describeHintLine);
   setRaceStatus({ conflicts: merged.conflicts });
 
   // Only a host without seed settings of its own takes a runner's. The config

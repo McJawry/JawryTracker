@@ -43,8 +43,25 @@ function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? value : [];
 }
 
-const lineKey = (line: string) => line.trim().toLowerCase();
 const itemKey = (item: string) => item.trim().toLowerCase();
+
+/**
+ * A note line as the merged notes write it: `key` says which hint it is, so
+ * two lines with the same key are the same hint however they were typed, and
+ * `tagged` says it names the item's requirement, which makes it the better of
+ * the two. The host's tracker reads lines with the hint parser
+ * (logic/hint-canonical.ts); without it, a line is only the same as another
+ * typed the same way.
+ */
+export interface NoteLine {
+  text: string;
+  key: string;
+  tagged: boolean;
+}
+
+export type DescribeNoteLine = (line: string) => NoteLine;
+
+const asTyped: DescribeNoteLine = (line) => ({ text: line.trimEnd(), key: line.trim().toLowerCase(), tagged: false });
 
 /** When a placement was recorded, read from its id - see addSpherePlacement. */
 function placementTime(placement: SpherePlacement): number {
@@ -58,36 +75,41 @@ interface Runner {
 }
 
 /**
- * The first runner's notes as written, then each line another runner has
- * that isn't in yet.
+ * The first runner's notes in their order, then each hint another runner has
+ * that isn't in yet - every line in the spelling `describe` gives it.
  *
- * Repeats count: two identical path hints are two hints, so a line is added
- * until the notes hold it as often as the runner who has it most.
+ * The same hint from two runners is one hint: each found it. The same hint
+ * twice from one runner is two - the seed can give a path hint twice, a
+ * second path item in that area - so a hint is added until the notes hold it
+ * as often as the runner who wrote it most. A hint already in without its
+ * requirement takes the tag from a runner who wrote it.
  */
-function mergeNotes(runners: Runner[]): string {
+function mergeNotes(runners: Runner[], describe: DescribeNoteLine): string {
   const notes = runners.map((runner) => runner.stores.notes ?? "").filter((text) => text.trim());
   if (!notes.length) return "";
+  const described = notes.map((text) => text.trimEnd().split(/\r?\n/).map((line) => (line.trim() ? describe(line) : null)));
 
-  const lines = notes[0].trimEnd().split(/\r?\n/);
+  // Blank lines stay where the first runner put them, as spacing.
+  const lines: NoteLine[] = described[0].map((line) => line ?? { text: "", key: "", tagged: false });
   const held = new Map<string, number>();
-  const count = (map: Map<string, number>, line: string) => {
-    const key = lineKey(line);
-    if (key) map.set(key, (map.get(key) ?? 0) + 1);
-  };
-  lines.forEach((line) => count(held, line));
+  lines.forEach(({ key }) => key && held.set(key, (held.get(key) ?? 0) + 1));
 
-  notes.slice(1).forEach((text) => {
+  described.slice(1).forEach((runnerLines) => {
     const seen = new Map<string, number>();
-    text.split(/\r?\n/).forEach((line) => {
-      const key = lineKey(line);
-      if (!key) return;
-      count(seen, line);
-      if ((seen.get(key) ?? 0) <= (held.get(key) ?? 0)) return;
-      lines.push(line.trimEnd());
-      held.set(key, seen.get(key)!);
+    runnerLines.forEach((line) => {
+      if (!line) return;
+      const count = (seen.get(line.key) ?? 0) + 1;
+      seen.set(line.key, count);
+      if (count > (held.get(line.key) ?? 0)) {
+        lines.push(line);
+        held.set(line.key, count);
+      } else if (line.tagged) {
+        const untagged = lines.find((candidate) => candidate.key === line.key && !candidate.tagged);
+        if (untagged) Object.assign(untagged, line);
+      }
     });
   });
-  return lines.join("\n");
+  return lines.map(({ text }) => text).join("\n");
 }
 
 /** One location holds one item, so two runners recording different ones is a mistake somewhere. */
@@ -172,8 +194,13 @@ export function toSphereState(value: unknown): SphereState {
 /**
  * Runner slots in order, each holding the latest value of each store it has
  * sent, and the host's own seed config - which every runner should be on.
+ * `describeLine` tells what each note line means; see NoteLine.
  */
-export function mergeRaceRuns(slots: Record<number, RaceSlotStores>, hostConfig = ""): MergedRaceRun {
+export function mergeRaceRuns(
+  slots: Record<number, RaceSlotStores>,
+  hostConfig = "",
+  describeLine: DescribeNoteLine = asTyped
+): MergedRaceRun {
   const runners: Runner[] = Object.entries(slots)
     .map(([slot, stores]) => ({ slot: Number(slot), label: `Runner ${slot}`, stores }))
     .sort((a, b) => a.slot - b.slot);
@@ -225,7 +252,7 @@ export function mergeRaceRuns(slots: Record<number, RaceSlotStores>, hostConfig 
   });
 
   return {
-    notes: mergeNotes(runners),
+    notes: mergeNotes(runners, describeLine),
     checked,
     items,
     sphere: {

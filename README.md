@@ -448,6 +448,12 @@ shows none of it.
     entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
     shows everything known about the seed. Changes you make yourself are replaced by the next
     update.
+  - Hint lines that mean the same thing are merged, however each runner typed them, and your
+    notes show them spelled out in full: `diamond to jalh` becomes `Diamond Steppe Island to
+    Jalhalla`. Dungeons keep their abbreviations, like `ET to Gohma`. Lines that aren't hints,
+    or that the tracker can't read for certain, stay as the runner typed them.
+  - The same hint from two runners is kept once. One runner writing a hint twice keeps it twice,
+    since a seed can give the same path hint twice.
   - If two trackers record different items at the same location, the newer one is kept and the
     tab lists the disagreement.
   - The tab shows which runners are connected and when each last sent an update.
