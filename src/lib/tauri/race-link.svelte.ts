@@ -8,7 +8,12 @@
 //
 // The host's tracker combines every runner's run into its own
 // (logic/race-merge.ts) and writes the result to storage, where every window
-// picks it up as it would a change made in another window. It also tells the
+// picks it up as it would a change made in another window. The host can
+// correct the combined run: what they change stays in their tracker, on top
+// of every merge, until a runner's tracker changes the same thing
+// (logic/race-edits.ts). Or the host can look at one runner's run as that
+// runner's tracker has it - only look: anything changed there is put back.
+// It also tells the
 // stream display server (src-tauri/src/race_display.rs) which room to follow,
 // and how to show it: the grid layout's cells, and which bosses the runs
 // between them have shown the seed asks for - every runner races the same ones.
@@ -18,12 +23,29 @@
 // whenever the host's changes, and back again if its own drifts.
 import { untrack } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
-import { CHECKED_KEY, ITEM_STORAGE_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
-import { mergeRaceRuns, RACE_STORES, type RaceSlotStores, type RaceStore } from "$lib/logic/race-merge";
+import { CHECKED_KEY, ITEM_STORAGE_KEY, RACE_EDITS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
+import {
+  mergeRaceRuns,
+  RACE_STORES,
+  toSphereState,
+  type NoteLine,
+  type RaceSlotStores,
+  type RaceStore
+} from "$lib/logic/race-merge";
+import {
+  applyRaceEdits,
+  countRaceEdits,
+  dropUpdatedEdits,
+  EDITABLE_STORES,
+  findRaceEdits,
+  type EditableStore,
+  type RaceEdits,
+  type RaceRunStores
+} from "$lib/logic/race-edits";
 import { describeHintLine } from "$lib/logic/hint-canonical";
 import { planRaceStreamGrid } from "$lib/logic/race-stream-grid";
 import { getBossRequirements } from "$lib/logic/dead-locations";
-import { race, resetRaceStatus, setRaceStatus, type RaceRunnerStatus, type RaceSession } from "$lib/state/race.svelte";
+import { race, resetRaceStatus, setRaceStatus, setRaceView, type RaceRunnerStatus, type RaceSession } from "$lib/state/race.svelte";
 import { checked } from "$lib/state/checked.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
 import { hintNotes } from "$lib/state/hints.svelte";
@@ -43,6 +65,8 @@ const SEND_DELAY_MS = 250;
 const MERGE_DELAY_MS = 150;
 // Host: the stream displays only ask every few seconds anyway.
 const DISPLAY_DELAY_MS = 300;
+// Host: what the host changed is taken in once all of a click's writes are.
+const CHANGE_DELAY_MS = 150;
 
 let started = false;
 let connection: RelayConnection | null = null;
@@ -54,6 +78,8 @@ let hosting = false;
 export function initRaceLink(): void {
   if (started) return;
   started = true;
+  // Left on a runner's run by a tracker closed while showing it.
+  if (race.view) setRaceView(0);
 
   $effect.root(() => {
     $effect(() => {
@@ -75,9 +101,26 @@ export function initRaceLink(): void {
       sendTimer = setTimeout(sendChangedStores, SEND_DELAY_MS);
     });
 
+    // A host's change to the run, from any window: an edit to the combined
+    // run, or something to put back on a runner's.
+    let changeTimer: ReturnType<typeof setTimeout> | undefined;
+    $effect(() => {
+      JSON.stringify([checked, sphere, hintNotes.value, itemTrackerState, dungeonItemsState]);
+      if (race.session?.role !== "host") return;
+      clearTimeout(changeTimer);
+      changeTimer = setTimeout(() => queueHostWork(takeHostChange), CHANGE_DELAY_MS);
+    });
+
+    // Whose run to show, picked in any window.
+    $effect(() => {
+      const view = race.view;
+      untrack(() => queueHostWork(() => showView(view)));
+    });
+
     // What the stream displays are told turns on the layout and on everything
     // the bosses are worked out from: the hints, the marks, the entrances and
-    // the seed's logic.
+    // the seed's logic - in the combined run, so not while a host is showing a
+    // runner's.
     let displayTimer: ReturnType<typeof setTimeout> | undefined;
     $effect(() => {
       JSON.stringify([sphere, checked]);
@@ -88,10 +131,10 @@ export function initRaceLink(): void {
       settings.raceGridColumns;
       settings.raceGridRows;
       settings.raceStreamGenericShards;
-      if (race.session?.role !== "host") return;
+      if (race.session?.role !== "host" || race.view) return;
       clearTimeout(displayTimer);
       displayTimer = setTimeout(() => {
-        if (race.session?.role === "host") void serveRaceDisplay(race.session);
+        if (race.session?.role === "host" && !shownView) void serveRaceDisplay(race.session);
       }, DISPLAY_DELAY_MS);
     });
   });
@@ -100,12 +143,23 @@ export function initRaceLink(): void {
 function follow(session: RaceSession | null) {
   const signature = session ? JSON.stringify(session) : "";
   if (signature === connectedTo) return;
+  // A host leaving while showing a runner's run gets the combined one back.
+  if (hosting && shownView) {
+    shownView = 0;
+    const run = viewedRun();
+    if (run) writeRun(run);
+  }
   connection?.close();
   connection = null;
   connectedTo = signature;
   lastSent.clear();
   hostConfig = null;
   slotStores = {};
+  seenSlotStores = {};
+  mergedRun = null;
+  hostEdits = {};
+  shownView = 0;
+  if (race.view) setRaceView(0);
   clearTimeout(mergeTimer);
 
   if (hosting) void serveRaceDisplay(null);
@@ -120,7 +174,8 @@ function follow(session: RaceSession | null) {
     for (let slot = 1; slot <= session.slot; slot += 1) runners[slot] = { online: false, updatedAt: 0 };
     void serveRaceDisplay(session);
   }
-  setRaceStatus({ connected: false, message: "Connecting...", runners, conflicts: [], display: "" });
+  setRaceStatus({ connected: false, message: "Connecting...", runners, conflicts: [], display: "", edits: 0 });
+  if (session.role === "host") loadHostEdits(session.room);
 
   connection = openRelayConnection(
     {
@@ -205,9 +260,56 @@ function keepHostConfig(): boolean {
 
 // --- Host -----------------------------------------------------------------
 
+/** Where each store of the run is kept. */
+const STORE_KEYS: Record<EditableStore, string> = {
+  notes: STORAGE_KEY,
+  checked: CHECKED_KEY,
+  items: ITEM_STORAGE_KEY,
+  sphere: SPHERE_STORAGE_KEY,
+  dungeonItems: DUNGEON_ITEMS_KEY
+};
+
+/** Each store as a tracker with nothing in it saves it. */
+const EMPTY_RUN: RaceRunStores = {
+  notes: "",
+  checked: "{}",
+  items: "{}",
+  sphere: JSON.stringify(toSphereState(null)),
+  dungeonItems: "{}"
+};
+
 let slotStores: Record<number, RaceSlotStores> = {};
+/** Each runner's stores as the last merge took them, to tell what a runner has changed since. */
+let seenSlotStores: Record<number, RaceSlotStores> = {};
+/** The combined run as last worked out, without the host's edits - null until a runner sends anything. */
+let mergedRun: RaceRunStores | null = null;
+let hostEdits: RaceEdits = {};
+/** Whose run this tracker shows: 0 for the combined one, else a runner's slot. */
+let shownView = 0;
+/** The run as this tracker last wrote it, to tell a change of the host's from its own. */
+let writtenRun: RaceRunStores | null = null;
 let mergeTimer: ReturnType<typeof setTimeout> | undefined;
 let merging = Promise.resolve();
+
+/** Host work goes one piece at a time - a merge, a change of view, an edit - and one failing doesn't stop the rest. */
+function queueHostWork(work: () => void | Promise<void>) {
+  merging = merging.then(work).catch((error) => console.error("Race Tracking:", error));
+}
+
+// The merge and the edits read every note line, several times a merge, and a
+// line reads the same until the logic changes.
+const describedLines = new Map<string, NoteLine>();
+let describedFor: unknown = null;
+
+function describeNoteLine(line: string): NoteLine {
+  if (describedFor !== data.sphereOptions || describedLines.size > 5000) {
+    describedLines.clear();
+    describedFor = data.sphereOptions;
+  }
+  let described = describedLines.get(line);
+  if (!described) describedLines.set(line, (described = describeHintLine(line)));
+  return described;
+}
 
 function updateRunner(slot: number, change: Partial<RaceRunnerStatus>) {
   const current = race.status.runners[slot] ?? { online: false, updatedAt: 0 };
@@ -236,7 +338,7 @@ function receive(message: RelayMessage) {
     return;
   }
   clearTimeout(mergeTimer);
-  mergeTimer = setTimeout(() => (merging = merging.then(applyMergedRun)), MERGE_DELAY_MS);
+  mergeTimer = setTimeout(() => queueHostWork(applyMergedRun), MERGE_DELAY_MS);
 }
 
 /**
@@ -250,13 +352,95 @@ function writeStore(key: string, value: string) {
   reloadFromStorage(key, value);
 }
 
+function readRun(): RaceRunStores {
+  return Object.fromEntries(EDITABLE_STORES.map((store) => [store, localStorage.getItem(STORE_KEYS[store]) ?? EMPTY_RUN[store]])) as RaceRunStores;
+}
+
+function writeRun(run: RaceRunStores) {
+  EDITABLE_STORES.forEach((store) => writeStore(STORE_KEYS[store], run[store]));
+  writtenRun = readRun();
+}
+
+/** A runner's run as their tracker has it. */
+function runnerRun(slot: number): RaceRunStores {
+  const stores = slotStores[slot] ?? {};
+  return Object.fromEntries(EDITABLE_STORES.map((store) => [store, stores[store] ?? EMPTY_RUN[store]])) as RaceRunStores;
+}
+
+/** The run to show: the runner's being looked at, or the combined one with the host's edits. */
+function viewedRun(): RaceRunStores | null {
+  if (shownView) return runnerRun(shownView);
+  return mergedRun && applyRaceEdits(mergedRun, hostEdits, describeNoteLine);
+}
+
+/** What the host has changed in the combined run, kept as their edits. */
+function takeHostEdits() {
+  if (shownView || !mergedRun) return;
+  const run = readRun();
+  if (writtenRun && EDITABLE_STORES.every((store) => run[store] === writtenRun![store])) return;
+  hostEdits = findRaceEdits(run, mergedRun, describeNoteLine);
+  writtenRun = run;
+  saveHostEdits();
+}
+
+/** The host's tracker changed: an edit on the combined run, put back on a runner's. */
+function takeHostChange() {
+  if (!hosting) return;
+  if (shownView) writeRun(runnerRun(shownView));
+  else takeHostEdits();
+}
+
+function showView(view: number) {
+  if (!hosting || view === shownView || view > (race.session?.slot ?? 0)) return;
+  // Edits not taken in yet would go with the combined run.
+  takeHostEdits();
+  shownView = view;
+  const run = viewedRun();
+  if (run) writeRun(run);
+}
+
+/** The host's edits, with each runner's stores as they stood for them, outlast a restart. */
+let savedEdits = "";
+
+function saveHostEdits() {
+  const room = race.session?.room;
+  if (!room) return;
+  const stored = JSON.stringify({ room, edits: hostEdits, seen: seenSlotStores });
+  if (stored === savedEdits) return;
+  savedEdits = stored;
+  try {
+    localStorage.setItem(RACE_EDITS_KEY, stored);
+  } catch (error) {
+    console.error("Could not keep the race edits", error);
+  }
+  const count = countRaceEdits(hostEdits);
+  if (race.status.edits !== count) setRaceStatus({ edits: count });
+}
+
+function loadHostEdits(room: string) {
+  let stored: { room?: string; edits?: RaceEdits; seen?: Record<number, RaceSlotStores> } | null = null;
+  try {
+    stored = JSON.parse(localStorage.getItem(RACE_EDITS_KEY) || "null");
+  } catch {
+    stored = null;
+  }
+  const ours = stored?.room === room;
+  hostEdits = ours ? (stored?.edits ?? {}) : {};
+  seenSlotStores = ours ? (stored?.seen ?? {}) : {};
+  savedEdits = "";
+  writtenRun = null;
+  setRaceStatus({ edits: countRaceEdits(hostEdits) });
+}
+
 async function applyMergedRun() {
   // Until a runner has sent anything, the host keeps the empty run hosting
   // started from.
   if (!Object.keys(slotStores).length) return;
+  // What the host changed since the last merge is theirs before this one lands.
+  takeHostEdits();
   // Lines that mean the same hint merge, in one spelling - full names, the
   // dungeons abbreviated - rather than whichever shorthand a runner typed.
-  const merged = mergeRaceRuns(slotStores, settings.randoConfigText ?? "", describeHintLine);
+  const merged = mergeRaceRuns(slotStores, settings.randoConfigText ?? "", describeNoteLine);
   setRaceStatus({ conflicts: merged.conflicts });
 
   // Only a host without seed settings of its own takes a runner's. The config
@@ -269,11 +453,20 @@ async function applyMergedRun() {
       console.error("Could not apply the runners' seed config", error);
     }
   }
-  writeStore(STORAGE_KEY, merged.notes);
-  writeStore(CHECKED_KEY, JSON.stringify(merged.checked));
-  writeStore(ITEM_STORAGE_KEY, JSON.stringify(merged.items));
-  writeStore(SPHERE_STORAGE_KEY, JSON.stringify(merged.sphere));
-  writeStore(DUNGEON_ITEMS_KEY, JSON.stringify(merged.dungeonItems));
+
+  // Whatever a runner's tracker has changed since the last merge is the
+  // runner's again, edited or not.
+  hostEdits = dropUpdatedEdits(hostEdits, seenSlotStores, slotStores, describeNoteLine);
+  seenSlotStores = Object.fromEntries(Object.entries(slotStores).map(([slot, stores]) => [slot, { ...stores }]));
+  mergedRun = {
+    notes: merged.notes,
+    checked: JSON.stringify(merged.checked),
+    items: JSON.stringify(merged.items),
+    sphere: JSON.stringify(merged.sphere),
+    dungeonItems: JSON.stringify(merged.dungeonItems)
+  };
+  saveHostEdits();
+  writeRun(viewedRun()!);
 }
 
 /** What the stream displays read from /race.json: the room, and how to show it. */

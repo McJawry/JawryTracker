@@ -24,6 +24,10 @@ export const NEW_RUN_KEY = "ww-rando-hint-tracker-new-run";
 // window sets up and the main window runs, and how the run is going there.
 export const RACE_SESSION_KEY = "ww-rando-hint-tracker-race";
 export const RACE_STATUS_KEY = "ww-rando-hint-tracker-race-status";
+// A host's: whose run the tracker shows, picked in any window, and the host's
+// corrections to the combined run, kept by the main window.
+export const RACE_VIEW_KEY = "ww-rando-hint-tracker-race-view";
+export const RACE_EDITS_KEY = "ww-rando-hint-tracker-race-edits";
 // The relay in this repo's relay/ folder, as deployed for everyone to use. A
 // tournament can run its own copy and point Race Tracking at that instead.
 export const DEFAULT_RACE_RELAY = "https://jawrytracker-relay.jawrytracker-relay.workers.dev";

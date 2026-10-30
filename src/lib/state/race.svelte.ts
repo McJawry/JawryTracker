@@ -4,9 +4,10 @@
 // and serves each runner's items to OBS (RaceStreamDisplay.svelte).
 //
 // Set up from the Settings window but run by the main window
-// (tauri/race-link.svelte.ts), so these two stores are how they talk: the
-// session says what to connect to, the status says how it is going.
-import { RACE_SESSION_KEY, RACE_STATUS_KEY } from "$lib/constants";
+// (tauri/race-link.svelte.ts), so these stores are how they talk: the session
+// says what to connect to, the status says how it is going, and a host's view
+// says whose run to show.
+import { RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
 
 export interface RaceSession {
   role: "host" | "runner";
@@ -35,9 +36,11 @@ export interface RaceStatus {
   conflicts: string[];
   /** Host only: why the stream display can't be served, if it can't. */
   display: string;
+  /** Host only: how many things the host has corrected in the combined run. */
+  edits: number;
 }
 
-const IDLE_STATUS: RaceStatus = { connected: false, message: "", runners: {}, conflicts: [], display: "" };
+const IDLE_STATUS: RaceStatus = { connected: false, message: "", runners: {}, conflicts: [], display: "", edits: 0 };
 
 function readJson<T>(key: string): T | null {
   try {
@@ -56,9 +59,19 @@ function loadStatus(): RaceStatus {
   return { ...IDLE_STATUS, ...readJson<RaceStatus>(RACE_STATUS_KEY) };
 }
 
-export const race: { session: RaceSession | null; status: RaceStatus } = $state({
+function loadView(): number {
+  return Number(localStorage.getItem(RACE_VIEW_KEY)) || 0;
+}
+
+export const race: {
+  session: RaceSession | null;
+  status: RaceStatus;
+  /** Host only: whose run the tracker shows - 0 for the runners' combined, else a runner's slot. */
+  view: number;
+} = $state({
   session: loadSession(),
-  status: loadStatus()
+  status: loadStatus(),
+  view: loadView()
 });
 
 export function setRaceSession(session: RaceSession | null): void {
@@ -82,6 +95,15 @@ export function reloadRaceSessionFromStorage(): void {
 
 export function reloadRaceStatusFromStorage(): void {
   race.status = loadStatus();
+}
+
+export function setRaceView(view: number): void {
+  race.view = view;
+  localStorage.setItem(RACE_VIEW_KEY, String(view));
+}
+
+export function reloadRaceViewFromStorage(): void {
+  race.view = loadView();
 }
 
 /**

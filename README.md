@@ -448,8 +448,11 @@ shows none of it.
   - Send each runner's tracker operator their **runner code**.
   - Your tracker combines the runners' runs into one: every item placement, checked location,
     entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
-    shows everything known about the seed. Changes you make yourself are replaced by the next
-    update.
+    shows everything known about the seed.
+  - If a runner's tracker has something wrong, correct it in your tracker as usual. Your
+    corrections stay through every update and decide the bosses the stream shows, but they never
+    reach the runners. When a runner's tracker changes the same thing again (the same item,
+    location, hint, placement or entrance), theirs replaces yours.
   - Hint lines that mean the same thing are merged, however each runner typed them, and your
     notes show them spelled out in full: `diamond to jalh` becomes `Diamond Steppe Island to
     Jalhalla`. Dungeons keep their abbreviations, like `ET to Gohma`. Lines that aren't hints,
@@ -459,6 +462,10 @@ shows none of it.
   - If two trackers record different items at the same location, the newer one is kept and the
     tab lists the disagreement.
   - The tab shows which runners are connected and when each last sent an update.
+  - Buttons above the map switch your tracker between **Merged**, the combined run, and
+    **Runner 1**, **Runner 2** and so on: each runner's run as their own tracker has it. A
+    runner's run is only for looking at. Anything changed there is put back, and undo is off.
+    Which one you're looking at doesn't change the stream.
 - **Stream display**: each runner has an address like `http://127.0.0.1:4747/?stream=1`. Add it
   to OBS as a **Browser Source**. It shows that runner's own items and dungeon row on a
   transparent background, scaled to the source's size. The address stays the same from one race

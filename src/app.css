@@ -2122,6 +2122,40 @@ body.stream-mode .empty-state {
   background: var(--ok);
 }
 
+.main-tracker-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A race host's: the runners' runs combined, or one runner's to look at.
+   The toolbar's own buttons, so they read as plainly as Clear dead. */
+.race-view-switcher {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.race-view-switcher .map-toolbar-button {
+  white-space: nowrap;
+}
+
+/* The run being shown, filled in the way an armed Mark starting flashes. */
+.race-view-switcher .map-toolbar-button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.race-view-note {
+  flex: 0 0 auto;
+  color: var(--ink);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
 .map-toolbar-button {
   flex: 0 0 auto;
   min-height: 28px;

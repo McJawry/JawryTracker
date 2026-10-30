@@ -19,6 +19,7 @@ import { sphere } from "$lib/state/sphere.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { DUNGEON_ITEMS_KEY, dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { hintNotes } from "$lib/state/hints.svelte";
+import { race } from "$lib/state/race.svelte";
 import { reloadFromStorage } from "$lib/tauri/storage-sync";
 
 const MAX_HISTORY = 200;
@@ -54,6 +55,10 @@ let lastNotesEditAt = 0;
 // Set by undo/redo: whatever the stores settle to next is the restored run,
 // not a new action - even if loading it back tidied something.
 let adoptNext = false;
+// Which run a race host's tracker showed when the stores last settled. Going
+// from one to another isn't an action on the run, and neither is anything
+// while a runner's run is shown - that run is only being looked at.
+let settledView = 0;
 let started = false;
 
 /** Starts watching the run. Idempotent; the history lives as long as the window. */
@@ -80,9 +85,10 @@ const lineCount = (text: string) => text.split("\n").length;
 function settle(): void {
   settleTimer = null;
   const next = { ...latest };
-  if (!current || adoptNext) {
+  if (!current || adoptNext || race.view || race.view !== settledView) {
     current = next;
     adoptNext = false;
+    settledView = race.view;
     return;
   }
 
@@ -133,6 +139,7 @@ function settlePending(): void {
 }
 
 export function undoTrackerAction(): void {
+  if (race.view) return;
   settlePending();
   const previous = history.undo.pop();
   if (!previous || !current) return;
@@ -141,6 +148,7 @@ export function undoTrackerAction(): void {
 }
 
 export function redoTrackerAction(): void {
+  if (race.view) return;
   settlePending();
   const next = history.redo.pop();
   if (!next || !current) return;

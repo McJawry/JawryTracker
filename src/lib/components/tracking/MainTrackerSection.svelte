@@ -7,6 +7,7 @@
   // that generically now.
   import MapToolbar from "$lib/components/map/MapToolbar.svelte";
   import MapSideTab from "$lib/components/map/MapSideTab.svelte";
+  import RaceViewSwitcher from "$lib/components/race/RaceViewSwitcher.svelte";
   import TrackingLocationGrid from "./TrackingLocationGrid.svelte";
   import TrackingItemGrid from "./TrackingItemGrid.svelte";
   import TrackingBossChecklist from "./TrackingBossChecklist.svelte";
@@ -62,7 +63,11 @@
 </script>
 
 <div class="main-tracker-section" bind:this={sectionRoot}>
-  <MapToolbar />
+  <!-- A race host's view buttons take the rest of the toolbar's row, over the map. -->
+  <div class="main-tracker-toolbar-row">
+    <MapToolbar />
+    <RaceViewSwitcher />
+  </div>
 
   <div class="tracker-section-row">
     <div class="item-tracker-panel" bind:this={itemColumn}>

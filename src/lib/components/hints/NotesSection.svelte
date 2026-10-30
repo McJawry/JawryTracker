@@ -8,6 +8,7 @@
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { sphere } from "$lib/state/sphere.svelte";
   import { parseSphereNotesText, serializeSpherePlacements } from "$lib/logic/sphere-notes-text";
+  import { race } from "$lib/state/race.svelte";
 
   let activeTab: "hint" | "sphere" = $state("hint");
 
@@ -155,6 +156,7 @@
     <textarea
       bind:this={hintTextarea}
       bind:value={hintNotes.value}
+      readonly={race.view > 0}
       oninput={handleHintInput}
       onscroll={syncScroll}
       onfocus={() => setNotesEditorFocused(true)}
@@ -170,6 +172,7 @@
   <textarea
     bind:this={sphereTextarea}
     bind:value={sphereText}
+    readonly={race.view > 0}
     oninput={handleSphereInput}
     class="notes-input"
     class:fixed-height={!settings.notesAutoGrow}
