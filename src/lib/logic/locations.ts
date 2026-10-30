@@ -239,10 +239,15 @@ export function getSphereHintAreaLocations(areaName: string): string[] {
 /**
  * Whether everything needed to finish the run is in hand.
  *
- * Computed beside the other reachability sets (computeGoMode in
+ * Computed beside the other reachability sets (computeFinishable in
  * sphere-board-analysis) because it needs an inventory this module cannot
  * build without closing an import cycle.
  */
+export function isFinishable(): boolean {
+  return sphereAnalysisCache.finishable;
+}
+
+/** Whether the run is finishable and every boss it may ask for is beaten - see computeGoMode. */
 export function isGoMode(): boolean {
   return sphereAnalysisCache.goMode;
 }

@@ -20,8 +20,8 @@
  *                      An item is only hidden once the question is settled:
  *                      while it still opens somewhere nobody has looked, what
  *                      lies down there could be anything, and hiding the card
- *                      claims to know it is nothing. The exception is go mode -
- *                      with the run already finishable from what is held, no
+ *                      claims to know it is nothing. The exception is a run
+ *                      already finishable from what is held, bosses or not: no
  *                      unopened chest can hold something that helps beat it,
  *                      so an unfinished branch stops being a reason to keep a
  *                      card. A card the playthrough pared out - the ones the
@@ -52,7 +52,7 @@ import {
   withNamedPlacementItems
 } from "$lib/logic/sphere-calculation";
 import { getRequiredBossDoors } from "$lib/logic/entrance-paths";
-import { getAvailableLocations, isGoMode, isLocationMarked } from "$lib/logic/locations";
+import { getAvailableLocations, isFinishable, isLocationMarked } from "$lib/logic/locations";
 import { data } from "$lib/state/data.svelte";
 import { type SpherePlacement } from "$lib/state/sphere.svelte";
 
@@ -245,10 +245,10 @@ export async function getRequiredAndUnfinishedPlacementIds(placements: SpherePla
   // grounds for hiding a card. Once every location it opens has been checked
   // the question is settled and the requirement walk above decides.
   //
-  // Go mode is the one state where the unknown stops mattering: the run can be
-  // finished with what is already held, so nothing still in a chest can help
-  // beat it, whichever branch it is down.
-  if (!isGoMode()) {
+  // A finishable run is the one state where the unknown stops mattering: it
+  // can be finished with what is already held, so nothing still in a chest can
+  // help beat it, whichever branch it is down - whether or not the bosses are.
+  if (!isFinishable()) {
     const occupied = new Set(placements.map((placement) => normalize(placement.location)));
     const unchecked = getAvailableLocations().filter((location) => {
       const key = normalize(location);

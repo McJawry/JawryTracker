@@ -23,7 +23,7 @@ const LOCATION_NEEDS: Record<string, string> = {
   "checked chest": "spent"
 };
 
-let goMode = false;
+let finishable = false;
 /** Which bosses the run has to beat, however the tracker worked it out. */
 let requiredBosses = new Set<string>(["Jalhalla"]);
 let checkedLocations = new Set<string>(["checked chest"]);
@@ -59,7 +59,7 @@ vi.mock("$lib/logic/entrance-paths", () => ({
 
 vi.mock("$lib/logic/locations", () => ({
   getAvailableLocations: () => ["Unchecked Chest", "Checked Chest"],
-  isGoMode: () => goMode,
+  isFinishable: () => finishable,
   isLocationMarked: (location: string) => checkedLocations.has(normalizeName(location))
 }));
 
@@ -89,7 +89,7 @@ async function hidden(prunedPlacementIds: string[] = [], finished = true) {
 
 describe("paths + required: when a card may be hidden", () => {
   beforeEach(() => {
-    goMode = false;
+    finishable = false;
     checkedLocations = new Set(["checked chest"]);
   });
 
@@ -108,8 +108,8 @@ describe("paths + required: when a card may be hidden", () => {
     expect(await hidden([], false)).toEqual(["opener", "spent"]);
   });
 
-  it("keeps them in go mode with every branch finished - the playthrough went through them", async () => {
-    goMode = true;
+  it("keeps them in a finishable run with every branch finished - the playthrough went through them", async () => {
+    finishable = true;
     checkedLocations = new Set(["checked chest", "unchecked chest"]);
     expect(await hidden()).toEqual([]);
   });

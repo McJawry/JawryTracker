@@ -139,7 +139,9 @@ The inventory grid is where you track what you own.
   clickable 0–8 counter.
 - The **Blue Chu Jelly** counter shows how many jellies you have marked on the map.
 - The **chart button** (under Progressive Magic) opens the [chart menu](#charts).
-- **GO MODE** appears over the grid once everything needed to beat the game is in hand.
+- **GO MODE** appears over the grid once everything needed to beat the game is in hand and
+  every required boss is beaten (its heart container checked). While the tracker doesn't know
+  which bosses are required, it waits for every boss it hasn't ruled out.
 - The row under the grid shows the full name of whatever is under the pointer. This includes
   map areas and location names that the lists shorten.
 
@@ -364,8 +366,8 @@ The **Filters** menu narrows the board to what matters:
     to unchecked locations.
   - They hide again once their branch is a dead end.
 - **Paths + required**: the boss paths, plus every item that beating the seed depends on.
-  Items with unexplored branches stay visible until those branches are checked (or until you are
-  in go mode). Cards marked *Optional* are hidden.
+  Items with unexplored branches stay visible until those branches are checked (or until
+  everything needed to beat the game is in hand). Cards marked *Optional* are hidden.
 - **Show keys**: keeps dungeon keys visible whatever the other filters say.
 
 **Locations**, next to Path icons, hides the locations each sphere opens up, leaving only the

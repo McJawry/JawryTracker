@@ -22,10 +22,12 @@ export interface SphereAnalysisCache {
    */
   inventoryReachableKeys: Set<string> | null;
   /**
-   * Everything needed to finish the run is in hand - see computeGoMode() in
-   * sphere-board-analysis. Kept beside the other derived sets because it is the
-   * same reachability question asked once more with a different inventory.
+   * Everything needed to finish the run is in hand - see computeFinishable()
+   * in sphere-board-analysis. Kept beside the other derived sets because it is
+   * the same reachability question asked once more with a different inventory.
    */
+  finishable: boolean;
+  /** Finishable, with the bosses the run may ask for beaten - see computeGoMode(). */
   goMode: boolean;
   /**
    * What only a Sphere Board shows - boss icons, path cards, the Filters
@@ -44,6 +46,7 @@ function emptyCache(): SphereAnalysisCache {
     relativeUnknown: null,
     certainLocationKeys: null,
     inventoryReachableKeys: null,
+    finishable: false,
     goMode: false,
     board: null,
     pending: false,
