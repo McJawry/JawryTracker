@@ -6,6 +6,7 @@
   import PopoutSettingsShell from "$lib/components/layout/PopoutSettingsShell.svelte";
   import PopoutSectionShell from "$lib/components/layout/PopoutSectionShell.svelte";
   import RaceStreamDisplay from "$lib/components/race/RaceStreamDisplay.svelte";
+  import RaceConflictsWindow from "$lib/components/race/RaceConflictsWindow.svelte";
   import { DOCKABLE_SECTIONS } from "$lib/dockable-sections";
   import { loadReferenceData } from "$lib/logic/data-loading";
   import { restoreRandoSync } from "$lib/tauri/rando-sync";
@@ -57,6 +58,8 @@
   <PopoutSphereShell />
 {:else if popout === "settings"}
   <PopoutSettingsShell />
+{:else if popout === "race-conflicts"}
+  <RaceConflictsWindow />
 {:else if popout && popout in DOCKABLE_SECTIONS}
   <PopoutSectionShell sectionId={popout} />
 {:else}

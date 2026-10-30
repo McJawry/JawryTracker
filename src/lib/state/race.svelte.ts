@@ -9,7 +9,8 @@
 // (tauri/race-link.svelte.ts), so these stores are how they talk: the session
 // says what to connect to, the status says how it is going, and a host's view
 // says whose run to show.
-import { RACE_ROSTER_KEY, RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
+import { RACE_RESOLVE_KEY, RACE_ROSTER_KEY, RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
+import type { RaceConflict } from "$lib/logic/race-conflicts";
 
 export interface RaceSession {
   role: "host" | "admin" | "runner";
@@ -34,8 +35,8 @@ export interface RaceStatus {
   message: string;
   /** Host only, by slot. */
   runners: Record<number, RaceRunnerStatus>;
-  /** Host only: where the runners' trackers disagree. */
-  conflicts: string[];
+  /** Host and admin: what the runners' trackers disagree on. */
+  conflicts: RaceConflict[];
   /** Host only: why the stream display can't be served, if it can't. */
   display: string;
   /** Host and admin: how many things are corrected in the combined run. */
@@ -75,6 +76,20 @@ export interface RaceRoster {
   editable: number[];
 }
 
+/**
+ * A conflict settled from the Race conflicts window, which the main window
+ * applies to the merged view (tauri/race-link.svelte.ts).
+ */
+export interface RaceResolution {
+  /** Tells one request from the next. */
+  id: string;
+  key: string;
+  /** Settles the conflict as the runners' trackers have it now - see logic/race-conflicts.ts. */
+  signature?: string;
+  /** Corrections to the merged view's Sphere Tracker store, by field. */
+  sphere: Record<string, string | null>;
+}
+
 function loadView(): number {
   return Number(localStorage.getItem(RACE_VIEW_KEY)) || 0;
 }
@@ -90,11 +105,13 @@ export const race: {
   /** Host and admin: whose run the tracker shows - 0 for the runners' combined, else a runner's slot. */
   view: number;
   roster: RaceRoster;
+  resolution: RaceResolution | null;
 } = $state({
   session: loadSession(),
   status: loadStatus(),
   view: loadView(),
-  roster: loadRoster()
+  roster: loadRoster(),
+  resolution: readJson<RaceResolution>(RACE_RESOLVE_KEY)
 });
 
 export function setRaceSession(session: RaceSession | null): void {
@@ -144,6 +161,16 @@ export function setRaceRoster(roster: RaceRoster): void {
 
 export function reloadRaceRosterFromStorage(): void {
   race.roster = loadRoster();
+}
+
+export function requestRaceResolution(resolution: Omit<RaceResolution, "id">): void {
+  const request = { ...resolution, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` };
+  race.resolution = request;
+  localStorage.setItem(RACE_RESOLVE_KEY, JSON.stringify(request));
+}
+
+export function reloadRaceResolutionFromStorage(): void {
+  race.resolution = readJson<RaceResolution>(RACE_RESOLVE_KEY);
 }
 
 /** A runner as the trackers show them: by the host's name for them, or as "Runner 2". */

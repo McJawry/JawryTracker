@@ -29,6 +29,8 @@ export const RACE_STATUS_KEY = "ww-rando-hint-tracker-race-status";
 export const RACE_VIEW_KEY = "ww-rando-hint-tracker-race-view";
 // The host's names for the runners, and which can be tracked for while offline.
 export const RACE_ROSTER_KEY = "ww-rando-hint-tracker-race-roster";
+// A conflict settled from the Race conflicts window, for the main window to apply.
+export const RACE_RESOLVE_KEY = "ww-rando-hint-tracker-race-resolve";
 export const RACE_EDITS_KEY = "ww-rando-hint-tracker-race-edits";
 // The relay in this repo's relay/ folder, as deployed for everyone to use. A
 // tournament can run its own copy and point Race Tracking at that instead.

@@ -23,8 +23,6 @@ export interface MergedRaceRun {
   dungeonItems: Record<string, DungeonItems>;
   /** The seed's config.yaml: the host's, or without one the first runner's. */
   config: string;
-  /** Where the runners' trackers disagree, worded for the host. */
-  conflicts: string[];
 }
 
 function parseJson(text: string | undefined): unknown {
@@ -70,7 +68,6 @@ function placementTime(placement: SpherePlacement): number {
 
 interface Runner {
   slot: number;
-  label: string;
   stores: RaceSlotStores;
 }
 
@@ -113,8 +110,8 @@ function mergeNotes(runners: Runner[], describe: DescribeNoteLine): string {
 }
 
 /** One location holds one item, so two runners recording different ones is a mistake somewhere. */
-function mergePlacements(runners: Runner[], sphereOf: (runner: Runner) => SphereState, conflicts: string[]): SpherePlacement[] {
-  const byLocation = new Map<string, { placement: SpherePlacement; runner: Runner }>();
+function mergePlacements(runners: Runner[], sphereOf: (runner: Runner) => SphereState): SpherePlacement[] {
+  const byLocation = new Map<string, SpherePlacement>();
   const usedIds = new Set<string>();
 
   runners.forEach((runner) => {
@@ -122,42 +119,24 @@ function mergePlacements(runners: Runner[], sphereOf: (runner: Runner) => Sphere
       if (!placement?.item || !placement.location) return;
       const key = itemKey(placement.location);
       const existing = byLocation.get(key);
-      if (existing && itemKey(existing.placement.item) === itemKey(placement.item)) return;
-
-      if (existing) {
-        conflicts.push(
-          `${placement.location}: ${existing.runner.label} has ${existing.placement.item}, ${runner.label} has ${placement.item}`
-        );
-        // The newer of the two is likelier to be a correction.
-        if (placementTime(placement) <= placementTime(existing.placement)) return;
-      }
+      // Of two different items, the newer is likelier to be a correction -
+      // until the conflict is settled (logic/race-conflicts.ts).
+      if (existing && (itemKey(existing.item) === itemKey(placement.item) || placementTime(placement) <= placementTime(existing))) return;
 
       const id = usedIds.has(placement.id) ? `${placement.id}-${runner.slot}` : placement.id;
       usedIds.add(id);
-      byLocation.set(key, { placement: { ...placement, id }, runner });
+      byLocation.set(key, { ...placement, id });
     });
   });
-  return [...byLocation.values()].map(({ placement }) => placement);
+  return [...byLocation.values()];
 }
 
-/** Keys found by any runner, the first runner's answer kept where they differ. */
-function mergeMaps(
-  runners: Runner[],
-  mapOf: (runner: Runner) => Record<string, string>,
-  describe: (key: string) => string,
-  conflicts: string[]
-): Record<string, string> {
+/** Keys found by any runner, the first runner's answer kept where they differ - until that conflict is settled. */
+function mergeMaps(runners: Runner[], mapOf: (runner: Runner) => Record<string, string>): Record<string, string> {
   const merged: Record<string, string> = {};
-  const owner: Record<string, Runner> = {};
   runners.forEach((runner) => {
     Object.entries(mapOf(runner)).forEach(([key, value]) => {
-      if (typeof value !== "string") return;
-      if (!(key in merged)) {
-        merged[key] = value;
-        owner[key] = runner;
-      } else if (merged[key] !== value) {
-        conflicts.push(`${describe(key)}: ${owner[key].label} has ${merged[key]}, ${runner.label} has ${value}`);
-      }
+      if (typeof value === "string" && !(key in merged)) merged[key] = value;
     });
   });
   return merged;
@@ -194,19 +173,16 @@ export function toSphereState(value: unknown): SphereState {
 /**
  * Runner slots in order, each holding the latest value of each store it has
  * sent, and the host's own seed config - which every runner should be on.
- * `describeLine` tells what each note line means; see NoteLine. `name` is
- * what the conflicts call each runner.
+ * `describeLine` tells what each note line means; see NoteLine.
  */
 export function mergeRaceRuns(
   slots: Record<number, RaceSlotStores>,
   hostConfig = "",
-  describeLine: DescribeNoteLine = asTyped,
-  name: (slot: number) => string = (slot) => `Runner ${slot}`
+  describeLine: DescribeNoteLine = asTyped
 ): MergedRaceRun {
   const runners: Runner[] = Object.entries(slots)
-    .map(([slot, stores]) => ({ slot: Number(slot), label: name(Number(slot)), stores }))
+    .map(([slot, stores]) => ({ slot: Number(slot), stores }))
     .sort((a, b) => a.slot - b.slot);
-  const conflicts: string[] = [];
 
   const spheres = new Map(runners.map((runner) => [runner, toSphereState(parseJson(runner.stores.sphere))]));
   const sphereOf = (runner: Runner) => spheres.get(runner)!;
@@ -245,28 +221,21 @@ export function mergeRaceRuns(
 
   // The host's seed config is the race's. Only a host without one falls back
   // on a runner's.
-  const configs = runners.filter((runner) => runner.stores.config?.trim());
-  const fromHost = Boolean(hostConfig.trim());
-  const config = fromHost ? hostConfig : (configs[0]?.stores.config ?? "");
-  const owner = fromHost ? "the host's" : `${configs[0]?.label}'s`;
-  configs.forEach((runner) => {
-    if (runner.stores.config!.trim() !== config.trim()) conflicts.push(`${runner.label}'s seed settings differ from ${owner}`);
-  });
+  const config = hostConfig.trim() ? hostConfig : (runners.find((runner) => runner.stores.config?.trim())?.stores.config ?? "");
 
   return {
     notes: mergeNotes(runners, describeLine),
     checked,
     items,
     sphere: {
-      placements: mergePlacements(runners, sphereOf, conflicts),
-      entranceMappings: mergeMaps(runners, (runner) => sphereOf(runner).entranceMappings, (dungeon) => dungeon, conflicts),
-      entranceConnections: mergeMaps(runners, (runner) => sphereOf(runner).entranceConnections, (entrance) => entrance, conflicts),
+      placements: mergePlacements(runners, sphereOf),
+      entranceMappings: mergeMaps(runners, (runner) => sphereOf(runner).entranceMappings),
+      entranceConnections: mergeMaps(runners, (runner) => sphereOf(runner).entranceConnections),
       randomStartingItems: mergeMultiset(runners.map((runner) => sphereOf(runner).randomStartingItems)),
       requiredBossOverrides,
       highlightedSectors: [...highlightedSectors]
     },
     dungeonItems,
-    config,
-    conflicts
+    config
   };
 }

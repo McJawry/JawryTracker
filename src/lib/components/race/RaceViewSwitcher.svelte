@@ -4,7 +4,11 @@
   // their own tracker has it - to look at, or to track for them while their
   // tracker is offline, when the host allows it. Picked from any window - the
   // main window does the showing (tauri/race-link.svelte.ts).
+  //
+  // Then Conflicts, which flashes while the runners' trackers disagree on
+  // something and opens the Race conflicts window to settle it.
   import { canTrackForRunner, isRaceViewReadOnly, race, runnerName, setRaceView } from "$lib/state/race.svelte";
+  import { openPopoutWindow } from "$lib/tauri/popout-window";
 
   const slots = $derived(
     race.session && race.session.role !== "runner" ? Array.from({ length: race.session.slot }, (_, index) => index + 1) : []
@@ -21,6 +25,20 @@
 
   // A runner who has sent nothing has nothing to show - unless it's for this tracker to track.
   const hasRun = (slot: number) => (race.status.runners[slot]?.updatedAt ?? 0) > 0;
+
+  const conflictCount = $derived(race.status.conflicts?.length ?? 0);
+
+  function openConflicts() {
+    void openPopoutWindow({
+      label: "race-conflicts-popout",
+      popoutParam: "race-conflicts",
+      title: "Race conflicts",
+      width: 460,
+      height: 480,
+      minWidth: 320,
+      minHeight: 240
+    });
+  }
 
   function runnerTitle(slot: number): string {
     const name = runnerName(slot);
@@ -55,6 +73,17 @@
         {runnerName(slot)}
       </button>
     {/each}
+    <button
+      type="button"
+      class="tool-button map-toolbar-button race-conflicts-button"
+      class:flashing={conflictCount > 0}
+      title={conflictCount
+        ? `The runners' trackers disagree on ${conflictCount} thing${conflictCount === 1 ? "" : "s"}. Open the list to settle them.`
+        : "The runners' trackers agree on everything they've recorded"}
+      onclick={openConflicts}
+    >
+      Conflicts
+    </button>
   </div>
   {#if race.view}
     <span class="race-view-note">{isRaceViewReadOnly() ? "View only" : `Tracking for ${runnerName(race.view)}`}</span>

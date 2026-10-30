@@ -99,11 +99,14 @@ const runnerCountBefore = runner1.received.length;
 admin.socket.send(JSON.stringify({ type: "edits", set: { items: { Hookshot: null, Bow: "2" } }, clear: {} }));
 const toHost = await waitFor(host, (data) => data.type === "edits");
 check("an admin's corrections reach the host", JSON.stringify(toHost?.data.edits) === JSON.stringify({ items: { Hookshot: null, Bow: "2" } }));
-host.socket.send(JSON.stringify({ type: "edits", set: { checked: { "sphere-location-checked:a": "true" } }, clear: { items: ["Bow"] } }));
+host.socket.send(
+  JSON.stringify({ type: "edits", set: { checked: { "sphere-location-checked:a": "true" }, resolved: { "location|a": "bow|hookshot" } }, clear: { items: ["Bow"] } })
+);
 const toAdmin = await waitFor(admin, (data) => data.type === "edits" && Boolean(data.edits.checked));
 check(
-  "the host's reach the admin, as every correction there is",
-  JSON.stringify(toAdmin?.data.edits) === JSON.stringify({ items: { Hookshot: null }, checked: { "sphere-location-checked:a": "true" } })
+  "the host's reach the admin, as every correction and settled conflict there is",
+  JSON.stringify(toAdmin?.data.edits) ===
+    JSON.stringify({ items: { Hookshot: null }, checked: { "sphere-location-checked:a": "true" }, resolved: { "location|a": "bow|hookshot" } })
 );
 admin.socket.send(JSON.stringify({ type: "state", store: "items", value: "{}" }));
 admin.socket.send('{"type":"edits","set":{"items":{"__proto__":"x"},"settings":{"x":"y"}}}');
@@ -177,7 +180,8 @@ check(
 );
 check(
   "and the corrections, without anything a correction couldn't name",
-  JSON.stringify(restored?.data.edits) === JSON.stringify({ items: { Hookshot: null }, checked: { "sphere-location-checked:a": "true" } })
+  JSON.stringify(restored?.data.edits) ===
+    JSON.stringify({ items: { Hookshot: null }, checked: { "sphere-location-checked:a": "true" }, resolved: { "location|a": "bow|hookshot" } })
 );
 
 [runner1, viewer, admin, rejoined].forEach((client) => client.socket.close());

@@ -17,6 +17,10 @@
 // host and its admins to share. A relay from before admins keeps none, and
 // the host's stay in the host's tracker.
 //
+// The host's and admins' trackers also work out what the runners' trackers
+// disagree on (logic/race-conflicts.ts), for the Conflicts button, and settle
+// a conflict the Race conflicts window asks them to with corrections.
+//
 // The host's tracker also tells the stream display server
 // (src-tauri/src/race_display.rs) which room to follow, and how to show it:
 // the grid layout's cells, and which bosses the runs between them have shown
@@ -53,6 +57,8 @@ import {
   type RaceRunStores
 } from "$lib/logic/race-edits";
 import { describeHintLine } from "$lib/logic/hint-canonical";
+import { findRaceConflicts } from "$lib/logic/race-conflicts";
+import { getFindableCopies } from "$lib/logic/assignment";
 import { planRaceStreamGrid } from "$lib/logic/race-stream-grid";
 import { getBossRequirements } from "$lib/logic/dead-locations";
 import {
@@ -64,6 +70,7 @@ import {
   setRaceRoster,
   setRaceStatus,
   setRaceView,
+  type RaceResolution,
   type RaceRunnerStatus,
   type RaceSession
 } from "$lib/state/race.svelte";
@@ -106,6 +113,8 @@ export function initRaceLink(): void {
   started = true;
   // Left on a runner's run by a tracker closed while showing it.
   if (race.view) setRaceView(0);
+  // The last conflict settled was settled then - not again now.
+  settledRequest = race.resolution?.id ?? "";
 
   $effect.root(() => {
     $effect(() => {
@@ -142,6 +151,12 @@ export function initRaceLink(): void {
     $effect(() => {
       const view = race.view;
       untrack(() => queueHostWork(() => showView(view)));
+    });
+
+    // A conflict settled from the Race conflicts window.
+    $effect(() => {
+      const request = race.resolution;
+      if (request) untrack(() => queueHostWork(() => settleConflict(request)));
     });
 
     // What the stream displays are told turns on the layout and on everything
@@ -192,6 +207,7 @@ function follow(session: RaceSession | null) {
   clearTimeout(mergeTimer);
   welcomed = false;
   clearTimeout(welcomeTimer);
+  publishedConflicts = "[]";
 
   if (hosting) void serveRaceDisplay(null);
   hosting = session?.role === "host";
@@ -471,7 +487,7 @@ function takeHostEdits() {
   const run = readRun();
   if (writtenRun && EDITABLE_STORES.every((store) => run[store] === writtenRun![store])) return;
   writtenRun = run;
-  changeHostEdits(findRaceEdits(run, mergedRun, describeNoteLine));
+  changeHostEdits(findRaceEdits(run, mergedRun, describeNoteLine, hostEdits));
 }
 
 /**
@@ -502,6 +518,40 @@ function changeHostEdits(next: RaceEdits) {
   if (roomKeepsEdits) sendEditChanges(hostEdits, next);
   hostEdits = next;
   saveHostEdits();
+  publishConflicts();
+}
+
+let publishedConflicts = "[]";
+
+/** What the runners' trackers disagree on now, for every window's Conflicts button. */
+function publishConflicts() {
+  if (!mergedRun) return;
+  const conflicts = findRaceConflicts({
+    slots: slotStores,
+    shown: applyRaceEdits(mergedRun, hostEdits, describeNoteLine),
+    edits: hostEdits,
+    raceConfig: race.session?.role === "admin" ? (hostConfig ?? "") : (settings.randoConfigText ?? ""),
+    name: runnerName,
+    copiesOf: getFindableCopies
+  });
+  const published = JSON.stringify(conflicts);
+  if (published === publishedConflicts) return;
+  publishedConflicts = published;
+  setRaceStatus({ conflicts });
+}
+
+let settledRequest = "";
+
+/** Settles a conflict as the Race conflicts window asked: corrections, and maybe a resolution. */
+function settleConflict(request: RaceResolution) {
+  if (!combining || !mergedRun || request.id === settledRequest) return;
+  settledRequest = request.id;
+  // A change made here and not taken in yet goes in first.
+  takeHostEdits();
+  const next: RaceEdits = { ...hostEdits, sphere: { ...hostEdits.sphere, ...request.sphere } };
+  if (request.signature) next.resolved = { ...hostEdits.resolved, [request.key]: request.signature };
+  changeHostEdits(next);
+  if (!shownView) writeRun(viewedRun()!);
 }
 
 function sendEditChanges(before: RaceEdits, after: RaceEdits) {
@@ -516,6 +566,7 @@ function adoptRoomEdits(edits: RaceEdits) {
   takeHostEdits();
   hostEdits = edits;
   saveHostEdits();
+  publishConflicts();
   if (mergedRun && !shownView) writeRun(viewedRun()!);
 }
 
@@ -584,8 +635,7 @@ async function applyMergedRun() {
   // dungeons abbreviated - rather than whichever shorthand a runner typed.
   // The host's seed config is the race's, and an admin has it from the room.
   const raceConfig = race.session?.role === "admin" ? (hostConfig ?? "") : (settings.randoConfigText ?? "");
-  const merged = mergeRaceRuns(slotStores, raceConfig, describeNoteLine, runnerName);
-  setRaceStatus({ conflicts: merged.conflicts });
+  const merged = mergeRaceRuns(slotStores, raceConfig, describeNoteLine);
 
   // Only a host without seed settings of its own takes a runner's. The config
   // goes first: taking it on trims the random starting items to the seed's
@@ -610,6 +660,7 @@ async function applyMergedRun() {
     dungeonItems: JSON.stringify(merged.dungeonItems)
   };
   saveHostEdits();
+  publishConflicts();
   writeRun(viewedRun()!);
 }
 

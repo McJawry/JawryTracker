@@ -53,7 +53,6 @@ describe("mergeRaceRuns", () => {
     expect(merged.items).toEqual({ Hookshot: 1, "Progressive Sword": 2, "Deku Leaf": 1 });
     expect(merged.sphere.placements.map((placement) => placement.item)).toEqual(["Hookshot", "Deku Leaf"]);
     expect(Object.keys(merged.sphere.entranceConnections)).toHaveLength(2);
-    expect(merged.conflicts).toEqual([]);
   });
 
   it("keeps one placement where both runners recorded the same item", () => {
@@ -62,16 +61,14 @@ describe("mergeRaceRuns", () => {
       2: runner({ placements: [at(300, "hookshot", "windfall island - jail maze")] })
     });
     expect(merged.sphere.placements).toHaveLength(1);
-    expect(merged.conflicts).toEqual([]);
   });
 
-  it("takes the newer of two different items at one location, and says so", () => {
+  it("takes the newer of two different items at one location", () => {
     const merged = mergeRaceRuns({
       1: runner({ placements: [at(500, "Hookshot", "Windfall Island - Jail Maze")] }),
       2: runner({ placements: [at(100, "Bomb Bag", "Windfall Island - Jail Maze")] })
     });
     expect(merged.sphere.placements.map((placement) => placement.item)).toEqual(["Hookshot"]);
-    expect(merged.conflicts).toEqual(["Windfall Island - Jail Maze: Runner 1 has Hookshot, Runner 2 has Bomb Bag"]);
   });
 
   it("gives each placement its own id when two runners' trackers made the same one", () => {
@@ -173,7 +170,7 @@ describe("mergeRaceRuns", () => {
     expect(merged.sphere.randomStartingItems).toEqual(["Progressive Sword", "Hookshot", "Progressive Sword"]);
   });
 
-  it("plays by the host's seed config, and flags a runner on other settings", () => {
+  it("plays by the host's seed config", () => {
     const merged = mergeRaceRuns(
       {
         1: runner({ config: "seed: A\n" }),
@@ -183,17 +180,15 @@ describe("mergeRaceRuns", () => {
       "seed: A\n"
     );
     expect(merged.config).toBe("seed: A\n");
-    expect(merged.conflicts).toEqual(["Runner 2's seed settings differ from the host's"]);
   });
 
-  it("without the host's, uses the first runner's config, and flags a runner on different settings", () => {
+  it("without the host's, uses the first runner's config", () => {
     const merged = mergeRaceRuns({
       1: runner({}),
       2: runner({ config: "seed: A\n" }),
       3: runner({ config: "seed: B\n" })
     });
     expect(merged.config).toBe("seed: A\n");
-    expect(merged.conflicts).toEqual(["Runner 3's seed settings differ from Runner 2's"]);
   });
 
   it("copes with runners who have sent nothing yet, or something unreadable", () => {

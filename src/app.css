@@ -2145,6 +2145,16 @@ body.stream-mode .empty-state {
   white-space: nowrap;
 }
 
+/* Set a little apart from the runners, and flashing like an armed Mark
+   starting while there's something to settle. */
+.race-view-switcher .race-conflicts-button {
+  margin-left: 6px;
+}
+
+.race-view-switcher .race-conflicts-button.flashing {
+  animation: mark-starting-flash 0.5s ease-in-out infinite;
+}
+
 /* The run being shown, filled in the way an armed Mark starting flashes. */
 .race-view-switcher .map-toolbar-button.active {
   border-color: var(--accent);

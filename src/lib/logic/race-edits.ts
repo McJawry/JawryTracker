@@ -9,7 +9,9 @@
 // sends a new value for that same field: whoever changed it last is right.
 //
 // The room keeps the corrections for the host and its admins to share, so each
-// tracker tells the room what it changed (diffRaceEdits).
+// tracker tells the room what it changed (diffRaceEdits). It keeps their
+// resolutions with them too: the conflicts settled as the runners' trackers
+// had them (logic/race-conflicts.ts), which no store holds.
 import { toSphereState, type DescribeNoteLine, type RaceSlotStores } from "$lib/logic/race-merge";
 
 /** What a host can correct: everything a runner sends but the config and display. */
@@ -19,8 +21,13 @@ export type EditableStore = (typeof EDITABLE_STORES)[number];
 /** A run as its stores are saved. */
 export type RaceRunStores = Record<EditableStore, string>;
 
-/** Store -> field -> the value shown instead, worded as storeFields words it, or null for none. */
-export type RaceEdits = Partial<Record<EditableStore, Record<string, string | null>>>;
+/**
+ * Store -> field -> the value shown instead, worded as storeFields words it, or
+ * null for none. And under `resolved`, conflict key -> what it was settled at.
+ */
+export type RaceEdits = Partial<Record<EditableStore | "resolved", Record<string, string | null>>>;
+
+const EDIT_KINDS = [...EDITABLE_STORES, "resolved"] as const;
 
 /** A store's fields, each worded so that two values compare as text. */
 type Fields = Map<string, string>;
@@ -224,9 +231,12 @@ function changedFields(before: Fields, after: Fields): Map<string, string | null
   return changed;
 }
 
-/** What the host's tracker shows differently from the combined run: the host's edits. */
-export function findRaceEdits(shown: RaceRunStores, merged: RaceRunStores, describe: DescribeNoteLine): RaceEdits {
-  const edits: RaceEdits = {};
+/**
+ * What the host's tracker shows differently from the combined run: the host's
+ * edits - with the resolutions of `before`, which the run doesn't show.
+ */
+export function findRaceEdits(shown: RaceRunStores, merged: RaceRunStores, describe: DescribeNoteLine, before: RaceEdits = {}): RaceEdits {
+  const edits: RaceEdits = before.resolved ? { resolved: before.resolved } : {};
   EDITABLE_STORES.forEach((store) => {
     const fields = STORE_FIELDS[store];
     const changed = changedFields(fields.read(merged[store], describe), fields.read(shown[store], describe));
@@ -275,10 +285,13 @@ export function dropUpdatedEdits(
 }
 
 /** What changed from one set of edits to another, as a room is told: fields to set, and fields to stop correcting. */
-export function diffRaceEdits(before: RaceEdits, after: RaceEdits): { set: RaceEdits; clear: Partial<Record<EditableStore, string[]>> } {
+export function diffRaceEdits(
+  before: RaceEdits,
+  after: RaceEdits
+): { set: RaceEdits; clear: Partial<Record<EditableStore | "resolved", string[]>> } {
   const set: RaceEdits = {};
-  const clear: Partial<Record<EditableStore, string[]>> = {};
-  EDITABLE_STORES.forEach((store) => {
+  const clear: Partial<Record<EditableStore | "resolved", string[]>> = {};
+  EDIT_KINDS.forEach((store) => {
     const was = before[store] ?? {};
     const now = after[store] ?? {};
     Object.entries(now).forEach(([field, value]) => {
@@ -291,7 +304,12 @@ export function diffRaceEdits(before: RaceEdits, after: RaceEdits): { set: RaceE
   return { set, clear };
 }
 
+/** The correction putting an item at a location, or nothing there for null: its Sphere Tracker field and value. */
+export function placementCorrection(location: string, item: string | null): [string, string | null] {
+  return [`placement|${locationKey(location)}`, item === null ? null : JSON.stringify({ item, location })];
+}
+
 /** How many fields have been corrected. */
 export function countRaceEdits(edits: RaceEdits): number {
-  return Object.values(edits).reduce((total, fields) => total + Object.keys(fields ?? {}).length, 0);
+  return EDITABLE_STORES.reduce((total, store) => total + Object.keys(edits[store] ?? {}).length, 0);
 }

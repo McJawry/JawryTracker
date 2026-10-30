@@ -31,6 +31,7 @@
     RACE_GRID_WIDTH
   } from "$lib/logic/race-stream-grid";
   import { checkRelayRoom, relayBase } from "$lib/tauri/relay-socket";
+  import { describeRaceConflict } from "$lib/logic/race-conflicts";
   import { applySeedConfigText } from "$lib/tauri/rando-sync";
   import { confirmAction } from "$lib/tauri/confirm-dialog";
 
@@ -366,10 +367,10 @@
         This tracker's run is sent to the host as you track. It keeps the host's seed settings until you leave the race.
       </p>
     {/if}
-    {#if session.role !== "runner" && status.conflicts.length}
-      <p class="setting-status">The runners' trackers disagree:</p>
+    {#if session.role !== "runner" && status.conflicts?.length}
+      <p class="setting-status">The runners' trackers disagree - settle it from Conflicts above the map:</p>
       <ul class="race-conflicts">
-        {#each status.conflicts as conflict (conflict)}<li>{conflict}</li>{/each}
+        {#each status.conflicts as conflict (conflict.key)}<li>{describeRaceConflict(conflict)}</li>{/each}
       </ul>
     {/if}
 

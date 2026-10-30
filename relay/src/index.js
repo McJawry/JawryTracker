@@ -27,7 +27,8 @@
 // correct the combined run their trackers make, and those corrections are the
 // room's: one sends { type: "edits", set, clear } - by store, the fields to
 // set and the fields to stop correcting - and every host and admin gets them
-// all back as { type: "edits", edits }, as the snapshot holds them too.
+// all back as { type: "edits", edits }, as the snapshot holds them too. The
+// conflicts they've settled travel the same way, as a `resolved` store.
 // Runners never hear of them.
 //
 // The host can let a runner be tracked for while their own tracker is offline:
@@ -48,6 +49,8 @@ const MAX_MESSAGE_BYTES = 512 * 1024;
 const ROOM_LIFETIME_MS = 2 * 24 * 60 * 60 * 1000;
 // The stores of a run that a host or admin can correct, or track for a runner.
 const EDITABLE_STORES = ["notes", "checked", "items", "sphere", "dungeonItems"];
+// What the corrections are kept under: those stores, and the conflicts settled.
+const EDIT_KINDS = [...EDITABLE_STORES, "resolved"];
 
 // The tracker runs from its own origin (tauri.localhost), and the stream
 // display from a local server, so every answer has to be readable cross-origin.
@@ -299,7 +302,7 @@ export class MatchRoom extends DurableObject {
     const edits = await this.readEdits();
     // Store and field names come from a tracker, so none of them may reach an object's prototype.
     const usable = (name) => typeof name === "string" && name !== "__proto__";
-    EDITABLE_STORES.forEach((store) => {
+    EDIT_KINDS.forEach((store) => {
       const setting = set?.[store];
       if (setting && typeof setting === "object") {
         Object.entries(setting).forEach(([field, value]) => {

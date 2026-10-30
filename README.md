@@ -463,8 +463,19 @@ shows none of it.
     or that the tracker can't read for certain, stay as the runner typed them.
   - The same hint from two runners is kept once. One runner writing a hint twice keeps it twice,
     since a seed can give the same path hint twice.
-  - If two trackers record different items at the same location, the newer one is kept and the
-    tab lists the disagreement.
+  - **Conflicts**, after the runner buttons above the map, flashes red while the runners'
+    trackers disagree, and opens the **Race conflicts** window. Click a line there to settle it
+    in the merged view, the same way the tracker asks which copy you meant:
+    - Two trackers with different items at one location: pick which is there, or neither. Until
+      then, the newer one is kept.
+    - An item placed more often than the seed has it, like one Hookshot at two locations or a
+      fifth bottle: pick the right placement, or remove one at a time. **Somewhere else** removes
+      them all, for you to place it yourself.
+    - An entrance sent two places: pick where it leads.
+    - A runner's tracker on other seed settings is listed too, but settles itself.
+
+    Settling a conflict is a correction like any other: the host and admins see it, the runners
+    don't, and a runner's tracker changing its answer brings the conflict back.
   - The tab shows which runners are connected and when each last sent an update.
   - Give each runner a **name** to tell them apart. It shows in the tab, on the buttons above
     the map, and for your admins.
