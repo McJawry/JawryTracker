@@ -162,12 +162,14 @@ export async function restoreRandoSync(): Promise<void> {
 }
 
 /**
- * A runner in a race plays by the host's seed config (tauri/race-link), which
- * a Sync must not swap for the folder's. Their logic still comes from the
- * folder, since that follows the randomizer build rather than the seed.
+ * A runner or admin in a race plays by the host's seed config
+ * (tauri/race-link), which a Sync must not swap for the folder's. Their logic
+ * still comes from the folder, since that follows the randomizer build rather
+ * than the seed.
  */
 function followsHostConfig(): boolean {
-  return race.session?.role === "runner" && Boolean(settings.randoConfigText?.trim());
+  const role = race.session?.role;
+  return (role === "runner" || role === "admin") && Boolean(settings.randoConfigText?.trim());
 }
 
 async function syncFromFolder(folder: string): Promise<RandoSyncResult> {

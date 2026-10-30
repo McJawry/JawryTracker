@@ -1,16 +1,17 @@
 <script lang="ts">
   // The Race Tracking tab: links this tracker into a race shown on one stream,
-  // as its host or as one runner's tracker operator. All of Race Tracking is
+  // as its host, as one runner's tracker operator, or as an admin helping run
+  // it - who sees and corrects the combined run as the host does. All of Race Tracking is
   // reached from here - a tracker that never races shows none of it. The
   // connection itself runs in the main window (tauri/race-link.svelte.ts);
   // this tab only sets the session up and shows how it is going.
   //
   // The host's seed settings are the race's, so a host needs some to share,
-  // and a runner's tracker takes them before it joins.
+  // and a runner's or admin's tracker takes them before it joins.
   import { DEFAULT_RACE_RELAY, RACE_DISPLAY_ORIGIN } from "$lib/constants";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
-  import { race, setRaceSession, formatRunnerCode, parseRunnerCode } from "$lib/state/race.svelte";
+  import { race, setRaceSession, formatAdminCode, formatRunnerCode, parseRaceCode } from "$lib/state/race.svelte";
   import { clearRun } from "$lib/state/new-run";
   import { loadReferenceData } from "$lib/logic/data-loading";
   import {
@@ -27,14 +28,17 @@
   const MAX_RUNNERS = 4;
 
   let runnerCount = $state(2);
-  let runnerCode = $state("");
+  let raceCode = $state("");
   let busy = $state(false);
   let message = $state("");
   let copied = $state("");
 
   const session = $derived(race.session);
   const status = $derived(race.status);
-  const runnerSlots = $derived(session?.role === "host" ? Array.from({ length: session.slot }, (_, index) => index + 1) : []);
+  const runnerSlots = $derived(
+    session && session.role !== "runner" ? Array.from({ length: session.slot }, (_, index) => index + 1) : []
+  );
+  const adminCode = $derived(session?.role === "host" && status.adminKey ? formatAdminCode(session.room, status.adminKey) : "");
 
   // What the browser sources' grid holds for this seed, so the host can size
   // it to fit - and how big the Browser Sources have to be to show it.
@@ -80,14 +84,21 @@
   }
 
   async function joinRace() {
-    const code = parseRunnerCode(runnerCode);
+    const code = parseRaceCode(raceCode);
     if (!code) {
-      message = "That isn't a runner code. They look like 79RVYS-1-ABCDEFGHJKLM.";
+      message = "That isn't a race code. A runner's looks like 79RVYS-1-ABCDEFGHJKLM, and an admin's like 79RVYS-A-ABCDEFGHJKLM.";
       return;
     }
+    const slot = code.slot;
     busy = true;
     message = "Checking the code...";
-    const check = await checkRelayRoom({ relay: settings.raceRelayUrl, room: code.room, role: "runner", slot: code.slot, key: code.key });
+    const check = await checkRelayRoom({
+      relay: settings.raceRelayUrl,
+      room: code.room,
+      role: slot === null ? "admin" : "runner",
+      slot: slot ?? undefined,
+      key: code.key
+    });
     busy = false;
     if (!check.ok) {
       message = check.message;
@@ -103,8 +114,11 @@
     // different seed's logic, so joining syncs them first - or doesn't join.
     const differs = hostConfig.trim() !== (settings.randoConfigText ?? "").trim();
     const sent =
-      `everything in this tracker is sent to the host as runner ${code.slot}'s run until you leave the race. ` +
-      "Start a new tracker first if it still holds another seed.";
+      slot === null
+        ? "this tracker shows the runners' combined run in place of the run it has now, until you leave the race. " +
+          "Save that under Load saves first if you want to keep it."
+        : `everything in this tracker is sent to the host as runner ${slot}'s run until you leave the race. ` +
+          "Start a new tracker first if it still holds another seed.";
     const question = differs
       ? `This tracker's seed settings don't match the host's. Joining syncs them to the host's, and then ${sent}\n\nSync and join the race?`
       : `This tracker's seed settings match the host's. From now on, ${sent}\n\nJoin the race?`;
@@ -128,8 +142,13 @@
       }
       busy = false;
     }
-    setRaceSession({ role: "runner", relay: settings.raceRelayUrl, room: code.room, key: code.key, slot: code.slot });
-    runnerCode = "";
+    if (slot === null) {
+      clearRun();
+      setRaceSession({ role: "admin", relay: settings.raceRelayUrl, room: code.room, key: code.key, slot: check.slots });
+    } else {
+      setRaceSession({ role: "runner", relay: settings.raceRelayUrl, room: code.room, key: code.key, slot });
+    }
+    raceCode = "";
     message = "";
   }
 
@@ -137,7 +156,9 @@
     const question =
       session?.role === "host"
         ? "End the race? This tracker keeps the combined run, and the stream displays go blank."
-        : "Leave the race? This tracker stops sending to the host.";
+        : session?.role === "admin"
+          ? "Leave the race? This tracker keeps the combined run."
+          : "Leave the race? This tracker stops sending to the host.";
     if (await confirmAction(question)) setRaceSession(null);
   }
 
@@ -163,7 +184,8 @@
     <legend>Race Tracking</legend>
     <p class="setting-hint">
       Links trackers for a race shown on one stream. Each runner's tracker operator joins with a runner code. The host's
-      tracker combines their runs into one for the Sphere Tracker, and shows each runner's items to OBS.
+      tracker combines their runs into one for the Sphere Tracker, and shows each runner's items to OBS. Anyone helping run
+      the race can join with the admin code to see and correct the combined run as well.
     </p>
   </fieldset>
 
@@ -187,19 +209,23 @@
   </fieldset>
 
   <fieldset class="settings-group">
-    <legend>Track for a runner</legend>
+    <legend>Join a race</legend>
     <div class="setting-row">
       <input
         class="preset-name race-code"
         type="text"
-        placeholder="Runner code from the host"
+        placeholder="Runner or admin code from the host"
         spellcheck="false"
-        bind:value={runnerCode}
+        bind:value={raceCode}
         disabled={busy}
         onkeydown={(event) => event.key === "Enter" && joinRace()}
       />
-      <button class="tool-button" type="button" disabled={busy || !runnerCode.trim()} onclick={joinRace}>Join</button>
+      <button class="tool-button" type="button" disabled={busy || !raceCode.trim()} onclick={joinRace}>Join</button>
     </div>
+    <p class="setting-hint">
+      A runner code sends this tracker's run to the host as that runner's. An admin code shows the runners' combined run
+      instead, which you can correct along with the host.
+    </p>
   </fieldset>
 
   <details class="race-relay">
@@ -222,7 +248,8 @@
   <fieldset class="settings-group">
     <legend>Race Tracking</legend>
     <p class="race-room">
-      {session.role === "host" ? "Hosting room" : `Runner ${session.slot} in room`} <span class="race-code">{session.room}</span>
+      {session.role === "host" ? "Hosting room" : session.role === "admin" ? "Admin in room" : `Runner ${session.slot} in room`}
+      <span class="race-code">{session.room}</span>
     </p>
     <p class="setting-status race-runner-name">
       <span class="race-presence" class:online={status.connected} aria-hidden="true"></span>
@@ -250,21 +277,48 @@
           </div>
         </div>
       {/each}
+      <div class="race-runner">
+        <p class="race-runner-name">Admins</p>
+        {#if adminCode}
+          <div class="setting-row">
+            <input class="preset-name race-code" type="text" readonly value={adminCode} title="Admin code" onfocus={(event) => event.currentTarget.select()} />
+            <button class="tool-button" type="button" onclick={() => copy(adminCode)}>{copied === adminCode ? "Copied" : "Copy code"}</button>
+          </div>
+        {:else if status.connected}
+          <p class="setting-status">This race's relay is too old for admin codes.</p>
+        {/if}
+      </div>
       <p class="setting-hint">
         Send each runner's tracker operator their code. Add each address to OBS as a Browser Source - it shows that runner's
-        items, and keeps working from one race to the next.
+        items, and keeps working from one race to the next. The admin code is for anyone helping run the race, like a
+        commentator: their tracker gets the same Merged and runner views as yours, and a correction either of you makes
+        shows for both.
       </p>
       {#if status.display}<p class="setting-status">{status.display}</p>{/if}
-      {#if status.conflicts.length}
-        <p class="setting-status">The runners' trackers disagree:</p>
-        <ul class="race-conflicts">
-          {#each status.conflicts as conflict (conflict)}<li>{conflict}</li>{/each}
-        </ul>
-      {/if}
+    {:else if session.role === "admin"}
+      {#each runnerSlots as slot (slot)}
+        {@const runner = status.runners[slot]}
+        <p class="race-runner-name">
+          <span class="race-presence" class:online={runner?.online} aria-hidden="true"></span>
+          Runner {slot}
+          <span class="race-runner-detail">{runner?.online ? "online" : "offline"}, {updatedAt(runner?.updatedAt ?? 0)}</span>
+        </p>
+      {/each}
+      <p class="setting-hint">
+        This tracker shows the runners' combined run, and each runner's from the buttons above the map. Corrections you make
+        to the combined run show for the host and other admins too, never for the runners. It keeps the host's seed settings
+        until you leave the race.
+      </p>
     {:else}
       <p class="setting-hint">
         This tracker's run is sent to the host as you track. It keeps the host's seed settings until you leave the race.
       </p>
+    {/if}
+    {#if session.role !== "runner" && status.conflicts.length}
+      <p class="setting-status">The runners' trackers disagree:</p>
+      <ul class="race-conflicts">
+        {#each status.conflicts as conflict (conflict)}<li>{conflict}</li>{/each}
+      </ul>
     {/if}
 
     <div class="setting-row">

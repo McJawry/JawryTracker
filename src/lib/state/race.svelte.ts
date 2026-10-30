@@ -1,7 +1,9 @@
 // Race Tracking: several trackers linked over the relay (relay/ in this repo)
 // for a race shown on one stream. Each runner's tracker operator sends their
 // run; the host's tracker combines them into its own (logic/race-merge.ts)
-// and serves each runner's items to OBS (RaceStreamDisplay.svelte).
+// and serves each runner's items to OBS (RaceStreamDisplay.svelte). An
+// admin's tracker - someone helping run the race - combines them the same
+// way, and corrects the combined run along with the host.
 //
 // Set up from the Settings window but run by the main window
 // (tauri/race-link.svelte.ts), so these stores are how they talk: the session
@@ -10,12 +12,12 @@
 import { RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
 
 export interface RaceSession {
-  role: "host" | "runner";
+  role: "host" | "admin" | "runner";
   relay: string;
   room: string;
   /** The host key, or this runner's own key. */
   key: string;
-  /** This runner's slot, or how many runners the host's room has. */
+  /** This runner's slot, or how many runners the room has. */
   slot: number;
   /** Host only: every runner's key, for handing out their codes. */
   runnerKeys?: string[];
@@ -36,11 +38,13 @@ export interface RaceStatus {
   conflicts: string[];
   /** Host only: why the stream display can't be served, if it can't. */
   display: string;
-  /** Host only: how many things the host has corrected in the combined run. */
+  /** Host and admin: how many things are corrected in the combined run. */
   edits: number;
+  /** Host only: the room's admin key, once the relay has sent it - a relay from before admins doesn't. */
+  adminKey: string;
 }
 
-const IDLE_STATUS: RaceStatus = { connected: false, message: "", runners: {}, conflicts: [], display: "", edits: 0 };
+const IDLE_STATUS: RaceStatus = { connected: false, message: "", runners: {}, conflicts: [], display: "", edits: 0, adminKey: "" };
 
 function readJson<T>(key: string): T | null {
   try {
@@ -52,7 +56,7 @@ function readJson<T>(key: string): T | null {
 
 function loadSession(): RaceSession | null {
   const stored = readJson<RaceSession>(RACE_SESSION_KEY);
-  return stored?.room && stored.key && (stored.role === "host" || stored.role === "runner") ? stored : null;
+  return stored?.room && stored.key && ["host", "admin", "runner"].includes(stored.role) ? stored : null;
 }
 
 function loadStatus(): RaceStatus {
@@ -66,7 +70,7 @@ function loadView(): number {
 export const race: {
   session: RaceSession | null;
   status: RaceStatus;
-  /** Host only: whose run the tracker shows - 0 for the runners' combined, else a runner's slot. */
+  /** Host and admin: whose run the tracker shows - 0 for the runners' combined, else a runner's slot. */
   view: number;
 } = $state({
   session: loadSession(),
@@ -114,7 +118,13 @@ export function formatRunnerCode(room: string, slot: number, key: string): strin
   return `${room}-${slot}-${key}`;
 }
 
-export function parseRunnerCode(text: string): { room: string; slot: number; key: string } | null {
-  const match = /^([A-Z0-9]{6})-([1-9])-([A-Z0-9]{12})$/.exec(text.trim().toUpperCase().replace(/\s+/g, ""));
-  return match ? { room: match[1], slot: Number(match[2]), key: match[3] } : null;
+/** The admin's code: a runner's with an A for the slot - "79RVYS-A-ABCDEFGHJKLM". */
+export function formatAdminCode(room: string, key: string): string {
+  return `${room}-A-${key}`;
+}
+
+/** A runner's code, or an admin's - which has no slot. */
+export function parseRaceCode(text: string): { room: string; slot: number | null; key: string } | null {
+  const match = /^([A-Z0-9]{6})-([1-9]|A)-([A-Z0-9]{12})$/.exec(text.trim().toUpperCase().replace(/\s+/g, ""));
+  return match ? { room: match[1], slot: match[2] === "A" ? null : Number(match[2]), key: match[3] } : null;
 }

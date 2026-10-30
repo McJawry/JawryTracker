@@ -7,12 +7,15 @@
 export interface RelayTarget {
   relay: string;
   room: string;
-  role: "host" | "runner" | "viewer";
+  role: "host" | "admin" | "runner" | "viewer";
   slot?: number;
   key?: string;
 }
 
-/** What the relay sends hosts and viewers - see relay/src/index.js. */
+/** The host's and admins' corrections to the combined run, as the room keeps them - see logic/race-edits.ts. */
+export type RelayEdits = Record<string, Record<string, string | null>>;
+
+/** What the relay sends hosts, admins and viewers - see relay/src/index.js. */
 export type RelayMessage =
   | {
       type: "snapshot";
@@ -21,11 +24,17 @@ export type RelayMessage =
       /** When each slot last sent anything. */
       updated: Record<string, number>;
       online: number[];
+      /** To hosts and admins - missing from a relay from before admins. */
+      edits?: RelayEdits;
+      /** To the host, to hand out. */
+      adminKey?: string;
     }
   | { type: "state"; slot: number; store: string; value: string; at: number }
   | { type: "presence"; slot: number; online: boolean }
-  /** To runners: something the host shares - its seed config. */
+  /** To runners and admins: something the host shares - its seed config. */
   | { type: "host"; store: string; value: string }
+  /** To hosts and admins: every correction, after one of them changed some. */
+  | { type: "edits"; edits: RelayEdits }
   | { type: "error"; message: string };
 
 export interface RelayHandlers {
@@ -59,7 +68,7 @@ function roomQuery(target: RelayTarget): string {
 }
 
 export type RoomCheck =
-  /** `config` is the host's seed config, for a host or runner to take before joining. */
+  /** `config` is the host's seed config, for a runner or admin to take before joining. */
   | { ok: true; slots: number; config?: string }
   | { ok: false; message: string; unreachable?: boolean };
 

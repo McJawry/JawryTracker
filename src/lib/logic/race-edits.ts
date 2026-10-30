@@ -7,6 +7,9 @@
 // check, one hint, one placement, one entrance - as the value to show in place
 // of the combined run's, or null for none. It holds until a runner's tracker
 // sends a new value for that same field: whoever changed it last is right.
+//
+// The room keeps the corrections for the host and its admins to share, so each
+// tracker tells the room what it changed (diffRaceEdits).
 import { toSphereState, type DescribeNoteLine, type RaceSlotStores } from "$lib/logic/race-merge";
 
 /** What a host can correct: everything a runner sends but the config and display. */
@@ -244,7 +247,9 @@ export function applyRaceEdits(merged: RaceRunStores, edits: RaceEdits, describe
 
 /**
  * The edits left once each runner's newest stores are in: a field a runner's
- * tracker has changed since `seen` goes back to what the runners say.
+ * tracker has changed since `seen` goes back to what the runners say. A store
+ * not seen before tells nothing - a tracker that has only just joined the room
+ * can't know what changed before it did.
  */
 export function dropUpdatedEdits(
   edits: RaceEdits,
@@ -256,9 +261,9 @@ export function dropUpdatedEdits(
   Object.entries(slots).forEach(([slot, stores]) => {
     EDITABLE_STORES.forEach((store) => {
       const storeEdits = kept[store];
-      const before = seen[Number(slot)]?.[store] ?? "";
+      const before = seen[Number(slot)]?.[store];
       const after = stores[store] ?? "";
-      if (!storeEdits || before === after) return;
+      if (!storeEdits || before === undefined || before === after) return;
       const fields = STORE_FIELDS[store];
       changedFields(fields.read(before, describe), fields.read(after, describe)).forEach((_, key) => delete storeEdits[key]);
     });
@@ -269,7 +274,24 @@ export function dropUpdatedEdits(
   return kept;
 }
 
-/** How many fields the host has corrected. */
+/** What changed from one set of edits to another, as a room is told: fields to set, and fields to stop correcting. */
+export function diffRaceEdits(before: RaceEdits, after: RaceEdits): { set: RaceEdits; clear: Partial<Record<EditableStore, string[]>> } {
+  const set: RaceEdits = {};
+  const clear: Partial<Record<EditableStore, string[]>> = {};
+  EDITABLE_STORES.forEach((store) => {
+    const was = before[store] ?? {};
+    const now = after[store] ?? {};
+    Object.entries(now).forEach(([field, value]) => {
+      if (!(field in was) || was[field] !== value) (set[store] ??= {})[field] = value;
+    });
+    Object.keys(was).forEach((field) => {
+      if (!(field in now)) (clear[store] ??= []).push(field);
+    });
+  });
+  return { set, clear };
+}
+
+/** How many fields have been corrected. */
 export function countRaceEdits(edits: RaceEdits): number {
   return Object.values(edits).reduce((total, fields) => total + Object.keys(fields ?? {}).length, 0);
 }

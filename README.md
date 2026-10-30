@@ -446,13 +446,17 @@ shows none of it.
   - Sync your seed settings first: runners take the host's. Then pick how many runners (2 to 4)
     and **Create race room**. This replaces your run, so save it first if you want to keep it.
   - Send each runner's tracker operator their **runner code**.
+  - The **admin code** is for anyone helping run the race, like a commentator. Their tracker
+    gets the same combined run and runner views as yours, and can correct the combined run too.
+    See **Helping as an admin** below.
   - Your tracker combines the runners' runs into one: every item placement, checked location,
     entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
     shows everything known about the seed.
   - If a runner's tracker has something wrong, correct it in your tracker as usual. Your
     corrections stay through every update and decide the bosses the stream shows, but they never
-    reach the runners. When a runner's tracker changes the same thing again (the same item,
-    location, hint, placement or entrance), theirs replaces yours.
+    reach the runners. Admins see them, and theirs show for you. When a runner's tracker changes
+    the same thing again (the same item, location, hint, placement or entrance), theirs replaces
+    the correction.
   - Hint lines that mean the same thing are merged, however each runner typed them, and your
     notes show them spelled out in full: `diamond to jalh` becomes `Diamond Steppe Island to
     Jalhalla`. Dungeons keep their abbreviations, like `ET to Gohma`. Lines that aren't hints,
@@ -488,17 +492,25 @@ shows none of it.
 - **Generic Triforce shards**: turn it on under **Browser sources** to make every runner's
   Triforce show a shard count, in either layout, even when their tracker shows which shards
   they have.
-- **Tracking for a runner**: paste the runner code into **Track for a runner** and press
+- **Tracking for a runner**: paste the runner code into **Join a race** and press
   **Join**. If your seed settings differ from the host's, joining syncs them to the host's
   first. From then on, your run is sent to the host as you track, and your tracker keeps the
   host's seed settings until you leave: a Sync from the ⚙️ menu only updates the logic. Start a
   new tracker before joining if it still holds another seed.
-- **End race** or **Leave race** disconnects. The host keeps the combined run.
+- **Helping as an admin**: paste the admin code into **Join a race** and press **Join**. Like
+  joining as a runner, it syncs your seed settings to the host's first, and keeps them until you
+  leave. Your tracker's run is replaced by the runners' combined run. From then on it works as
+  the host's does: the **Merged** and **Runner** buttons above the map, and corrections to the
+  combined run that the host and other admins see too. Only the host's tracker serves the stream
+  displays.
+- **End race** or **Leave race** disconnects. The host and admins keep the combined run.
 - Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
   two days after they're created.
 - Races go through a small relay server, the `relay` folder in this repository. Trackers use a
   public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))
   and enter its address under **Relay server**. Everyone in a race has to use the same one.
+  Admin codes need a relay updated for them. On an older one, the host's tab says so and the
+  host's corrections stay in the host's tracker.
 
 ---
 

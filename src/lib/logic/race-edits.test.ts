@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRaceEdits, countRaceEdits, dropUpdatedEdits, findRaceEdits, type RaceRunStores } from "./race-edits";
+import { applyRaceEdits, countRaceEdits, diffRaceEdits, dropUpdatedEdits, findRaceEdits, type RaceRunStores } from "./race-edits";
 import type { DescribeNoteLine } from "./race-merge";
 
 // Hints by the words they're about, the way the hint parser keys them: the
@@ -79,6 +79,18 @@ describe("a race host's edits", () => {
     });
     // Sending the same run again changes nothing.
     expect(dropUpdatedEdits(edits, before, before, describeLine)).toEqual(edits);
+    // Nor does a run first seen now: a tracker joining late can't tell what changed.
+    expect(dropUpdatedEdits(edits, {}, after, describeLine)).toEqual(edits);
+  });
+
+  it("tell the room only what changed, a correction to nothing told apart from no correction", () => {
+    const before = { items: { Hookshot: null, Bow: "2" }, checked: { a: "true" } };
+    const after = { items: { Hookshot: null, Bow: "3" }, notes: { k: JSON.stringify(["k"]) } };
+    expect(diffRaceEdits(before, after)).toEqual({
+      set: { items: { Bow: "3" }, notes: { k: JSON.stringify(["k"]) } },
+      clear: { checked: ["a"] }
+    });
+    expect(diffRaceEdits(after, after)).toEqual({ set: {}, clear: {} });
   });
 
   it("put a placement back on the location it names, keeping the runners' own placement's id", () => {

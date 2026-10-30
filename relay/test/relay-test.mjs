@@ -1,5 +1,5 @@
-// Plays a stream host and two runners' tracker operators against a running
-// relay, and checks what each of them gets.
+// Plays a stream host, an admin and two runners' tracker operators against a
+// running relay, and checks what each of them gets.
 //
 //   npm test                                   (against `npm run dev`)
 //   RELAY_URL=https://….workers.dev npm test   (against a deployed relay)
@@ -36,7 +36,7 @@ async function waitFor(client, predicate, timeout = 5000) {
 const created = await fetch(`${base}/rooms?slots=2`, { method: "POST" });
 check("create a room", created.ok, `HTTP ${created.status}`);
 check("the answer is readable from the tracker's own origin", created.headers.get("access-control-allow-origin") === "*");
-const { room, hostKey, slotKeys } = await created.json();
+const { room, hostKey, adminKey, slotKeys } = await created.json();
 console.log(`      room ${room}, ${slotKeys.length} runner slots`);
 
 // What the tracker asks before joining, so a mistyped code fails at once
@@ -54,6 +54,7 @@ const host = await connect(`${room}/socket?role=host&key=${hostKey}`);
 check("host joins", !host.error);
 const snapshot = await waitFor(host, (data) => data.type === "snapshot");
 check("host gets the room's state on joining", Boolean(snapshot) && Object.keys(snapshot.data.slots).length === 0, "empty so far");
+check("the host's snapshot has the admin key to hand out, and no edits yet", snapshot?.data.adminKey === adminKey && JSON.stringify(snapshot?.data.edits) === "{}");
 
 const runner1 = await connect(`${room}/socket?role=runner&slot=1&key=${slotKeys[0]}`);
 const runner2 = await connect(`${room}/socket?role=runner&slot=2&key=${slotKeys[1]}`);
@@ -75,6 +76,39 @@ lateRunner.socket.close();
 
 const intruder = await connect(`${room}/socket?role=runner&slot=1&key=WRONGKEY0000`);
 check("a wrong slot key is refused", Boolean(intruder.error));
+
+// An admin: the host's view of the race, from another tracker.
+const adminCheck = await fetch(`${base}/rooms/${room}?role=admin&key=${adminKey}`);
+const wrongAdmin = await fetch(`${base}/rooms/${room}?role=admin&key=${hostKey}`);
+check(
+  "an admin code is checked before joining, and the check has the seed settings",
+  adminCheck.status === 200 && (await adminCheck.json()).config === config && wrongAdmin.status === 403,
+  `${adminCheck.status} / ${wrongAdmin.status}`
+);
+const admin = await connect(`${room}/socket?role=admin&key=${adminKey}`);
+check("an admin joins", !admin.error);
+const adminSnapshot = await waitFor(admin, (data) => data.type === "snapshot");
+const adminConfig = await waitFor(admin, (data) => data.type === "host" && data.store === "config");
+check(
+  "an admin gets the room's state and the host's seed settings, but not the admin key",
+  Boolean(adminSnapshot) && adminSnapshot.data.adminKey === undefined && adminConfig?.data.value === config
+);
+
+// Corrections go to the host and every admin, never to runners.
+const runnerCountBefore = runner1.received.length;
+admin.socket.send(JSON.stringify({ type: "edits", set: { items: { Hookshot: null, Bow: "2" } }, clear: {} }));
+const toHost = await waitFor(host, (data) => data.type === "edits");
+check("an admin's corrections reach the host", JSON.stringify(toHost?.data.edits) === JSON.stringify({ items: { Hookshot: null, Bow: "2" } }));
+host.socket.send(JSON.stringify({ type: "edits", set: { checked: { "sphere-location-checked:a": "true" } }, clear: { items: ["Bow"] } }));
+const toAdmin = await waitFor(admin, (data) => data.type === "edits" && Boolean(data.edits.checked));
+check(
+  "the host's reach the admin, as every correction there is",
+  JSON.stringify(toAdmin?.data.edits) === JSON.stringify({ items: { Hookshot: null }, checked: { "sphere-location-checked:a": "true" } })
+);
+admin.socket.send(JSON.stringify({ type: "state", store: "items", value: "{}" }));
+admin.socket.send('{"type":"edits","set":{"items":{"__proto__":"x"},"settings":{"x":"y"}}}');
+await new Promise((resolve) => setTimeout(resolve, 500));
+check("runners hear nothing of it, nor an admin's own run", runner1.received.length === runnerCountBefore);
 
 // A whole run's worth of item state, about the size the real tracker sends.
 const items = JSON.stringify({ Hookshot: 1, "Progressive Sword": 4, padding: "x".repeat(30000) });
@@ -114,7 +148,11 @@ check(
     restored?.data.slotCount === 2 &&
     restored?.data.updated?.["1"] === arrived?.data.at
 );
+check(
+  "and the corrections, without anything a correction couldn't name",
+  JSON.stringify(restored?.data.edits) === JSON.stringify({ items: { Hookshot: null }, checked: { "sphere-location-checked:a": "true" } })
+);
 
-[runner1, viewer, rejoined].forEach((client) => client.socket.close());
+[runner1, viewer, admin, rejoined].forEach((client) => client.socket.close());
 console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
 process.exit(failures ? 1 : 0);

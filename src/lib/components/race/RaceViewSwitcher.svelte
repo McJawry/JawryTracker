@@ -1,17 +1,17 @@
 <script lang="ts">
-  // A race host's choice of whose run the tracker shows: the runners' runs
-  // combined, which the host can correct, or one runner's run as their own
-  // tracker has it, to look at. Picked from any window - the main window does
-  // the showing (tauri/race-link.svelte.ts).
+  // A race host's or admin's choice of whose run the tracker shows: the
+  // runners' runs combined, which they can correct, or one runner's run as
+  // their own tracker has it, to look at. Picked from any window - the main
+  // window does the showing (tauri/race-link.svelte.ts).
   import { race, setRaceView } from "$lib/state/race.svelte";
 
   const slots = $derived(
-    race.session?.role === "host" ? Array.from({ length: race.session.slot }, (_, index) => index + 1) : []
+    race.session && race.session.role !== "runner" ? Array.from({ length: race.session.slot }, (_, index) => index + 1) : []
   );
 
   const mergedTitle = $derived(
     [
-      "Every runner's tracker combined. You can correct it here: your changes stay in your tracker, and in the bosses the stream shows, but never reach the runners - until a runner's tracker changes the same thing again.",
+      "Every runner's tracker combined. You can correct it here: your changes show for the host and admins, and in the bosses the stream shows, but never reach the runners - until a runner's tracker changes the same thing again.",
       race.status.edits ? `You have changed ${race.status.edits} thing${race.status.edits === 1 ? "" : "s"}.` : ""
     ]
       .filter(Boolean)
