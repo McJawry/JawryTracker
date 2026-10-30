@@ -14,7 +14,8 @@ import {
   PENDING_LOCATION_KEY,
   RACE_SESSION_KEY,
   RACE_STATUS_KEY,
-  RACE_VIEW_KEY
+  RACE_VIEW_KEY,
+  RACE_ROSTER_KEY
 } from "$lib/constants";
 import { sphere, loadSphereState } from "$lib/state/sphere.svelte";
 import { reloadMarkStartingModeFromStorage, reloadPendingLocationFromStorage } from "$lib/state/ui.svelte";
@@ -26,7 +27,12 @@ import { LAYOUT_KEY, reloadLayoutFromStorage } from "$lib/state/layout.svelte";
 import { UNDOCKED_KEY, reloadUndockedFromStorage } from "$lib/state/undocked.svelte";
 import { DUNGEON_ITEMS_KEY, reloadDungeonItemsFromStorage } from "$lib/state/dungeon-items.svelte";
 import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
-import { reloadRaceSessionFromStorage, reloadRaceStatusFromStorage, reloadRaceViewFromStorage } from "$lib/state/race.svelte";
+import {
+  reloadRaceRosterFromStorage,
+  reloadRaceSessionFromStorage,
+  reloadRaceStatusFromStorage,
+  reloadRaceViewFromStorage
+} from "$lib/state/race.svelte";
 import { restoreRandoSync } from "./rando-sync";
 
 let initialized = false;
@@ -127,6 +133,9 @@ export function reloadFromStorage(key: string, newValue: string | null): void {
       break;
     case RACE_VIEW_KEY:
       reloadRaceViewFromStorage();
+      break;
+    case RACE_ROSTER_KEY:
+      reloadRaceRosterFromStorage();
       break;
   }
 }

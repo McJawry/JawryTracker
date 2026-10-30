@@ -31,8 +31,10 @@ export type RelayMessage =
     }
   | { type: "state"; slot: number; store: string; value: string; at: number }
   | { type: "presence"; slot: number; online: boolean }
-  /** To runners and admins: something the host shares - its seed config. */
+  /** To runners and admins: something the host shares - its seed config, and its roster. */
   | { type: "host"; store: string; value: string }
+  /** To a runner joining: the run someone tracked for it while it was away, if anyone did. */
+  | { type: "welcome"; stores?: Record<string, string> }
   /** To hosts and admins: every correction, after one of them changed some. */
   | { type: "edits"; edits: RelayEdits }
   | { type: "error"; message: string };

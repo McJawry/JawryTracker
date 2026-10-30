@@ -2139,6 +2139,9 @@ body.stream-mode .empty-state {
 }
 
 .race-view-switcher .map-toolbar-button {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -3742,6 +3745,11 @@ body.stream-mode .empty-state {
 .race-runner-detail {
   font-weight: 400;
   opacity: 0.7;
+}
+
+.race-runner-nickname {
+  flex: 0 1 160px;
+  min-width: 0;
 }
 
 .race-presence {

@@ -29,6 +29,14 @@
 // set and the fields to stop correcting - and every host and admin gets them
 // all back as { type: "edits", edits }, as the snapshot holds them too.
 // Runners never hear of them.
+//
+// The host can let a runner be tracked for while their own tracker is offline:
+// the host's "runners" store lists them under `editable`. The host or an admin
+// then sends { type: "state", slot, store, value } as that runner's tracker
+// would, and it goes out the same way. When the runner's tracker comes back,
+// it is welcomed with { type: "welcome", stores } - the run as it was tracked
+// for it - to take instead of sending its own. Otherwise the welcome is just
+// { type: "welcome" }, and the tracker sends what it has.
 import { DurableObject } from "cloudflare:workers";
 
 // No 0/O or 1/I: codes are read out over voice chat.
@@ -38,7 +46,7 @@ const MAX_SLOTS = 4;
 const MAX_MESSAGE_BYTES = 512 * 1024;
 // Rooms clear themselves out, so finished matches don't pile up in storage.
 const ROOM_LIFETIME_MS = 2 * 24 * 60 * 60 * 1000;
-// The stores of a run that a host or admin can correct.
+// The stores of a run that a host or admin can correct, or track for a runner.
 const EDITABLE_STORES = ["notes", "checked", "items", "sphere", "dungeonItems"];
 
 // The tracker runs from its own origin (tauri.localhost), and the stream
@@ -154,8 +162,16 @@ export class MatchRoom extends DurableObject {
     // anyone, and isn't billed while it does.
     this.ctx.acceptWebSocket(server, [role]);
     server.serializeAttachment({ role, slot: role === "runner" ? slot : null });
-    if (role === "runner") this.broadcast({ type: "presence", slot, online: true });
-    else {
+    if (role === "runner") {
+      this.broadcast({ type: "presence", slot, online: true });
+      // Tracked for while it was away: the tracker takes that run instead of sending its own.
+      const welcome = { type: "welcome" };
+      if (await this.ctx.storage.get(`trackedFor:${slot}`)) {
+        welcome.stores = (await this.readSlots())[slot] ?? {};
+        await this.ctx.storage.delete(`trackedFor:${slot}`);
+      }
+      server.send(JSON.stringify(welcome));
+    } else {
       const snapshot = {
         type: "snapshot",
         slotCount: stored.get("slotKeys").length,
@@ -195,6 +211,10 @@ export class MatchRoom extends DurableObject {
       return;
     }
     if (update?.type !== "state" || typeof update.store !== "string" || typeof update.value !== "string") return;
+    if ((role === "host" || role === "admin") && update.slot !== undefined) {
+      await this.trackFor(socket, update);
+      return;
+    }
     // An admin's own run is nobody's.
     if (role === "admin") return;
 
@@ -236,6 +256,33 @@ export class MatchRoom extends DurableObject {
         listener.send(out);
       } catch {}
     });
+  }
+
+  /**
+   * A runner's store, sent by the host or an admin tracking for them - only
+   * for a runner the host has let be, and only while their own tracker is
+   * offline.
+   */
+  async trackFor(socket, { slot, store, value }) {
+    const slots = (await this.ctx.storage.get("slotKeys")).length;
+    let editable = [];
+    try {
+      editable = JSON.parse((await this.ctx.storage.get("host:runners")) ?? "{}").editable ?? [];
+    } catch {}
+    const refusal = !Number.isInteger(slot) || slot < 1 || slot > slots || !EDITABLE_STORES.includes(store)
+      ? "That isn't a runner's run"
+      : !editable.includes(slot)
+        ? `The host hasn't let runner ${slot} be tracked for`
+        : this.onlineSlots().includes(slot)
+          ? `Runner ${slot}'s own tracker is online`
+          : "";
+    if (refusal) {
+      socket.send(JSON.stringify({ type: "error", message: refusal }));
+      return;
+    }
+    const at = Date.now();
+    await this.ctx.storage.put({ [`slot:${slot}:${store}`]: value, [`updated:${slot}`]: at, [`trackedFor:${slot}`]: true });
+    this.broadcast({ type: "state", slot, store, value, at });
   }
 
   /** The corrections to the combined run: { store: { field: value or null } }. */

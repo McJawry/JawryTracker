@@ -11,7 +11,16 @@
   import { DEFAULT_RACE_RELAY, RACE_DISPLAY_ORIGIN } from "$lib/constants";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
-  import { race, setRaceSession, formatAdminCode, formatRunnerCode, parseRaceCode } from "$lib/state/race.svelte";
+  import {
+    currentRaceRoster,
+    formatAdminCode,
+    formatRunnerCode,
+    parseRaceCode,
+    race,
+    runnerName,
+    setRaceRoster,
+    setRaceSession
+  } from "$lib/state/race.svelte";
   import { clearRun } from "$lib/state/new-run";
   import { loadReferenceData } from "$lib/logic/data-loading";
   import {
@@ -50,6 +59,18 @@
     return filled === gridPlan.cells.length ? "This seed fills every cell." : `This seed fills ${filled} of the ${gridPlan.cells.length} cells.`;
   });
 
+  /** What the host calls a runner - empty for no name, which shows as "Runner 2". */
+  function renameRunner(slot: number, name: string) {
+    const roster = currentRaceRoster();
+    setRaceRoster({ ...roster, names: { ...roster.names, [slot]: name.trim() } });
+  }
+
+  function setRunnerEditable(slot: number, editable: boolean) {
+    const roster = currentRaceRoster();
+    const others = roster.editable.filter((other) => other !== slot);
+    setRaceRoster({ ...roster, editable: editable ? [...others, slot].sort() : others });
+  }
+
   function saveGridSize() {
     settings.raceGridColumns = gridPlan.columns;
     settings.raceGridRows = gridPlan.rows;
@@ -74,6 +95,7 @@
       if (!response.ok) throw new Error(`the relay answered ${response.status}`);
       const { room, hostKey, slotKeys } = await response.json();
       clearRun();
+      setRaceRoster({ room, names: {}, editable: [] });
       setRaceSession({ role: "host", relay: settings.raceRelayUrl, room, key: hostKey, slot: slotKeys.length, runnerKeys: slotKeys });
       message = "";
     } catch (error) {
@@ -261,12 +283,33 @@
         {@const runner = status.runners[slot]}
         {@const code = formatRunnerCode(session.room, slot, session.runnerKeys?.[slot - 1] ?? "")}
         {@const display = `${RACE_DISPLAY_ORIGIN}/?stream=${slot}`}
+        {@const roster = currentRaceRoster()}
         <div class="race-runner">
           <p class="race-runner-name">
             <span class="race-presence" class:online={runner?.online} aria-hidden="true"></span>
             Runner {slot}
             <span class="race-runner-detail">{runner?.online ? "online" : "offline"}, {updatedAt(runner?.updatedAt ?? 0)}</span>
           </p>
+          <div class="setting-row">
+            <input
+              class="preset-name race-runner-nickname"
+              type="text"
+              maxlength="24"
+              spellcheck="false"
+              placeholder="Name"
+              title="What to call this runner here and on the buttons above the map"
+              value={roster.names[slot] ?? ""}
+              onchange={(event) => renameRunner(slot, event.currentTarget.value)}
+            />
+            <label class="setting-toggle">
+              <input
+                type="checkbox"
+                checked={roster.editable.includes(slot)}
+                onchange={(event) => setRunnerEditable(slot, event.currentTarget.checked)}
+              />
+              <span>Editable when offline</span>
+            </label>
+          </div>
           <div class="setting-row">
             <input class="preset-name race-code" type="text" readonly value={code} title="Runner code" onfocus={(event) => event.currentTarget.select()} />
             <button class="tool-button" type="button" onclick={() => copy(code)}>{copied === code ? "Copied" : "Copy code"}</button>
@@ -294,20 +337,29 @@
         commentator: their tracker gets the same Merged and runner views as yours, and a correction either of you makes
         shows for both.
       </p>
+      <p class="setting-hint">
+        A name tells runners apart here, on the buttons above the map and for your admins. Editable when offline lets you
+        or an admin track for that runner from their view while their own tracker is offline. When it comes back, it takes
+        what was tracked for it.
+      </p>
       {#if status.display}<p class="setting-status">{status.display}</p>{/if}
     {:else if session.role === "admin"}
       {#each runnerSlots as slot (slot)}
         {@const runner = status.runners[slot]}
+        {@const editable = currentRaceRoster().editable.includes(slot)}
         <p class="race-runner-name">
           <span class="race-presence" class:online={runner?.online} aria-hidden="true"></span>
-          Runner {slot}
-          <span class="race-runner-detail">{runner?.online ? "online" : "offline"}, {updatedAt(runner?.updatedAt ?? 0)}</span>
+          {runnerName(slot)}
+          <span class="race-runner-detail">
+            {runner?.online ? "online" : "offline"}, {updatedAt(runner?.updatedAt ?? 0)}{editable ? ", editable when offline" : ""}
+          </span>
         </p>
       {/each}
       <p class="setting-hint">
         This tracker shows the runners' combined run, and each runner's from the buttons above the map. Corrections you make
-        to the combined run show for the host and other admins too, never for the runners. It keeps the host's seed settings
-        until you leave the race.
+        to the combined run show for the host and other admins too, never for the runners. A runner the host has made
+        editable when offline can be tracked for from their view while their own tracker is offline. This tracker keeps the
+        host's seed settings until you leave the race.
       </p>
     {:else}
       <p class="setting-hint">

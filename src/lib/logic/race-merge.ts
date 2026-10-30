@@ -194,15 +194,17 @@ export function toSphereState(value: unknown): SphereState {
 /**
  * Runner slots in order, each holding the latest value of each store it has
  * sent, and the host's own seed config - which every runner should be on.
- * `describeLine` tells what each note line means; see NoteLine.
+ * `describeLine` tells what each note line means; see NoteLine. `name` is
+ * what the conflicts call each runner.
  */
 export function mergeRaceRuns(
   slots: Record<number, RaceSlotStores>,
   hostConfig = "",
-  describeLine: DescribeNoteLine = asTyped
+  describeLine: DescribeNoteLine = asTyped,
+  name: (slot: number) => string = (slot) => `Runner ${slot}`
 ): MergedRaceRun {
   const runners: Runner[] = Object.entries(slots)
-    .map(([slot, stores]) => ({ slot: Number(slot), label: `Runner ${slot}`, stores }))
+    .map(([slot, stores]) => ({ slot: Number(slot), label: name(Number(slot)), stores }))
     .sort((a, b) => a.slot - b.slot);
   const conflicts: string[] = [];
 

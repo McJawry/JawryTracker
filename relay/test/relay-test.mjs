@@ -137,6 +137,33 @@ runner2.socket.close();
 const offline = await waitFor(host, (data) => data.type === "presence" && data.slot === 2 && !data.online);
 check("the host hears a runner drop out", Boolean(offline));
 
+// Tracking for a runner whose own tracker is offline.
+const notesForRunner2 = "tracked by the admin";
+admin.socket.send(JSON.stringify({ type: "state", slot: 2, store: "notes", value: notesForRunner2 }));
+const notAllowed = await waitFor(admin, (data) => data.type === "error");
+check("an admin can't track for a runner the host hasn't let them", Boolean(notAllowed), notAllowed?.data.message);
+host.socket.send(JSON.stringify({ type: "state", store: "runners", value: JSON.stringify({ names: { 2: "Bea" }, editable: [1, 2] }) }));
+const roster = await waitFor(admin, (data) => data.type === "host" && data.store === "runners");
+check("admins hear the host's names and who can be tracked for", JSON.parse(roster?.data.value ?? "{}").names?.[2] === "Bea");
+admin.received.length = 0;
+admin.socket.send(JSON.stringify({ type: "state", slot: 1, store: "notes", value: "runner 1 is online" }));
+const online1 = await waitFor(admin, (data) => data.type === "error");
+check("nor for one whose own tracker is online", Boolean(online1), online1?.data.message);
+admin.socket.send(JSON.stringify({ type: "state", slot: 2, store: "notes", value: notesForRunner2 }));
+const trackedFor = await waitFor(host, (data) => data.type === "state" && data.slot === 2 && data.store === "notes");
+check("an admin's tracking for an offline runner reaches the host as that runner's", trackedFor?.data.value === notesForRunner2);
+const back = await connect(`${room}/socket?role=runner&slot=2&key=${slotKeys[1]}`);
+const welcome = await waitFor(back, (data) => data.type === "welcome");
+check("the runner's tracker coming back is handed the run tracked for it", welcome?.data.stores?.notes === notesForRunner2);
+back.socket.close();
+await waitFor(host, (data) => data.type === "presence" && data.slot === 2 && !data.online && data !== offline.data);
+const again = await connect(`${room}/socket?role=runner&slot=2&key=${slotKeys[1]}`);
+const plainWelcome = await waitFor(again, (data) => data.type === "welcome");
+check("but only the once", Boolean(plainWelcome) && plainWelcome.data.stores === undefined);
+const offlineCount = host.received.filter(({ data }) => data.type === "presence" && data.slot === 2 && !data.online).length;
+again.socket.close();
+await waitFor(host, () => host.received.filter(({ data }) => data.type === "presence" && data.slot === 2 && !data.online).length > offlineCount);
+
 // The host leaving and coming back - a stream restart.
 host.socket.close();
 const rejoined = await connect(`${room}/socket?role=host&key=${hostKey}`);

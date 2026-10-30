@@ -466,10 +466,16 @@ shows none of it.
   - If two trackers record different items at the same location, the newer one is kept and the
     tab lists the disagreement.
   - The tab shows which runners are connected and when each last sent an update.
+  - Give each runner a **name** to tell them apart. It shows in the tab, on the buttons above
+    the map, and for your admins.
+  - Turn on **Editable when offline** for a runner to let you or an admin track for them while
+    their own tracker is offline: their view above the map can then be changed, and what you
+    change goes out as their run, to the stream and everyone's trackers. When their tracker
+    comes back, it takes the run that was tracked for it.
   - Buttons above the map switch your tracker between **Merged**, the combined run, and
-    **Runner 1**, **Runner 2** and so on: each runner's run as their own tracker has it. A
-    runner's run is only for looking at. Anything changed there is put back, and undo is off.
-    Which one you're looking at doesn't change the stream.
+    each runner's run as their own tracker has it. A runner's run is only for looking at,
+    unless you're tracking for them (see **Editable when offline**). Anything changed there is
+    put back, and undo is off. Which one you're looking at doesn't change the stream.
 - **Stream display**: each runner has an address like `http://127.0.0.1:4747/?stream=1`. Add it
   to OBS as a **Browser Source**. It shows that runner's own items and dungeon row on a
   transparent background, scaled to the source's size. The address stays the same from one race

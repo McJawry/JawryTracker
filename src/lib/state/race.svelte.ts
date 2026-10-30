@@ -9,7 +9,7 @@
 // (tauri/race-link.svelte.ts), so these stores are how they talk: the session
 // says what to connect to, the status says how it is going, and a host's view
 // says whose run to show.
-import { RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
+import { RACE_ROSTER_KEY, RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
 
 export interface RaceSession {
   role: "host" | "admin" | "runner";
@@ -63,8 +63,25 @@ function loadStatus(): RaceStatus {
   return { ...IDLE_STATUS, ...readJson<RaceStatus>(RACE_STATUS_KEY) };
 }
 
+/**
+ * What the host sets for each runner, which the room passes on: a name to
+ * tell them apart by, and whether the host or an admin can track for them
+ * while their own tracker is offline.
+ */
+export interface RaceRoster {
+  /** The room this is for - a new room starts with none. */
+  room: string;
+  names: Record<number, string>;
+  editable: number[];
+}
+
 function loadView(): number {
   return Number(localStorage.getItem(RACE_VIEW_KEY)) || 0;
+}
+
+function loadRoster(): RaceRoster {
+  const stored = readJson<Partial<RaceRoster>>(RACE_ROSTER_KEY);
+  return { room: stored?.room ?? "", names: stored?.names ?? {}, editable: stored?.editable ?? [] };
 }
 
 export const race: {
@@ -72,10 +89,12 @@ export const race: {
   status: RaceStatus;
   /** Host and admin: whose run the tracker shows - 0 for the runners' combined, else a runner's slot. */
   view: number;
+  roster: RaceRoster;
 } = $state({
   session: loadSession(),
   status: loadStatus(),
-  view: loadView()
+  view: loadView(),
+  roster: loadRoster()
 });
 
 export function setRaceSession(session: RaceSession | null): void {
@@ -108,6 +127,45 @@ export function setRaceView(view: number): void {
 
 export function reloadRaceViewFromStorage(): void {
   race.view = loadView();
+}
+
+/** This race's roster - an empty one if what's kept is another room's. */
+export function currentRaceRoster(): RaceRoster {
+  const room = race.session?.room ?? "";
+  return race.roster.room === room ? race.roster : { room, names: {}, editable: [] };
+}
+
+export function setRaceRoster(roster: RaceRoster): void {
+  const stored = JSON.stringify(roster);
+  if (stored === JSON.stringify(race.roster)) return;
+  race.roster = roster;
+  localStorage.setItem(RACE_ROSTER_KEY, stored);
+}
+
+export function reloadRaceRosterFromStorage(): void {
+  race.roster = loadRoster();
+}
+
+/** A runner as the trackers show them: by the host's name for them, or as "Runner 2". */
+export function runnerName(slot: number): string {
+  return currentRaceRoster().names[slot]?.trim() || `Runner ${slot}`;
+}
+
+/**
+ * Whether this tracker can track for a runner: it's the host's or an admin's,
+ * the host has let the runner be tracked for, and the runner's own tracker is
+ * offline.
+ */
+export function canTrackForRunner(slot: number): boolean {
+  const role = race.session?.role;
+  return (
+    (role === "host" || role === "admin") && currentRaceRoster().editable.includes(slot) && !race.status.runners[slot]?.online
+  );
+}
+
+/** Whether the run shown is only to look at: a runner's this tracker can't track for. */
+export function isRaceViewReadOnly(): boolean {
+  return race.view > 0 && !canTrackForRunner(race.view);
 }
 
 /**

@@ -1,9 +1,10 @@
 <script lang="ts">
   // A race host's or admin's choice of whose run the tracker shows: the
   // runners' runs combined, which they can correct, or one runner's run as
-  // their own tracker has it, to look at. Picked from any window - the main
-  // window does the showing (tauri/race-link.svelte.ts).
-  import { race, setRaceView } from "$lib/state/race.svelte";
+  // their own tracker has it - to look at, or to track for them while their
+  // tracker is offline, when the host allows it. Picked from any window - the
+  // main window does the showing (tauri/race-link.svelte.ts).
+  import { canTrackForRunner, isRaceViewReadOnly, race, runnerName, setRaceView } from "$lib/state/race.svelte";
 
   const slots = $derived(
     race.session && race.session.role !== "runner" ? Array.from({ length: race.session.slot }, (_, index) => index + 1) : []
@@ -18,8 +19,15 @@
       .join(" ")
   );
 
-  // A runner who has sent nothing has nothing to show.
+  // A runner who has sent nothing has nothing to show - unless it's for this tracker to track.
   const hasRun = (slot: number) => (race.status.runners[slot]?.updatedAt ?? 0) > 0;
+
+  function runnerTitle(slot: number): string {
+    const name = runnerName(slot);
+    if (canTrackForRunner(slot)) return `${name}'s tracker is offline, so you can track for them here. What you change goes to the race as their run.`;
+    if (hasRun(slot)) return `${name}'s tracker as they have it. Only to look at: changes made here are undone.`;
+    return `${name} hasn't sent anything yet`;
+  }
 </script>
 
 {#if slots.length}
@@ -40,17 +48,15 @@
         class="tool-button map-toolbar-button"
         class:active={race.view === slot}
         aria-pressed={race.view === slot}
-        disabled={!hasRun(slot)}
-        title={hasRun(slot)
-          ? `Runner ${slot}'s tracker as they have it. Only to look at: changes made here are undone.`
-          : `Runner ${slot} hasn't sent anything yet`}
+        disabled={!hasRun(slot) && !canTrackForRunner(slot)}
+        title={runnerTitle(slot)}
         onclick={() => setRaceView(slot)}
       >
-        Runner {slot}
+        {runnerName(slot)}
       </button>
     {/each}
   </div>
   {#if race.view}
-    <span class="race-view-note">View only</span>
+    <span class="race-view-note">{isRaceViewReadOnly() ? "View only" : `Tracking for ${runnerName(race.view)}`}</span>
   {/if}
 {/if}
