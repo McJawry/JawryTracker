@@ -1,5 +1,8 @@
+import { tick } from "svelte";
 import { STORAGE_KEY } from "$lib/constants";
 import type { RequirementAlias } from "$lib/gameData";
+import { mergeNotesText } from "$lib/logic/notes-merge";
+import { race } from "$lib/state/race.svelte";
 
 export type HintType = "path" | "item" | "location" | "barren" | "no" | "needs-review";
 export type HintSideKind = "text" | "item" | "boss";
@@ -102,15 +105,32 @@ export function removeHintLine(lineNumber: number): void {
  * Notes are one shared buffer across windows, so an edit made elsewhere has to
  * land here somehow - but not while someone is mid-sentence in this window.
  * The editor holds its own text while focused and the incoming value waits.
+ *
+ * Except in a race, where other trackers' hints keep arriving: held back, the
+ * host's tracker went on working from old hints, and anything typed meanwhile
+ * was saved over the runners' new ones. There they are folded into the text
+ * being typed (logic/notes-merge.ts), the caret kept where it was.
  */
 let notesEditorFocused = false;
 let notesValueAtFocus = "";
 let pendingRemoteNotes: string | null = null;
+/** The notes as the other windows last had them, while the editor is focused. */
+let notesBase = "";
+let notesEditor: HTMLTextAreaElement | null = null;
+
+/** The notes editor, whose caret is kept in place when notes are folded in under it. */
+export function registerNotesEditor(editor: HTMLTextAreaElement): () => void {
+  notesEditor = editor;
+  return () => {
+    if (notesEditor === editor) notesEditor = null;
+  };
+}
 
 export function setNotesEditorFocused(focused: boolean): void {
   if (focused) {
     notesEditorFocused = true;
     notesValueAtFocus = hintNotes.value;
+    notesBase = hintNotes.value;
     pendingRemoteNotes = null;
     return;
   }
@@ -136,9 +156,29 @@ export function setNotesEditorFocused(focused: boolean): void {
 /** Notes changed in another window. */
 export function applyRemoteHintNotes(value: string): void {
   if (notesEditorFocused) {
-    pendingRemoteNotes = value;
+    if (race.session) foldRemoteNotes(value);
+    else pendingRemoteNotes = value;
     return;
   }
   hintNotes.value = value;
   updateHintsFromNotes({ save: false });
+}
+
+/** Folds notes changed elsewhere into the ones being typed here. */
+function foldRemoteNotes(value: string): void {
+  const editor = notesEditor;
+  const selection = editor ? { start: editor.selectionStart, end: editor.selectionEnd } : undefined;
+  const scrollTop = editor?.scrollTop ?? 0;
+  const merged = mergeNotesText(notesBase, hintNotes.value, value, selection);
+  notesBase = value;
+  const changed = merged.text !== hintNotes.value;
+  if (changed) hintNotes.value = merged.text;
+  // What was typed here and isn't there yet goes back out with the rest.
+  if (changed || merged.text !== value) updateHintsFromNotes({ save: merged.text !== value });
+  if (!changed || !editor || !merged.selection) return;
+  const { start, end } = merged.selection;
+  void tick().then(() => {
+    editor.setSelectionRange(start, end);
+    editor.scrollTop = scrollTop;
+  });
 }
