@@ -7,7 +7,9 @@
 // Names are written out in full, except the dungeons, which go by the
 // abbreviations runners use and the tracker's own buttons show. A line is only
 // respelled when the new spelling reads back as the same hint; anything the
-// parser isn't sure of, and anything that isn't a hint, stays as typed.
+// parser isn't sure of, and anything that isn't a hint, stays as typed. A hint
+// it isn't sure of still says what it most likely is, so a runner's "windfall
+// to goh" joins another's "windfall to gohma" rather than standing beside it.
 import { DUNGEON_ENTRANCE_TRACKERS } from "$lib/gameData";
 import { parseHints } from "$lib/logic/hint-parsing";
 import type { NoteLine } from "$lib/logic/race-merge";
@@ -70,12 +72,14 @@ function spell(hint: Hint): { text: string; untagged: string } | null {
 export function describeHintLine(line: string): NoteLine {
   const typed: NoteLine = { text: line.trim(), key: line.trim().toLowerCase(), tagged: false };
   const hint = parseHints(line)[0];
-  if (!hint || hint.needsReview) return typed;
+  if (!hint) return typed;
   const spelled = spell(hint);
   if (!spelled) return typed;
 
   // Read back, the new spelling has to give the same hint, spelled the same.
   const again = parseHints(spelled.text)[0];
   if (!again || again.needsReview || spell(again)?.text !== spelled.text) return typed;
-  return { text: spelled.text, key: spelled.untagged.toLowerCase(), tagged: Boolean(hint.requirement) };
+  const key = spelled.untagged.toLowerCase();
+  if (hint.needsReview) return { ...typed, guess: key };
+  return { text: spelled.text, key, tagged: Boolean(hint.requirement) };
 }

@@ -55,6 +55,12 @@ export interface NoteLine {
   text: string;
   key: string;
   tagged: boolean;
+  /**
+   * For a hint the parser isn't sure of - "windfall to goh", Gohma or Gohdan -
+   * the key of the one it most likely is. The line is kept as typed, unless
+   * another runner wrote that hint out in full: then it's that hint.
+   */
+  guess?: string;
 }
 
 export type DescribeNoteLine = (line: string) => NoteLine;
@@ -95,10 +101,19 @@ function mergeNotes(runners: Runner[], describe: DescribeNoteLine): string {
     const seen = new Map<string, number>();
     runnerLines.forEach((line) => {
       if (!line) return;
+      // A shorthand for a hint already written out in full is that hint.
+      if (line.guess && held.get(line.guess)) return;
       const count = (seen.get(line.key) ?? 0) + 1;
       seen.set(line.key, count);
       if (count > (held.get(line.key) ?? 0)) {
-        lines.push(line);
+        // And written out in full, it takes the place of a shorthand for it.
+        const shorthand = lines.find((candidate) => candidate.guess === line.key);
+        if (shorthand) {
+          held.set(shorthand.key, (held.get(shorthand.key) ?? 1) - 1);
+          Object.assign(shorthand, line, { guess: undefined });
+        } else {
+          lines.push(line);
+        }
         held.set(line.key, count);
       } else if (line.tagged) {
         const untagged = lines.find((candidate) => candidate.key === line.key && !candidate.tagged);

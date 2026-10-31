@@ -110,6 +110,21 @@ describe("mergeRaceRuns", () => {
     expect(merged.notes).toBe("Diamond Steppe Island to Jalhalla\nET to Gohma\nfree text stays\nNeedle to Molgera");
   });
 
+  it("takes a shorthand the parser isn't sure of as the hint another runner wrote out in full", () => {
+    // "goh" could be Gohma or Gohdan: kept as typed, with Gohma its best guess.
+    const describe = (line: string) => {
+      const text = line.trim();
+      if (text === "windfall to goh") return { text, key: text, tagged: false, guess: "windfall island to gohma" };
+      return { text, key: text.toLowerCase(), tagged: false };
+    };
+    const merge = (one: string, two: string) =>
+      mergeRaceRuns({ 1: runner({ notes: one }), 2: runner({ notes: two }) }, "", describe).notes;
+    expect(merge("Windfall Island to Gohma", "windfall to goh")).toBe("Windfall Island to Gohma");
+    expect(merge("windfall to goh\ndri to helm", "Windfall Island to Gohma")).toBe("Windfall Island to Gohma\ndri to helm");
+    // With nobody sure, it stays as typed, for its runner to look at.
+    expect(merge("windfall to goh", "dri to helm")).toBe("windfall to goh\ndri to helm");
+  });
+
   it("gives a hint the requirement tag another runner wrote for it", () => {
     const describe = (line: string) => {
       const tagged = / r at /.test(line);

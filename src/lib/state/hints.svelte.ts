@@ -116,6 +116,8 @@ let notesValueAtFocus = "";
 let pendingRemoteNotes: string | null = null;
 /** The notes as the other windows last had them, while the editor is focused. */
 let notesBase = "";
+/** Whose run a race host's or admin's tracker showed, as far as the focused editor knows. */
+let notesView = 0;
 let notesEditor: HTMLTextAreaElement | null = null;
 
 /** The notes editor, whose caret is kept in place when notes are folded in under it. */
@@ -131,6 +133,7 @@ export function setNotesEditorFocused(focused: boolean): void {
     notesEditorFocused = true;
     notesValueAtFocus = hintNotes.value;
     notesBase = hintNotes.value;
+    notesView = race.view;
     pendingRemoteNotes = null;
     return;
   }
@@ -155,11 +158,18 @@ export function setNotesEditorFocused(focused: boolean): void {
 
 /** Notes changed in another window. */
 export function applyRemoteHintNotes(value: string): void {
-  if (notesEditorFocused) {
-    if (race.session) foldRemoteNotes(value);
-    else pendingRemoteNotes = value;
+  if (notesEditorFocused && !race.session) {
+    pendingRemoteNotes = value;
     return;
   }
+  // Another run on screen - the view switched under the editor - is no edit
+  // of the text in it, so there's nothing of it to fold in.
+  if (notesEditorFocused && race.view === notesView) {
+    foldRemoteNotes(value);
+    return;
+  }
+  notesBase = value;
+  notesView = race.view;
   hintNotes.value = value;
   updateHintsFromNotes({ save: false });
 }

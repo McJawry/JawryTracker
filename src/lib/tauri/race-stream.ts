@@ -7,7 +7,8 @@
 // hosts one - the page keeps asking, so a new race is picked up without
 // touching OBS. The host's tracker also says there how to show it - as the
 // grid layout or not, counting the shards or not - and which bosses the race
-// is known to ask for, so a change there reaches OBS within a few seconds too. `?room=` (and `?relay=`)
+// is known to ask for, so a change there reaches OBS within a few seconds too.
+// And the race's seed config, for a runner whose tracker never sent its own. `?room=` (and `?relay=`)
 // in the address follow a room directly instead, shown the tracker's way.
 //
 // Nothing here is ever saved. Every source on a stream shares one browser
@@ -45,6 +46,11 @@ interface HostedRace extends DisplayedRace {
   bosses?: RaceDisplayLayout["bosses"];
   /** Count every runner's Triforce shards, whichever way their tracker shows them. */
   genericShards?: boolean;
+  /**
+   * The race's seed config - the host's. A runner only ever tracked for by the
+   * host or an admin, while their own tracker was offline, never sent one.
+   */
+  config?: string;
 }
 
 function replaceContents<T>(target: Record<string, T>, next: Record<string, T>) {
@@ -62,6 +68,20 @@ function parseRecord<T>(value: string): Record<string, T> {
 }
 
 let configQueue = Promise.resolve();
+
+// The runner's own seed config, and the race's for when they've sent none.
+let runnerConfig = "";
+let raceConfig = "";
+
+/** Starting gear lights items on the grid, so the seed's config counts. */
+function applyConfig() {
+  const value = runnerConfig.trim() ? runnerConfig : raceConfig;
+  configQueue = configQueue.then(async () => {
+    if (value === settings.randoConfigText) return;
+    settings.randoConfigText = value;
+    await restoreRandoSync();
+  });
+}
 
 // The runner's own way of showing the shards, and whether the host overrides it.
 let runnerGenericShards = false;
@@ -92,12 +112,8 @@ function applyStore(store: RaceStore, value: string) {
       refreshSphereStartingGear();
       break;
     case "config":
-      // Starting gear lights items on the grid, so the seed's config counts.
-      configQueue = configQueue.then(async () => {
-        if (value === settings.randoConfigText) return;
-        settings.randoConfigText = value;
-        await restoreRandoSync();
-      });
+      runnerConfig = value;
+      applyConfig();
       break;
     case "display":
       runnerGenericShards = Boolean(parseRecord(value).genericTriforceShards);
@@ -185,6 +201,10 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
     follow(race);
     hostGenericShards = Boolean(race?.genericShards);
     showGenericShards();
+    if ((race?.config ?? "") !== raceConfig) {
+      raceConfig = race?.config ?? "";
+      applyConfig();
+    }
     show(race?.grid?.cells ? { grid: race.grid, bosses: race.bosses ?? {} } : null);
     pollTimer = setTimeout(poll, RACE_POLL_MS);
   }
