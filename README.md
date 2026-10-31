@@ -505,7 +505,8 @@ shows none of it.
   - Every runner races the same bosses, so the host works them out from all the runs
     together. Path hints, chart marks and the seed's number of required dungeons show which
     bosses are required. Bosses that aren't required are dimmed and crossed out. A runner's
-    beaten bosses get a green check.
+    beaten bosses get a green check once the race knows they're required. Until then a checked
+    heart container could just be **Clear dead** ruling the dungeon out.
 - **Generic Triforce shards**: turn it on under **Browser sources** to make every runner's
   Triforce show a shard count, in either layout, even when their tracker shows which shards
   they have.

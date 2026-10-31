@@ -389,8 +389,8 @@
       <p class="setting-hint">
         Shows each runner's items as a grid of square cells, always {RACE_GRID_WIDTH} pixels wide, instead of the
         tracker's item grid on a transparent background. The items are the ones this seed's settings leave to find. Bosses the race doesn't need
-        are crossed out once the runners' hints or chart marks show which ones they are, and a runner's beaten bosses get
-        a check.
+        are crossed out once the runners' hints or chart marks show which ones they are, and a runner's beaten required
+        bosses get a check.
       </p>
       {#if settings.raceStreamGrid}
         <div class="setting-row race-grid-size">

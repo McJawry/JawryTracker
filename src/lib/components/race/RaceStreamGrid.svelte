@@ -11,8 +11,11 @@
   //
   // The bosses wear what the race knows of them, which the host's tracker
   // works out from every runner's run, since they all race the same ones: a
-  // boss race mode leaves out is dimmed and crossed out, and one this runner
-  // has beaten gets a check.
+  // boss race mode leaves out is dimmed and crossed out, and a required one
+  // this runner has beaten gets a check. Only a required one: Clear dead checks
+  // off the heart containers of the dungeons it rules out, so for any other
+  // boss a checked one may mean nothing was beaten - and the host's tracker
+  // can take a few seconds to rule out what the runner's already has.
   import { BOSS_LOCATIONS } from "$lib/gameData";
   import { ITEM_STAGE_TABLES } from "$lib/state/item-tracker.svelte";
   import { getEffectiveItemStage } from "$lib/logic/starting-gear-items";
@@ -100,11 +103,13 @@
           {/if}
         </span>
       {:else if cell.kind === "boss"}
-        {@const left = layout.bosses[cell.boss] === "unrequired"}
-        <span class="race-grid-art"><img class:dim={left} src={trackerBossImage(cell.boss, false)} alt={cell.boss} /></span>
-        {#if left}
+        {@const requirement = layout.bosses[cell.boss]}
+        <span class="race-grid-art">
+          <img class:dim={requirement === "unrequired"} src={trackerBossImage(cell.boss, false)} alt={cell.boss} />
+        </span>
+        {#if requirement === "unrequired"}
           <svg class="race-grid-mark cross" viewBox="0 0 24 24" aria-label="Not required"><path d="M6 6 L18 18 M18 6 L6 18" /></svg>
-        {:else if isLocationMarked(BOSS_LOCATIONS[cell.boss] ?? "")}
+        {:else if requirement === "required" && isLocationMarked(BOSS_LOCATIONS[cell.boss] ?? "")}
           <svg class="race-grid-mark check" viewBox="0 0 24 24" aria-label="Beaten"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5" /></svg>
         {/if}
       {/if}
