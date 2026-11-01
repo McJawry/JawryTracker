@@ -397,10 +397,10 @@ Open **Settings** from the Control Panel.
     the app. Point it at that copy's folder or its `data` folder. Your run isn't included: to
     carry that over, copy the whole `data` folder before the first launch, or use the autosave
     (see [Saving your run](#saving-your-run)).
-- **Race Tracking**: links trackers for a race shown on one stream. See
-  [Race Tracking](#race-tracking).
 - **Load saves**: named saves of your run, and loading a spoiler log. See
   [Saving your run](#saving-your-run).
+- **Race Tracking**: links trackers for a race shown on one stream. See
+  [Race Tracking](#race-tracking).
 
 Presets and saves can live in the **app folder** (portable, beside the exe) or the **user
 folder** (`Documents/JawryTracker`, shared by every copy of the app on the computer).

@@ -318,18 +318,18 @@
       type="button"
       role="tab"
       class="settings-tab"
-      class:active={activeTab === "race-tracking"}
-      aria-selected={activeTab === "race-tracking"}
-      onclick={() => (activeTab = "race-tracking")}
-    >Race Tracking</button>
-    <button
-      type="button"
-      role="tab"
-      class="settings-tab"
       class:active={activeTab === "run-saves"}
       aria-selected={activeTab === "run-saves"}
       onclick={() => (activeTab = "run-saves")}
     >Load saves</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "race-tracking"}
+      aria-selected={activeTab === "race-tracking"}
+      onclick={() => (activeTab = "race-tracking")}
+    >Race Tracking</button>
   </div>
 
   {#if activeTab === "appearance"}
