@@ -445,9 +445,11 @@ shows none of it.
 - **Hosting**:
   - Sync your seed settings first: runners take the host's. Then pick how many runners (2 to 4)
     and **Create race room**. This replaces your run, so save it first if you want to keep it.
-  - Send each runner's tracker operator their **runner code**.
-  - The **admin code** is for anyone helping run the race, like a commentator. Their tracker
-    gets the same combined run and runner views as yours, and can correct the combined run too.
+  - Send each runner's tracker operator their **runner code**. If the runner is already using
+  JawryTracker and placing items on locations, send the runner code to the runner.
+  - The **admin code** is for anyone helping run the race, like a commentator, or for a tracker
+  operator who wants a full overview as well. Their tracker gets the same combined run and runner
+    views as yours, and can correct the combined run too.
     See **Helping as an admin** below.
   - Your tracker combines the runners' runs into one: every item placement, checked location,
     entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
