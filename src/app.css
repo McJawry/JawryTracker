@@ -3762,6 +3762,15 @@ body.stream-mode .empty-state {
   min-width: 0;
 }
 
+.settings-group .race-runner-delay {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.race-runner-delay input {
+  width: 56px;
+}
+
 .race-presence {
   flex: 0 0 auto;
   width: 8px;

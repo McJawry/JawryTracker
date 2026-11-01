@@ -8,8 +8,10 @@
 // touching OBS. The host's tracker also says there how to show it - as the
 // grid layout or not, counting the shards or not - and which bosses the race
 // is known to ask for, so a change there reaches OBS within a few seconds too.
-// And the race's seed config, for a runner whose tracker never sent its own. `?room=` (and `?relay=`)
-// in the address follow a room directly instead, shown the tracker's way.
+// And the race's seed config, for a runner whose tracker never sent its own,
+// and how long to hold the runner's updates back for, as far as their stream
+// lags behind (race-delay.ts). `?room=` (and `?relay=`) in the address follow
+// a room directly instead, shown the tracker's way and without a delay.
 //
 // Nothing here is ever saved. Every source on a stream shares one browser
 // profile, so a display that wrote its runner's run to storage would hand it
@@ -27,6 +29,7 @@ import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { settings } from "$lib/state/settings.svelte";
 import { restoreRandoSync } from "./rando-sync";
 import { openRelayConnection, type RelayConnection } from "./relay-socket";
+import { createRaceDelay } from "./race-delay";
 
 const RACE_POLL_MS = 3000;
 
@@ -51,6 +54,8 @@ interface HostedRace extends DisplayedRace {
    * host or an admin, while their own tracker was offline, never sent one.
    */
   config?: string;
+  /** Seconds, by slot: how long to hold each runner's updates back. */
+  delays?: Record<string, number>;
 }
 
 function replaceContents<T>(target: Record<string, T>, next: Record<string, T>) {
@@ -163,12 +168,23 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
   let following = "";
   let stopped = false;
 
+  // The runner's updates, held back by the delay the host set for them: one
+  // store, or the whole run from the room's snapshot.
+  let delaySeconds = 0;
+  let online = false;
+  const held = createRaceDelay<{ store: RaceStore; value: string } | { stores: Record<string, string> }>({
+    delayOf: () => delaySeconds * 1000,
+    apply: (_, update) => ("stores" in update ? applyRun(update.stores) : applyStore(update.store, update.value))
+  });
+
   function follow(race: DisplayedRace | null) {
     const signature = race ? `${race.relay}|${race.room}` : "";
     if (signature === following) return;
     following = signature;
     connection?.close();
     connection = null;
+    held.clear();
+    online = false;
     applyRun({});
     if (!race) return;
 
@@ -177,9 +193,16 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
       {
         onMessage: (message) => {
           if (message.type === "snapshot") {
-            applyRun(message.slots[String(slot)] ?? {});
+            // The run as of the runner's last update, due once the delay has passed since then.
+            online = message.online.includes(slot);
+            const now = Date.now();
+            held.push(slot, { stores: message.slots[String(slot)] ?? {} }, { at: Math.min(now, message.updated?.[slot] ?? now) });
+          } else if (message.type === "presence" && message.slot === slot) {
+            online = message.online;
           } else if (message.type === "state" && message.slot === slot && STORES.includes(message.store as RaceStore)) {
-            applyStore(message.store as RaceStore, message.value);
+            // With the runner's own tracker offline, it's someone tracking for
+            // them - who goes by their stream, so is behind already.
+            held.push(slot, { store: message.store as RaceStore, value: message.value }, { delayed: online });
           }
         }
       }
@@ -198,6 +221,7 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
   async function poll() {
     const race = await readHostedRace();
     if (stopped) return;
+    delaySeconds = Math.max(0, Number(race?.delays?.[slot]) || 0);
     follow(race);
     hostGenericShards = Boolean(race?.genericShards);
     showGenericShards();
@@ -215,6 +239,7 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
   return () => {
     stopped = true;
     clearTimeout(pollTimer);
+    held.clear();
     connection?.close();
   };
 }

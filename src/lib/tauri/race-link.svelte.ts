@@ -30,10 +30,11 @@
 // runner's or admin's tracker takes it - before joining
 // (RaceTrackingSettings.svelte), whenever the host's changes, and back again
 // if its own drifts. The host shares its roster the same way: the runners'
-// names, and which ones the host or an admin can track for while the runner's
-// own tracker is offline. Tracking for one, this tracker sends what changes in
-// that runner's view as the runner's tracker would; the runner's tracker takes
-// that run when it comes back.
+// names, which ones the host or an admin can track for while the runner's own
+// tracker is offline, and how long to hold each runner's updates back for, as
+// far as their stream lags behind (race-delay.ts). Tracking for one, this
+// tracker sends what changes in that runner's view as the runner's tracker
+// would; the runner's tracker takes that run when it comes back.
 import { untrack } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
 import { CHECKED_KEY, ITEM_STORAGE_KEY, RACE_EDITS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
@@ -66,6 +67,7 @@ import {
   currentRaceRoster,
   race,
   resetRaceStatus,
+  runnerDelay,
   runnerName,
   setRaceRoster,
   setRaceStatus,
@@ -85,6 +87,7 @@ import { currentAutosave } from "./tracker-autosave";
 import { reloadFromStorage } from "./storage-sync";
 import { applySeedConfigText } from "./rando-sync";
 import { openRelayConnection, type RelayConnection, type RelayMessage } from "./relay-socket";
+import { createRaceDelay } from "./race-delay";
 import { isTauriRuntime } from "./is-tauri";
 
 // Runner: long enough to send a burst of clicks as one update.
@@ -192,6 +195,7 @@ export function initRaceLink(): void {
       settings.raceGridColumns;
       settings.raceGridRows;
       settings.raceStreamGenericShards;
+      race.roster;
       if (race.session?.role !== "host" || race.view) return;
       clearTimeout(displayTimer);
       displayTimer = setTimeout(() => {
@@ -224,6 +228,7 @@ function follow(session: RaceSession | null) {
   shownView = 0;
   if (race.view) setRaceView(0);
   clearTimeout(mergeTimer);
+  held.clear();
   welcomed = false;
   clearTimeout(welcomeTimer);
   publishedConflicts = "[]";
@@ -324,8 +329,8 @@ function currentStores(role: RaceSession["role"]): Record<string, string> {
   // between would flag a disagreement that isn't there.
   const config = settings.randoConfigText ?? "";
   if (role === "host") {
-    const { names, editable } = currentRaceRoster();
-    return { config, runners: JSON.stringify({ names, editable }) };
+    const { names, editable, delays } = currentRaceRoster();
+    return { config, runners: JSON.stringify({ names, editable, delays }) };
   }
   if (role === "admin") return {};
   const save = currentAutosave();
@@ -371,8 +376,8 @@ function keepHostConfig(): boolean {
 /** The host's roster, for this tracker's names and views. */
 function takeRoster(room: string, value: string) {
   try {
-    const { names = {}, editable = [] } = JSON.parse(value);
-    setRaceRoster({ room, names, editable });
+    const { names = {}, editable = [], delays = {} } = JSON.parse(value);
+    setRaceRoster({ room, names, editable, delays });
   } catch {
     // Not a roster this version reads.
   }
@@ -464,10 +469,6 @@ function updateRunner(slot: number, change: Partial<RaceRunnerStatus>) {
 
 function receive(message: RelayMessage) {
   if (message.type === "snapshot") {
-    slotStores = {};
-    Object.entries(message.slots).forEach(([slot, stores]) => {
-      slotStores[Number(slot)] = Object.fromEntries(Object.entries(stores).filter(([store]) => RACE_STORES.includes(store as RaceStore)));
-    });
     const runners: Record<number, RaceRunnerStatus> = {};
     for (let slot = 1; slot <= message.slotCount; slot += 1) {
       runners[slot] = { online: message.online.includes(slot), updatedAt: message.updated?.[slot] ?? 0 };
@@ -475,6 +476,16 @@ function receive(message: RelayMessage) {
     setRaceStatus(race.session?.role === "host" ? { runners, adminKey: message.adminKey ?? "" } : { runners });
     const edits = message.edits;
     queueHostWork(() => adoptSnapshotEdits(edits));
+    // Each runner's whole run, as of their last update - due once their delay
+    // has passed since then. Until it is, the run shown before stays: after a
+    // restart, as the last merge took it.
+    const now = Date.now();
+    Object.entries(message.slots).forEach(([key, stores]) => {
+      const slot = Number(key);
+      if (!slotStores[slot] && seenSlotStores[slot]) slotStores[slot] = { ...seenSlotStores[slot] };
+      const run = Object.fromEntries(Object.entries(stores).filter(([store]) => RACE_STORES.includes(store as RaceStore)));
+      held.push(slot, { stores: run }, { at: Math.min(now, message.updated?.[slot] ?? now) });
+    });
   } else if (message.type === "edits") {
     const edits = message.edits;
     queueHostWork(() => adoptRoomEdits(edits));
@@ -482,20 +493,17 @@ function receive(message: RelayMessage) {
   } else if (message.type === "state") {
     if (!RACE_STORES.includes(message.store as RaceStore)) return;
     updateRunner(message.slot, { updatedAt: message.at ?? Date.now() });
-    // This tracker's own tracking for a runner, back from the room - and with
-    // newer on its way, it's older than what this tracker already holds.
-    const sent = awaitingEcho.get(`${message.slot}|${message.store}`);
-    const echoed = sent?.indexOf(message.value) ?? -1;
-    if (sent && echoed >= 0) {
-      sent.splice(0, echoed + 1);
-      if (sent.length) return;
-    } else {
-      // Someone else's: theirs is the newest now.
-      awaitingEcho.delete(`${message.slot}|${message.store}`);
-    }
-    (slotStores[message.slot] ??= {})[message.store as RaceStore] = message.value;
+    // From the runner's own tracker, held back by their delay. With it
+    // offline, it's someone tracking for them - who goes by their stream, so
+    // is behind already.
+    const delayed = Boolean(race.status.runners[message.slot]?.online);
+    held.push(message.slot, { store: message.store as RaceStore, value: message.value }, { delayed });
+    return;
   } else if (message.type === "presence") {
     updateRunner(message.slot, { online: message.online });
+    // A runner's own tracker gone while their run is shown, for this tracker
+    // to track for them: what it sent before going shows now, to track on from.
+    held.release();
     // A runner's own tracker back while their run is shown: theirs is the run again.
     const slot = message.slot;
     if (message.online) queueHostWork(() => void (shownView === slot && writeRun(runnerRun(slot))));
@@ -504,6 +512,36 @@ function receive(message: RelayMessage) {
     return;
   }
   scheduleMerge();
+}
+
+/** A runner's update, held back by their delay: one store, or the whole run from the room's snapshot. */
+type HeldUpdate = { store: RaceStore; value: string } | { stores: RaceSlotStores };
+
+const held = createRaceDelay<HeldUpdate>({
+  // Not while this tracker is tracking for the runner: it has to track on from what they last sent.
+  delayOf: (slot) => (shownView === slot && canTrackForRunner(slot) ? 0 : runnerDelay(slot) * 1000),
+  apply: (slot, update) => {
+    if ("stores" in update) slotStores[slot] = update.stores;
+    else if (!takeRunnerStore(slot, update.store, update.value)) return;
+    scheduleMerge();
+  }
+});
+
+/** One store of a runner's run, as their delay lets it through - false when it changes nothing. */
+function takeRunnerStore(slot: number, store: RaceStore, value: string): boolean {
+  // This tracker's own tracking for a runner, back from the room - and with
+  // newer on its way, it's older than what this tracker already holds.
+  const sent = awaitingEcho.get(`${slot}|${store}`);
+  const echoed = sent?.indexOf(value) ?? -1;
+  if (sent && echoed >= 0) {
+    sent.splice(0, echoed + 1);
+    if (sent.length) return false;
+  } else {
+    // Someone else's: theirs is the newest now.
+    awaitingEcho.delete(`${slot}|${store}`);
+  }
+  (slotStores[slot] ??= {})[store] = value;
+  return true;
 }
 
 function scheduleMerge() {
@@ -579,7 +617,12 @@ const awaitingEcho = new Map<string, string[]>();
 function sendRunnerStores(slot: number) {
   const run = readRun();
   const stores = (slotStores[slot] ??= {});
-  const changed = EDITABLE_STORES.filter((store) => run[store] !== (stores[store] ?? EMPTY_RUN[store]));
+  // Only what was changed here since this tracker wrote the run: the rest
+  // differs because newer has come in since - let through by the runner's
+  // delay, or sent by someone else tracking for them.
+  const changed = EDITABLE_STORES.filter(
+    (store) => run[store] !== (stores[store] ?? EMPTY_RUN[store]) && (!writtenRun || run[store] !== writtenRun[store])
+  );
   changed.forEach((store) => {
     if (!connection?.send({ type: "state", slot, store, value: run[store] })) return;
     stores[store] = run[store];
@@ -665,6 +708,8 @@ function showView(view: number) {
   // Changes not taken in yet would go with the run on screen.
   takeLocalChanges();
   shownView = view;
+  // Tracking for a runner goes on from everything they sent.
+  if (canTrackForRunner(view)) held.flush(view);
   const run = viewedRun();
   if (run) writeRun(run);
 }
@@ -749,7 +794,9 @@ function describeDisplay(session: RaceSession): string {
     relay: session.relay,
     room: session.room,
     genericShards: settings.raceStreamGenericShards,
-    config: settings.randoConfigText ?? ""
+    config: settings.randoConfigText ?? "",
+    // How many seconds each runner's browser source holds their updates back.
+    delays: Object.fromEntries(Array.from({ length: session.slot }, (_, index) => [index + 1, runnerDelay(index + 1)]))
   };
   if (!settings.raceStreamGrid) return JSON.stringify(room);
   const { columns, rows, cells } = planRaceStreamGrid(settings.randoConfigText ?? "", settings.raceGridColumns, settings.raceGridRows);

@@ -15,9 +15,11 @@
     currentRaceRoster,
     formatAdminCode,
     formatRunnerCode,
+    MAX_RUNNER_DELAY,
     parseRaceCode,
     race,
     requestRaceReconnect,
+    runnerDelay,
     runnerName,
     setRaceRoster,
     setRaceSession
@@ -73,6 +75,15 @@
     setRaceRoster({ ...roster, editable: editable ? [...others, slot].sort() : others });
   }
 
+  /** How many whole seconds to hold a runner's updates back - put back in the box as kept. */
+  function setRunnerDelay(slot: number, input: HTMLInputElement) {
+    const seconds = Math.round(input.valueAsNumber);
+    const delay = Number.isFinite(seconds) ? Math.min(MAX_RUNNER_DELAY, Math.max(0, seconds)) : 0;
+    input.value = String(delay);
+    const roster = currentRaceRoster();
+    setRaceRoster({ ...roster, delays: { ...roster.delays, [slot]: delay } });
+  }
+
   function saveGridSize() {
     settings.raceGridColumns = gridPlan.columns;
     settings.raceGridRows = gridPlan.rows;
@@ -97,7 +108,7 @@
       if (!response.ok) throw new Error(`the relay answered ${response.status}`);
       const { room, hostKey, slotKeys } = await response.json();
       clearRun();
-      setRaceRoster({ room, names: {}, editable: [] });
+      setRaceRoster({ room, names: {}, editable: [], delays: {} });
       setRaceSession({ role: "host", relay: settings.raceRelayUrl, room, key: hostKey, slot: slotKeys.length, runnerKeys: slotKeys });
       message = "";
     } catch (error) {
@@ -308,6 +319,20 @@
               value={roster.names[slot] ?? ""}
               onchange={(event) => renameRunner(slot, event.currentTarget.value)}
             />
+            <label class="setting-control race-runner-delay" title="Seconds to hold this runner's updates back, as far as their stream lags behind">
+              <span>Delay</span>
+              <input
+                type="number"
+                min="0"
+                max={MAX_RUNNER_DELAY}
+                step="1"
+                value={runnerDelay(slot)}
+                onchange={(event) => setRunnerDelay(slot, event.currentTarget)}
+              />
+              <span>s</span>
+            </label>
+          </div>
+          <div class="setting-row">
             <label class="setting-toggle">
               <input
                 type="checkbox"
@@ -349,21 +374,30 @@
         or an admin track for that runner from their view while their own tracker is offline. When it comes back, it takes
         what was tracked for it.
       </p>
+      <p class="setting-hint">
+        Delay holds a runner's updates back by that many seconds, on their browser source and in your and your admins'
+        trackers, so nothing shows before their stream does. Set it to how far their stream lags behind their game.
+        What you or an admin track for them while they're offline shows right away.
+      </p>
       {#if status.display}<p class="setting-status">{status.display}</p>{/if}
     {:else if session.role === "admin"}
       {#each runnerSlots as slot (slot)}
         {@const runner = status.runners[slot]}
         {@const editable = currentRaceRoster().editable.includes(slot)}
+        {@const delay = runnerDelay(slot)}
         <p class="race-runner-name">
           <span class="race-presence" class:online={runner?.online} aria-hidden="true"></span>
           {runnerName(slot)}
           <span class="race-runner-detail">
-            {runner?.online ? "online" : "offline"}, {updatedAt(runner?.updatedAt ?? 0)}{editable ? ", editable when offline" : ""}
+            {runner?.online ? "online" : "offline"}, {updatedAt(runner?.updatedAt ?? 0)}{editable ? ", editable when offline" : ""}{delay
+              ? `, ${delay} s delay`
+              : ""}
           </span>
         </p>
       {/each}
       <p class="setting-hint">
-        This tracker shows the runners' combined run, and each runner's from the buttons above the map. Corrections you make
+        This tracker shows the runners' combined run, and each runner's from the buttons above the map, each runner's updates
+        held back by the delay the host set for them. Corrections you make
         to the combined run show for the host and other admins too, never for the runners. A runner the host has made
         editable when offline can be tracked for from their view while their own tracker is offline. This tracker keeps the
         host's seed settings until you leave the race.

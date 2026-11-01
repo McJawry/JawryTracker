@@ -77,14 +77,16 @@ function loadStatus(): RaceStatus {
 
 /**
  * What the host sets for each runner, which the room passes on: a name to
- * tell them apart by, and whether the host or an admin can track for them
- * while their own tracker is offline.
+ * tell them apart by, whether the host or an admin can track for them while
+ * their own tracker is offline, and how long to hold their updates back.
  */
 export interface RaceRoster {
   /** The room this is for - a new room starts with none. */
   room: string;
   names: Record<number, string>;
   editable: number[];
+  /** Seconds, by slot: how far the runner's stream lags behind their game. */
+  delays: Record<number, number>;
 }
 
 /**
@@ -107,7 +109,7 @@ function loadView(): number {
 
 function loadRoster(): RaceRoster {
   const stored = readJson<Partial<RaceRoster>>(RACE_ROSTER_KEY);
-  return { room: stored?.room ?? "", names: stored?.names ?? {}, editable: stored?.editable ?? [] };
+  return { room: stored?.room ?? "", names: stored?.names ?? {}, editable: stored?.editable ?? [], delays: stored?.delays ?? {} };
 }
 
 export const race: {
@@ -163,7 +165,7 @@ export function reloadRaceViewFromStorage(): void {
 /** This race's roster - an empty one if what's kept is another room's. */
 export function currentRaceRoster(): RaceRoster {
   const room = race.session?.room ?? "";
-  return race.roster.room === room ? race.roster : { room, names: {}, editable: [] };
+  return race.roster.room === room ? race.roster : { room, names: {}, editable: [], delays: {} };
 }
 
 export function setRaceRoster(roster: RaceRoster): void {
@@ -200,6 +202,19 @@ export function reloadRaceReconnectFromStorage(): void {
 /** A runner as the trackers show them: by the host's name for them, or as "Runner 2". */
 export function runnerName(slot: number): string {
   return currentRaceRoster().names[slot]?.trim() || `Runner ${slot}`;
+}
+
+/** The most a runner's updates can be held back, in seconds. */
+export const MAX_RUNNER_DELAY = 900;
+
+/**
+ * How many seconds a runner's updates are held back - on the browser sources
+ * and in the host's and admins' trackers - so that none of them shows an item
+ * before the runner's stream does.
+ */
+export function runnerDelay(slot: number): number {
+  const delay = Number(currentRaceRoster().delays[slot]);
+  return Number.isFinite(delay) ? Math.min(MAX_RUNNER_DELAY, Math.max(0, delay)) : 0;
 }
 
 /**

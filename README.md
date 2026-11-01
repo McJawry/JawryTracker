@@ -483,6 +483,11 @@ shows none of it.
     their own tracker is offline: their view above the map can then be changed, and what you
     change goes out as their run, to the stream and everyone's trackers. When their tracker
     comes back, it takes the run that was tracked for it.
+  - Set a runner's **Delay** to how many seconds their stream lags behind their game. Their
+    updates are held back that long on their browser source and in your and your admins'
+    trackers, so the stream never shows an item before the runner's own stream does. What you or
+    an admin track for them while they're offline shows right away, since you're going by their
+    stream already. A browser source added with its own `?room=` address has no delay.
   - Buttons above the map switch your tracker between **Merged**, the combined run, and
     each runner's run as their own tracker has it. A runner's run is only for looking at,
     unless you're tracking for them (see **Editable when offline**). Anything changed there is
@@ -522,12 +527,12 @@ shows none of it.
   combined run that the host and other admins see too. Only the host's tracker serves the stream
   displays.
 - **End race** or **Leave race** disconnects. The host and admins keep the combined run.
-- Trackers reconnect by themselves if the connection drops, and after a restart.
+- Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
+  two days after they're created.
 - A tracker disconnects after an hour without activity: nothing changed in it, and for the
   host and admins, nothing came in from the runners. A runner's tracker left open then stops
   showing as online. It reconnects as soon as anything changes in it, or with **Reconnect** in
-  the Race Tracking tab. Rooms expire
-  two days after they're created.
+  the Race Tracking tab.
 - Races go through a small relay server, the `relay` folder in this repository. Trackers use a
   public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))
   and enter its address under **Relay server**. Everyone in a race has to use the same one.
