@@ -9,7 +9,7 @@ import { hints, type Hint } from "$lib/state/hints.svelte";
 import { checked, setChecked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { settings } from "$lib/state/settings.svelte";
-import { sphere } from "$lib/state/sphere.svelte";
+import { sphere, trimSpherePlacementsForItem } from "$lib/state/sphere.svelte";
 import { getHintIconId } from "$lib/logic/map-icons";
 import { getEffectiveItemStage } from "$lib/logic/starting-gear-items";
 
@@ -41,6 +41,10 @@ export function setShardTrackingChecked(number: number, isChecked: boolean): voi
   const { shardHintIds, fallbackId } = getShardTrackingState(number);
   setChecked(fallbackId, isChecked);
   shardHintIds.forEach((id) => setChecked(id, isChecked));
+  // Not held after all, so not found anywhere either: its card goes too, as a
+  // dungeon row's key gives up its own. Left behind, the placement went on
+  // counting the shard as held, whatever the shard column said.
+  if (!isChecked) trimSpherePlacementsForItem(`Triforce Shard ${number}`, 0);
 }
 
 /** Eight shards make the Triforce of Courage, and there are no more than that. */
