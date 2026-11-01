@@ -17,6 +17,7 @@
     formatRunnerCode,
     parseRaceCode,
     race,
+    requestRaceReconnect,
     runnerName,
     setRaceRoster,
     setRaceSession
@@ -278,6 +279,11 @@
       <span class="race-presence" class:online={status.connected} aria-hidden="true"></span>
       {status.message || "Connecting..."}
     </p>
+    {#if status.idle}
+      <div class="setting-row">
+        <button class="tool-button" type="button" onclick={requestRaceReconnect}>Reconnect</button>
+      </div>
+    {/if}
 
     {#if session.role === "host"}
       {#each runnerSlots as slot (slot)}

@@ -16,7 +16,8 @@ import {
   RACE_STATUS_KEY,
   RACE_VIEW_KEY,
   RACE_ROSTER_KEY,
-  RACE_RESOLVE_KEY
+  RACE_RESOLVE_KEY,
+  RACE_RECONNECT_KEY
 } from "$lib/constants";
 import { sphere, loadSphereState } from "$lib/state/sphere.svelte";
 import { reloadMarkStartingModeFromStorage, reloadPendingLocationFromStorage } from "$lib/state/ui.svelte";
@@ -29,6 +30,7 @@ import { UNDOCKED_KEY, reloadUndockedFromStorage } from "$lib/state/undocked.sve
 import { DUNGEON_ITEMS_KEY, reloadDungeonItemsFromStorage } from "$lib/state/dungeon-items.svelte";
 import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
 import {
+  reloadRaceReconnectFromStorage,
   reloadRaceResolutionFromStorage,
   reloadRaceRosterFromStorage,
   reloadRaceSessionFromStorage,
@@ -141,6 +143,9 @@ export function reloadFromStorage(key: string, newValue: string | null): void {
       break;
     case RACE_RESOLVE_KEY:
       reloadRaceResolutionFromStorage();
+      break;
+    case RACE_RECONNECT_KEY:
+      reloadRaceReconnectFromStorage();
       break;
   }
 }

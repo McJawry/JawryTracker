@@ -522,7 +522,11 @@ shows none of it.
   combined run that the host and other admins see too. Only the host's tracker serves the stream
   displays.
 - **End race** or **Leave race** disconnects. The host and admins keep the combined run.
-- Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
+- Trackers reconnect by themselves if the connection drops, and after a restart.
+- A tracker disconnects after an hour without activity: nothing changed in it, and for the
+  host and admins, nothing came in from the runners. A runner's tracker left open then stops
+  showing as online. It reconnects as soon as anything changes in it, or with **Reconnect** in
+  the Race Tracking tab. Rooms expire
   two days after they're created.
 - Races go through a small relay server, the `relay` folder in this repository. Trackers use a
   public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))

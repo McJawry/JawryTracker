@@ -9,7 +9,7 @@
 // (tauri/race-link.svelte.ts), so these stores are how they talk: the session
 // says what to connect to, the status says how it is going, and a host's view
 // says whose run to show.
-import { RACE_RESOLVE_KEY, RACE_ROSTER_KEY, RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
+import { RACE_RECONNECT_KEY, RACE_RESOLVE_KEY, RACE_ROSTER_KEY, RACE_SESSION_KEY, RACE_STATUS_KEY, RACE_VIEW_KEY } from "$lib/constants";
 import type { RaceConflict } from "$lib/logic/race-conflicts";
 
 export interface RaceSession {
@@ -43,9 +43,20 @@ export interface RaceStatus {
   edits: number;
   /** Host only: the room's admin key, once the relay has sent it - a relay from before admins doesn't. */
   adminKey: string;
+  /** Disconnected after an hour without activity, until something changes - see race-link. */
+  idle: boolean;
 }
 
-const IDLE_STATUS: RaceStatus = { connected: false, message: "", runners: {}, conflicts: [], display: "", edits: 0, adminKey: "" };
+const IDLE_STATUS: RaceStatus = {
+  connected: false,
+  message: "",
+  runners: {},
+  conflicts: [],
+  display: "",
+  edits: 0,
+  adminKey: "",
+  idle: false
+};
 
 function readJson<T>(key: string): T | null {
   try {
@@ -106,12 +117,15 @@ export const race: {
   view: number;
   roster: RaceRoster;
   resolution: RaceResolution | null;
+  /** When the Race Tracking tab last asked to reconnect. */
+  reconnect: number;
 } = $state({
   session: loadSession(),
   status: loadStatus(),
   view: loadView(),
   roster: loadRoster(),
-  resolution: readJson<RaceResolution>(RACE_RESOLVE_KEY)
+  resolution: readJson<RaceResolution>(RACE_RESOLVE_KEY),
+  reconnect: Number(localStorage.getItem(RACE_RECONNECT_KEY)) || 0
 });
 
 export function setRaceSession(session: RaceSession | null): void {
@@ -171,6 +185,16 @@ export function requestRaceResolution(resolution: Omit<RaceResolution, "id">): v
 
 export function reloadRaceResolutionFromStorage(): void {
   race.resolution = readJson<RaceResolution>(RACE_RESOLVE_KEY);
+}
+
+/** Reconnects a tracker that disconnected after an hour without activity. */
+export function requestRaceReconnect(): void {
+  race.reconnect = Date.now();
+  localStorage.setItem(RACE_RECONNECT_KEY, String(race.reconnect));
+}
+
+export function reloadRaceReconnectFromStorage(): void {
+  race.reconnect = Number(localStorage.getItem(RACE_RECONNECT_KEY)) || 0;
 }
 
 /** A runner as the trackers show them: by the host's name for them, or as "Runner 2". */

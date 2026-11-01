@@ -98,6 +98,12 @@ const CHANGE_DELAY_MS = 150;
 // Runner: how long to wait for the room's welcome before sending anyway - a
 // relay from before welcomes sends none.
 const WELCOME_WAIT_MS = 3000;
+// An hour with nothing changing in this tracker and nothing coming in from the
+// race: the race is over, or the tracker was left open. Its connection goes -
+// a runner left open stayed online for good, which also kept the host and
+// admins from tracking for them - and comes back as soon as anything changes.
+const IDLE_DISCONNECT_MS = 60 * 60 * 1000;
+const IDLE_CHECK_MS = 60 * 1000;
 
 let started = false;
 let connection: RelayConnection | null = null;
@@ -116,6 +122,10 @@ export function initRaceLink(): void {
   // The last conflict settled was settled then - not again now.
   settledRequest = race.resolution?.id ?? "";
 
+  setInterval(() => {
+    if (connection && Date.now() - lastActivity > IDLE_DISCONNECT_MS) disconnectIdle();
+  }, IDLE_CHECK_MS);
+
   $effect.root(() => {
     $effect(() => {
       const session = race.session;
@@ -132,8 +142,14 @@ export function initRaceLink(): void {
       settings.randoConfigText;
       settings.genericTriforceShards;
       if (!race.session) return;
+      untrack(markRaceActivity);
       clearTimeout(sendTimer);
       sendTimer = setTimeout(sendChangedStores, SEND_DELAY_MS);
+    });
+
+    // Reconnect, asked for from the Race Tracking tab.
+    $effect(() => {
+      if (race.reconnect) untrack(markRaceActivity);
     });
 
     // A host's or admin's change to the run, from any window: an edit to the
@@ -226,7 +242,9 @@ function follow(session: RaceSession | null) {
     for (let slot = 1; slot <= session.slot; slot += 1) runners[slot] = { online: false, updatedAt: 0 };
   }
   if (hosting) void serveRaceDisplay(session);
-  setRaceStatus({ connected: false, message: "Connecting...", runners, conflicts: [], display: "", edits: 0, adminKey: "" });
+  idle = false;
+  lastActivity = Date.now();
+  setRaceStatus({ connected: false, message: "Connecting...", runners, conflicts: [], display: "", edits: 0, adminKey: "", idle: false });
   if (combining) loadHostEdits(session.room);
 
   connection = openRelayConnection(
@@ -252,6 +270,7 @@ function follow(session: RaceSession | null) {
       onDrop: () => setRaceStatus({ connected: false, message: "Connection lost - reconnecting..." }),
       onRefused: (reason) => setRaceStatus({ connected: false, message: reason }),
       onMessage: (message) => {
+        markRaceActivity();
         if (message.type === "welcome") {
           if (session.role === "runner") welcome(message.stores);
         } else if (message.type === "host" && message.store === "config") {
@@ -264,6 +283,34 @@ function follow(session: RaceSession | null) {
       }
     }
   );
+}
+
+// --- Idling ---------------------------------------------------------------
+
+/** When this tracker last changed, or last heard from the race. */
+let lastActivity = Date.now();
+/** Disconnected for want of activity, to reconnect when there is some. */
+let idle = false;
+
+function markRaceActivity() {
+  lastActivity = Date.now();
+  if (!idle || !race.session) return;
+  // Following again from scratch, as at startup - the room's snapshot, or its
+  // welcome, brings back whatever happened meanwhile.
+  idle = false;
+  connectedTo = "";
+  follow(race.session);
+}
+
+function disconnectIdle() {
+  idle = true;
+  connection?.close();
+  connection = null;
+  setRaceStatus({
+    connected: false,
+    idle: true,
+    message: "Disconnected after an hour without activity. It reconnects as soon as anything changes here."
+  });
 }
 
 // --- Sending ----------------------------------------------------------------
