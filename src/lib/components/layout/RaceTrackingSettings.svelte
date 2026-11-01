@@ -8,6 +8,9 @@
   //
   // The host's seed settings are the race's, so a host needs some to share,
   // and a runner's or admin's tracker takes them before it joins.
+  //
+  // What each option does is behind an (i) beside it rather than written out
+  // between the options.
   import { DEFAULT_RACE_RELAY, RACE_DISPLAY_ORIGIN } from "$lib/constants";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
@@ -37,6 +40,7 @@
   import { describeRaceConflict } from "$lib/logic/race-conflicts";
   import { applySeedConfigText } from "$lib/tauri/rando-sync";
   import { confirmAction } from "$lib/tauri/confirm-dialog";
+  import InfoTip from "$lib/components/shared/InfoTip.svelte";
 
   const MAX_RUNNERS = 4;
 
@@ -236,11 +240,11 @@
         </select>
       </label>
       <button class="tool-button" type="button" disabled={busy} onclick={hostRace}>Create race room</button>
+      <InfoTip
+        label="About hosting a race"
+        text="Replaces this tracker's run with the runners' combined runs. Runners take this tracker's seed settings, so sync them first."
+      />
     </div>
-    <p class="setting-hint">
-      Replaces this tracker's run with the runners' combined runs. Runners take this tracker's seed settings, so sync them
-      first.
-    </p>
   </fieldset>
 
   <fieldset class="settings-group">
@@ -256,11 +260,14 @@
         onkeydown={(event) => event.key === "Enter" && joinRace()}
       />
       <button class="tool-button" type="button" disabled={busy || !raceCode.trim()} onclick={joinRace}>Join</button>
+      <InfoTip
+        label="About joining a race"
+        text={[
+          "A runner code sends this tracker's run to the host as that runner's.",
+          "An admin code shows the runners' combined run instead, which you can correct along with the host."
+        ]}
+      />
     </div>
-    <p class="setting-hint">
-      A runner code sends this tracker's run to the host as that runner's. An admin code shows the runners' combined run
-      instead, which you can correct along with the host.
-    </p>
   </fieldset>
 
   <details class="race-relay">
@@ -276,8 +283,8 @@
           saveSettings();
         }}>Reset</button
       >
+      <InfoTip label="About the relay server" text="Everyone in a race has to use the same one." />
     </div>
-    <p class="setting-hint">Everyone in a race has to use the same one.</p>
   </details>
 {:else}
   <fieldset class="settings-group">
@@ -285,6 +292,31 @@
     <p class="race-room">
       {session.role === "host" ? "Hosting room" : session.role === "admin" ? "Admin in room" : `Runner ${session.slot} in room`}
       <span class="race-code">{session.room}</span>
+      {#if session.role === "host"}
+        <InfoTip
+          label="About hosting"
+          text={[
+            "Send each runner's tracker operator their runner code.",
+            "Add each runner's address to OBS as a Browser Source. It shows that runner's items, and keeps working from one race to the next.",
+            "A name tells runners apart here, on the buttons above the map and for your admins."
+          ]}
+        />
+      {:else if session.role === "admin"}
+        <InfoTip
+          label="About being an admin"
+          text={[
+            "This tracker shows the runners' combined run, and each runner's from the buttons above the map. Each runner's updates are held back by the delay the host set for them.",
+            "Corrections you make to the combined run show for the host and other admins too, never for the runners.",
+            "A runner the host has made editable when offline can be tracked for from their view while their own tracker is offline.",
+            "This tracker keeps the host's seed settings until you leave the race."
+          ]}
+        />
+      {:else}
+        <InfoTip
+          label="About being a runner"
+          text="This tracker's run is sent to the host as you track. It keeps the host's seed settings until you leave the race."
+        />
+      {/if}
     </p>
     <p class="setting-status race-runner-name">
       <span class="race-presence" class:online={status.connected} aria-hidden="true"></span>
@@ -331,6 +363,13 @@
               />
               <span>s</span>
             </label>
+            <InfoTip
+              label="About Delay"
+              text={[
+                "Holds this runner's updates back by that many seconds, on their browser source and in your and your admins' trackers, so nothing shows before their stream does. Set it to how far their stream lags behind their game.",
+                "What you or an admin track for them while they're offline shows right away."
+              ]}
+            />
           </div>
           <div class="setting-row">
             <label class="setting-toggle">
@@ -341,6 +380,10 @@
               />
               <span>Editable when offline</span>
             </label>
+            <InfoTip
+              label="About Editable when offline"
+              text="Lets you or an admin track for this runner from their view above the map while their own tracker is offline. When it comes back, it takes what was tracked for it."
+            />
           </div>
           <div class="setting-row">
             <input class="preset-name race-code" type="text" readonly value={code} title="Runner code" onfocus={(event) => event.currentTarget.select()} />
@@ -353,7 +396,13 @@
         </div>
       {/each}
       <div class="race-runner">
-        <p class="race-runner-name">Admins</p>
+        <p class="race-runner-name">
+          Admins
+          <InfoTip
+            label="About the admin code"
+            text="For anyone helping run the race, like a commentator. Their tracker gets the same Merged and runner views as yours, and a correction either of you makes shows for both."
+          />
+        </p>
         {#if adminCode}
           <div class="setting-row">
             <input class="preset-name race-code" type="text" readonly value={adminCode} title="Admin code" onfocus={(event) => event.currentTarget.select()} />
@@ -363,22 +412,6 @@
           <p class="setting-status">This race's relay is too old for admin codes.</p>
         {/if}
       </div>
-      <p class="setting-hint">
-        Send each runner's tracker operator their code. Add each address to OBS as a Browser Source - it shows that runner's
-        items, and keeps working from one race to the next. The admin code is for anyone helping run the race, like a
-        commentator: their tracker gets the same Merged and runner views as yours, and a correction either of you makes
-        shows for both.
-      </p>
-      <p class="setting-hint">
-        A name tells runners apart here, on the buttons above the map and for your admins. Editable when offline lets you
-        or an admin track for that runner from their view while their own tracker is offline. When it comes back, it takes
-        what was tracked for it.
-      </p>
-      <p class="setting-hint">
-        Delay holds a runner's updates back by that many seconds, on their browser source and in your and your admins'
-        trackers, so nothing shows before their stream does. Set it to how far their stream lags behind their game.
-        What you or an admin track for them while they're offline shows right away.
-      </p>
       {#if status.display}<p class="setting-status">{status.display}</p>{/if}
     {:else if session.role === "admin"}
       {#each runnerSlots as slot (slot)}
@@ -395,17 +428,6 @@
           </span>
         </p>
       {/each}
-      <p class="setting-hint">
-        This tracker shows the runners' combined run, and each runner's from the buttons above the map, each runner's updates
-        held back by the delay the host set for them. Corrections you make
-        to the combined run show for the host and other admins too, never for the runners. A runner the host has made
-        editable when offline can be tracked for from their view while their own tracker is offline. This tracker keeps the
-        host's seed settings until you leave the race.
-      </p>
-    {:else}
-      <p class="setting-hint">
-        This tracker's run is sent to the host as you track. It keeps the host's seed settings until you leave the race.
-      </p>
     {/if}
     {#if session.role !== "runner" && status.conflicts?.length}
       <p class="setting-status">The runners' trackers disagree - settle it from Conflicts above the map:</p>
@@ -422,16 +444,19 @@
   {#if session.role === "host"}
     <fieldset class="settings-group">
       <legend>Browser sources</legend>
-      <label class="setting-toggle">
-        <input type="checkbox" bind:checked={settings.raceStreamGrid} onchange={saveSettings} />
-        <span>Grid layout</span>
-      </label>
-      <p class="setting-hint">
-        Shows each runner's items as a grid of square cells, always {RACE_GRID_WIDTH} pixels wide, instead of the
-        tracker's item grid on a transparent background. The items are the ones this seed's settings leave to find. Bosses the race doesn't need
-        are crossed out once the runners' hints or chart marks show which ones they are, and a runner's beaten required
-        bosses get a check.
-      </p>
+      <div class="setting-row">
+        <label class="setting-toggle">
+          <input type="checkbox" bind:checked={settings.raceStreamGrid} onchange={saveSettings} />
+          <span>Grid layout</span>
+        </label>
+        <InfoTip
+          label="About Grid layout"
+          text={[
+            `Shows each runner's items as a grid of square cells, always ${RACE_GRID_WIDTH} pixels wide, instead of the tracker's item grid on a transparent background.`,
+            "The items are the ones this seed's settings leave to find. Bosses the race doesn't need are crossed out once the runners' hints or chart marks show which ones they are, and a runner's beaten required bosses get a check."
+          ]}
+        />
+      </div>
       {#if settings.raceStreamGrid}
         <div class="setting-row race-grid-size">
           <label class="setting-control">
@@ -446,14 +471,16 @@
         <p class="setting-status">{gridSummary}</p>
         <p class="setting-status">Set each Browser Source in OBS to {RACE_GRID_WIDTH} × {gridSize.height}.</p>
       {/if}
-      <label class="setting-toggle">
-        <input type="checkbox" bind:checked={settings.raceStreamGenericShards} onchange={saveSettings} />
-        <span>Generic Triforce shards</span>
-      </label>
-      <p class="setting-hint">
-        Every runner's Triforce shows how many shards they have, even when their tracker shows which ones. Turned off,
-        each shows them the way that runner's tracker does.
-      </p>
+      <div class="setting-row">
+        <label class="setting-toggle">
+          <input type="checkbox" bind:checked={settings.raceStreamGenericShards} onchange={saveSettings} />
+          <span>Generic Triforce shards</span>
+        </label>
+        <InfoTip
+          label="About Generic Triforce shards"
+          text="Every runner's Triforce shows how many shards they have, even when their tracker shows which ones. Turned off, each shows them the way that runner's tracker does."
+        />
+      </div>
     </fieldset>
   {/if}
 {/if}

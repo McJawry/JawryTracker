@@ -3707,6 +3707,59 @@ body.stream-mode .empty-state {
 
 /* Race Tracking tab. The relay address is tucked away: a race only works if
    everyone in it uses the same one, so it is rarely the thing to change. */
+/* An (i) beside a setting, with what it does in a popup (InfoTip.svelte). */
+.info-tip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.info-tip-button {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  font: italic 800 13px/1 Georgia, "Times New Roman", serif;
+  cursor: pointer;
+}
+
+.info-tip-button:hover,
+.info-tip-button:focus-visible {
+  border-color: var(--accent);
+}
+
+.info-tip-button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.info-tip-popup {
+  position: fixed;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+
 .race-relay {
   margin-top: 12px;
   padding-top: 12px;
