@@ -261,7 +261,7 @@ closest item, area, location or boss, so short forms work.
 | `hookshot at needle rock` | **Item hint**: the Hookshot is somewhere in an area. `in` and `on` work too. |
 | `bombs in windfall jail maze chest` | **Location hint**: when the text matches a single location, the hint points at that location. |
 | `sword r at headstone` | Item hint marked **required**. Add `r`, `p` or `n` after the item for *required*, *possibly required* or *not required*. |
-| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. |
+| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. |
 
 Common abbreviations work for areas, for example **FF**, **DRI**, **DRC**, **FW**, **FH**,
 **GT**, **NFI** and **SFI**, and for bosses, for example **KD**. A line the tracker can't read

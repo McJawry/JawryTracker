@@ -15,8 +15,13 @@
     { value: "needs-review", label: "Review" }
   ];
 
+  // A "no" line isn't a hint: it checks places off, which the notes show in
+  // red and the map and location lists show as checked. One the tracker can't
+  // read checks nothing off, though, so that stays, for Review.
+  const panelHints = $derived(hints.filter((hint) => hint.type !== "no" || hint.needsReview));
+
   const visibleHints = $derived(
-    hints.filter((hint) => {
+    panelHints.filter((hint) => {
       if (filter.value === "all") return true;
       if (filter.value === "needs-review") return hint.needsReview || hint.type === "needs-review";
       return hint.type === filter.value;
@@ -42,7 +47,7 @@
         />
         <span>Filters</span>
       </label>
-      <span class="parsed-count">{hints.length} {hints.length === 1 ? "hint" : "hints"}</span>
+      <span class="parsed-count">{panelHints.length} {panelHints.length === 1 ? "hint" : "hints"}</span>
     </div>
     <div class="tabs" role="tablist" aria-label="Hint type filters">
       {#each filterTabs as tab (tab.value)}
@@ -54,7 +59,7 @@
     <div class="hint-list" aria-live="polite">
       {#if !visibleHints.length}
         <div class="empty-state">
-          {hints.length ? "No hints match this filter." : "Type hint notes to see them parsed here. Right-click a parsed hint to delete its note line."}
+          {panelHints.length ? "No hints match this filter." : "Type hint notes to see them parsed here. Right-click a parsed hint to delete its note line."}
         </div>
       {:else}
         {#each visibleHints as hint (hint.lineNumber)}
