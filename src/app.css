@@ -2122,6 +2122,53 @@ body.stream-mode .empty-state {
   background: var(--ok);
 }
 
+.main-tracker-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A race host's: the runners' runs combined, or one runner's to look at.
+   The toolbar's own buttons, so they read as plainly as Clear dead. */
+.race-view-switcher {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+
+.race-view-switcher .map-toolbar-button {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Set a little apart from the runners, and flashing like an armed Mark
+   starting while there's something to settle. */
+.race-view-switcher .race-conflicts-button {
+  margin-left: 6px;
+}
+
+.race-view-switcher .race-conflicts-button.flashing {
+  animation: mark-starting-flash 0.5s ease-in-out infinite;
+}
+
+/* The run being shown, filled in the way an armed Mark starting flashes. */
+.race-view-switcher .map-toolbar-button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.race-view-note {
+  flex: 0 0 auto;
+  color: var(--ink);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
 .map-toolbar-button {
   flex: 0 0 auto;
   min-height: 28px;
@@ -3656,6 +3703,151 @@ body.stream-mode .empty-state {
   margin: 0;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* Race Tracking tab. The relay address is tucked away: a race only works if
+   everyone in it uses the same one, so it is rarely the thing to change. */
+/* An (i) beside a setting, with what it does in a popup (InfoTip.svelte). */
+.info-tip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.info-tip-button {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  font: italic 800 13px/1 Georgia, "Times New Roman", serif;
+  cursor: pointer;
+}
+
+.info-tip-button:hover,
+.info-tip-button:focus-visible {
+  border-color: var(--accent);
+}
+
+.info-tip-button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.info-tip-popup {
+  position: fixed;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+
+.race-relay {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+
+.race-relay summary {
+  color: var(--muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.race-relay > :not(summary) {
+  margin-top: 8px;
+}
+
+.race-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.race-room {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.race-runner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.race-runner-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.race-runner-detail {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.race-runner-nickname {
+  flex: 0 1 160px;
+  min-width: 0;
+}
+
+.settings-group .race-runner-delay {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.race-runner-delay input {
+  width: 56px;
+}
+
+.race-presence {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa3aa;
+}
+
+.race-presence.online {
+  background: #2f9e44;
+}
+
+.race-conflicts {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+}
+
+.race-grid-size {
+  gap: 16px;
+}
+
+.race-grid-size input {
+  width: 56px;
 }
 
 /* Hidden-section restore control: shows the section name, and swaps to

@@ -10,6 +10,7 @@
   import { clearDeadLocations } from "$lib/logic/dead-locations";
   import { redoTrackerAction, startTrackerHistory, trackerHistory, undoTrackerAction } from "$lib/state/tracker-history.svelte";
   import { ui, toggleMarkStartingMode } from "$lib/state/ui.svelte";
+  import { race } from "$lib/state/race.svelte";
 
   // The one undo for the whole run, so whichever window shows these buttons
   // keeps the history - including actions taken in other windows.
@@ -40,7 +41,7 @@
   <button
     class="tool-button map-toolbar-button history-button undo-button"
     type="button"
-    disabled={!trackerHistory.canUndo}
+    disabled={!trackerHistory.canUndo || race.view > 0}
     title="Undo"
     aria-label="Undo"
     onclick={undoTrackerAction}
@@ -50,7 +51,7 @@
   <button
     class="tool-button map-toolbar-button history-button redo-button"
     type="button"
-    disabled={!trackerHistory.canRedo}
+    disabled={!trackerHistory.canRedo || race.view > 0}
     title="Redo"
     aria-label="Redo"
     onclick={redoTrackerAction}

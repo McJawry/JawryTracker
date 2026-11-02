@@ -8,6 +8,7 @@
 // Item Tracker stage. Hint *notes* are still written by typing in the Notes
 // section - that path is unaffected.
 import { WWRSphereEngine } from "$lib/logic";
+import { MAX_LOGIC_ITEM_COPIES } from "$lib/gameData";
 import { getLocationCheckedId } from "$lib/logic/locations";
 import { isChartAcquired, setChartAcquired } from "$lib/logic/chart-tracking";
 import {
@@ -68,6 +69,26 @@ export function isFindableItem(itemName: string): boolean {
 
   if (ITEM_STAGE_TABLES[itemName]) return getStartingItemStage(itemName) < getItemMaxStage(itemName);
   return true;
+}
+
+/**
+ * How many copies of an item the seed hides at locations - as many as can be
+ * placed. Its starting copies were never at one, so they don't count, the way
+ * isFindableItem counts them.
+ */
+export function getFindableCopies(itemName: string): number {
+  const dungeonItem = /^(.+) (Small Key|Big Key|Boss Key|Dungeon Map|Compass)$/.exec(itemName);
+  if (dungeonItem) {
+    const [, dungeon, kind] = dungeonItem;
+    if (kind === "Small Key") return Math.max(0, getMaxSmallKeys(dungeon) - getStartingSmallKeys(dungeon));
+    return hasStartingDungeonItem(dungeon, kind === "Dungeon Map" ? "map" : kind === "Compass" ? "compass" : "bigKey") ? 0 : 1;
+  }
+
+  const shard = getTriforceShardNumber(itemName);
+  if (shard) return isStartingShard(shard) ? 0 : 1;
+
+  if (ITEM_STAGE_TABLES[itemName]) return Math.max(0, getItemMaxStage(itemName) - getStartingItemStage(itemName));
+  return MAX_LOGIC_ITEM_COPIES[itemName] ?? 1;
 }
 
 /** Returns false, recording nothing, for an item the seed never hides anywhere. */

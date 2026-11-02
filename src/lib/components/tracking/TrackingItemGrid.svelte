@@ -25,7 +25,7 @@
   import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
   import { answerArmedLocation, isFindableItem, needsRemovalChoice } from "$lib/logic/assignment";
   import { beginItemDrag } from "$lib/logic/item-drag";
-  import { getHeldTriforceShardCount, getShardTrackingState, isStartingShard } from "$lib/logic/shard-tracking";
+  import { getHeldTriforceShardCount, getShownTriforceShards } from "$lib/logic/shard-tracking";
   import { settings } from "$lib/state/settings.svelte";
   import { data } from "$lib/state/data.svelte";
   import { itemImage } from "$lib/logic/images";
@@ -63,11 +63,7 @@
   // and a complete set swaps to the single finished image. A shard crossed
   // out in the shard column is starting gear - you have it, so it shows, but
   // tinted red to mark where it came from.
-  const ownedShards = $derived(
-    Array.from({ length: 8 }, (_, index) => index + 1)
-      .map((number) => ({ number, starting: isStartingShard(number) }))
-      .filter(({ number, starting }) => starting || getShardTrackingState(number).isChecked)
-  );
+  const ownedShards = $derived(getShownTriforceShards());
   const allShards = $derived(ownedShards.length === 8);
 
   // Generic shards: not everyone tracks which shard is which, so the Triforce

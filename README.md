@@ -33,6 +33,7 @@ what you have found, and shows where each boss path can still lead.
   - [Filters](#filters)
 - [Settings](#settings)
 - [Saving your run](#saving-your-run)
+- [Race Tracking](#race-tracking)
 - [Mouse and keyboard reference](#mouse-and-keyboard-reference)
 - [Building from source](#building-from-source)
 
@@ -138,7 +139,9 @@ The inventory grid is where you track what you own.
   clickable 0–8 counter.
 - The **Blue Chu Jelly** counter shows how many jellies you have marked on the map.
 - The **chart button** (under Progressive Magic) opens the [chart menu](#charts).
-- **GO MODE** appears over the grid once everything needed to beat the game is in hand.
+- **GO MODE** appears over the grid once everything needed to beat the game is in hand and
+  every required boss is beaten (its heart container checked). While the tracker doesn't know
+  which bosses are required, it waits for every boss it hasn't ruled out.
 - The row under the grid shows the full name of whatever is under the pointer. This includes
   map areas and location names that the lists shorten.
 
@@ -363,8 +366,8 @@ The **Filters** menu narrows the board to what matters:
     to unchecked locations.
   - They hide again once their branch is a dead end.
 - **Paths + required**: the boss paths, plus every item that beating the seed depends on.
-  Items with unexplored branches stay visible until those branches are checked (or until you are
-  in go mode). Cards marked *Optional* are hidden.
+  Items with unexplored branches stay visible until those branches are checked (or until
+  everything needed to beat the game is in hand). Cards marked *Optional* are hidden.
 - **Show keys**: keeps dungeon keys visible whatever the other filters say.
 
 **Locations**, next to Path icons, hides the locations each sphere opens up, leaving only the
@@ -396,6 +399,8 @@ Open **Settings** from the Control Panel.
     (see [Saving your run](#saving-your-run)).
 - **Load saves**: named saves of your run, and loading a spoiler log. See
   [Saving your run](#saving-your-run).
+- **Race Tracking**: links trackers for a race shown on one stream. See
+  [Race Tracking](#race-tracking).
 
 Presets and saves can live in the **app folder** (portable, beside the exe) or the **user
 folder** (`Documents/JawryTracker`, shared by every copy of the app on the computer).
@@ -428,6 +433,113 @@ folder** (`Documents/JawryTracker`, shared by every copy of the app on the compu
   Then it runs [Clear dead](#clear-dead).
 - The tracker keeps its working data in the `data` folder next to the exe. Keep that folder on a
   drive that stays connected while you play.
+
+---
+
+## Race Tracking
+
+For a race shown on one stream: each runner's tracker operator links their JawryTracker to the
+stream host's. All of it is in **Settings → Race Tracking**, and a tracker that isn't racing
+shows none of it.
+
+- **Hosting**:
+  - Sync your seed settings first: runners take the host's. Then pick how many runners (2 to 4)
+    and **Create race room**. This replaces your run, so save it first if you want to keep it.
+  - Send each runner's tracker operator their **runner code**. If the runner is already using
+  JawryTracker and placing items on locations, send the runner code to the runner.
+  - The **admin code** is for anyone helping run the race, like a commentator, or for a tracker
+  operator who wants a full overview as well. Their tracker gets the same combined run and runner
+    views as yours, and can correct the combined run too.
+    See **Helping as an admin** below.
+  - Your tracker combines the runners' runs into one: every item placement, checked location,
+    entrance and hint line any of them has recorded. Your Sphere Tracker works from that, so it
+    shows everything known about the seed.
+  - If a runner's tracker has something wrong, correct it in your tracker as usual. Your
+    corrections stay through every update and decide the bosses the stream shows, but they never
+    reach the runners. Admins see them, and theirs show for you. When a runner's tracker changes
+    the same thing again (the same item, location, hint, placement or entrance), theirs replaces
+    the correction.
+  - Hint lines that mean the same thing are merged, however each runner typed them, and your
+    notes show them spelled out in full: `diamond to jalh` becomes `Diamond Steppe Island to
+    Jalhalla`. Dungeons keep their abbreviations, like `ET to Gohma`. Lines that aren't hints,
+    or that the tracker can't read for certain, stay as the runner typed them.
+  - The same hint from two runners is kept once. One runner writing a hint twice keeps it twice,
+    since a seed can give the same path hint twice.
+  - **Conflicts**, after the runner buttons above the map, flashes red while the runners'
+    trackers disagree, and opens the **Race conflicts** window. Click a line there to settle it
+    in the merged view, the same way the tracker asks which copy you meant:
+    - Two trackers with different items at one location: pick which is there, or neither. Until
+      then, the newer one is kept.
+    - An item placed more often than the seed has it, like one Hookshot at two locations or a
+      fifth bottle: pick the right placement, or remove one at a time. **Somewhere else** removes
+      them all, for you to place it yourself.
+    - An entrance sent two places: pick where it leads.
+    - A runner's tracker on other seed settings is listed too, but settles itself.
+
+    Settling a conflict is a correction like any other: the host and admins see it, the runners
+    don't, and a runner's tracker changing its answer brings the conflict back.
+  - The tab shows which runners are connected and when each last sent an update.
+  - Give each runner a **name** to tell them apart. It shows in the tab, on the buttons above
+    the map, and for your admins.
+  - Turn on **Editable when offline** for a runner to let you or an admin track for them while
+    their own tracker is offline: their view above the map can then be changed, and what you
+    change goes out as their run, to the stream and everyone's trackers. When their tracker
+    comes back, it takes the run that was tracked for it.
+  - Set a runner's **Delay** to how many seconds their stream lags behind their game. Their
+    updates are held back that long on their browser source and in your and your admins'
+    trackers, so the stream never shows an item before the runner's own stream does. What you or
+    an admin track for them while they're offline shows right away, since you're going by their
+    stream already. A browser source added with its own `?room=` address has no delay.
+  - Buttons above the map switch your tracker between **Merged**, the combined run, and
+    each runner's run as their own tracker has it. A runner's run is only for looking at,
+    unless you're tracking for them (see **Editable when offline**). Anything changed there is
+    put back, and undo is off. Which one you're looking at doesn't change the stream.
+- **Stream display**: each runner has an address like `http://127.0.0.1:4747/?stream=1`. Add it
+  to OBS as a **Browser Source**. It shows that runner's own items and dungeon row on a
+  transparent background, scaled to the source's size. The address stays the same from one race
+  to the next, so the OBS scene only needs setting up once. It shows while your tracker is
+  hosting.
+- **Grid layout**: turn on **Grid layout** under **Browser sources** to show each runner's
+  items as a grid of square black cells instead, like race restreams use. Set how many columns
+  and rows it has, and the tab says whether this seed's items fit.
+  - The grid is always 800 pixels wide, so it looks the same on every stream. The tab gives the
+    size to set each Browser Source to in OBS, like `800 × 398` for 8 by 4.
+  - The items are the ones the seed's settings leave to find. Items the seed starts you with
+    in full are left out, as is the sword in swordless. The bosses are along the bottom in race
+    mode. If the grid is too small, the least important items are left out first.
+  - Items not found yet are dimmed. The Triforce shows the runner's shards the way their
+    tracker does, as pieces or as a count.
+  - Every runner races the same bosses, so the host works them out from all the runs
+    together. Path hints, chart marks and the seed's number of required dungeons show which
+    bosses are required. Bosses that aren't required are dimmed and crossed out. A runner's
+    beaten bosses get a green check once the race knows they're required. Until then a checked
+    heart container could just be **Clear dead** ruling the dungeon out.
+- **Generic Triforce shards**: turn it on under **Browser sources** to make every runner's
+  Triforce show a shard count, in either layout, even when their tracker shows which shards
+  they have.
+- **Tracking for a runner**: paste the runner code into **Join a race** and press
+  **Join**. If your seed settings differ from the host's, joining syncs them to the host's
+  first. From then on, your run is sent to the host as you track, and your tracker keeps the
+  host's seed settings until you leave: a Sync from the ⚙️ menu only updates the logic. Start a
+  new tracker before joining if it still holds another seed.
+- **Helping as an admin**: paste the admin code into **Join a race** and press **Join**. Like
+  joining as a runner, it syncs your seed settings to the host's first, and keeps them until you
+  leave. Your tracker's run is replaced by the runners' combined run. From then on it works as
+  the host's does: the **Merged** and **Runner** buttons above the map, and corrections to the
+  combined run that the host and other admins see too. Only the host's tracker serves the stream
+  displays.
+- **End race** or **Leave race** disconnects. The host and admins keep the combined run.
+- Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
+  two days after they're created.
+- A tracker disconnects after an hour without activity: nothing changed in it, and for the
+  host and admins, nothing came in from the runners. A runner's tracker left open then stops
+  showing as online. It reconnects as soon as anything changes in it, or with **Reconnect** in
+  the Race Tracking tab.
+- Races go through a small relay server, the `relay` folder in this repository. Trackers use a
+  public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))
+  and enter its address under **Relay server**. Everyone in a race has to use the same one.
+  Admin codes need a relay updated for them. On an older one, the host's tab says so and the
+  host's corrections stay in the host's tracker.
 
 ---
 

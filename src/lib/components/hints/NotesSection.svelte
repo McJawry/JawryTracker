@@ -4,14 +4,20 @@
   // 5769, 5774). The Sphere Tracking textarea uses a simplified text
   // round-trip (see sphere-notes-text.ts) rather than the original's
   // ID-stable line diffing.
-  import { hints, hintNotes, updateHintsFromNotes, setNotesEditorFocused } from "$lib/state/hints.svelte";
+  import { hints, hintNotes, updateHintsFromNotes, setNotesEditorFocused, registerNotesEditor } from "$lib/state/hints.svelte";
   import { settings, saveSettings } from "$lib/state/settings.svelte";
   import { sphere } from "$lib/state/sphere.svelte";
   import { parseSphereNotesText, serializeSpherePlacements } from "$lib/logic/sphere-notes-text";
+  import { isRaceViewReadOnly } from "$lib/state/race.svelte";
 
   let activeTab: "hint" | "sphere" = $state("hint");
 
   let hintTextarea: HTMLTextAreaElement | undefined = $state();
+
+  // So notes folded in while typing in a race keep the caret where it was.
+  $effect(() => {
+    if (hintTextarea) return registerNotesEditor(hintTextarea);
+  });
   let sphereTextarea: HTMLTextAreaElement | undefined = $state();
   let sphereText = $state(serializeSpherePlacements());
 
@@ -155,6 +161,7 @@
     <textarea
       bind:this={hintTextarea}
       bind:value={hintNotes.value}
+      readonly={isRaceViewReadOnly()}
       oninput={handleHintInput}
       onscroll={syncScroll}
       onfocus={() => setNotesEditorFocused(true)}
@@ -170,6 +177,7 @@
   <textarea
     bind:this={sphereTextarea}
     bind:value={sphereText}
+    readonly={isRaceViewReadOnly()}
     oninput={handleSphereInput}
     class="notes-input"
     class:fixed-height={!settings.notesAutoGrow}

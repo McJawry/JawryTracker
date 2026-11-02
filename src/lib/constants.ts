@@ -20,6 +20,26 @@ export const AUTOSAVE_STAMP_KEY = "ww-rando-hint-tracker-autosave-stamp";
 // Set by Start New Tracker: the empty run that follows is meant, so it may
 // replace a run in autosave.json. Nothing else may - see saveTrackerAutosave.
 export const NEW_RUN_KEY = "ww-rando-hint-tracker-new-run";
+// Race Tracking (see tauri/race-link.svelte.ts): the session the Settings
+// window sets up and the main window runs, and how the run is going there.
+export const RACE_SESSION_KEY = "ww-rando-hint-tracker-race";
+export const RACE_STATUS_KEY = "ww-rando-hint-tracker-race-status";
+// A host's: whose run the tracker shows, picked in any window, and the host's
+// corrections to the combined run, kept by the main window.
+export const RACE_VIEW_KEY = "ww-rando-hint-tracker-race-view";
+// The host's names for the runners, and which can be tracked for while offline.
+export const RACE_ROSTER_KEY = "ww-rando-hint-tracker-race-roster";
+// A conflict settled from the Race conflicts window, for the main window to apply.
+export const RACE_RESOLVE_KEY = "ww-rando-hint-tracker-race-resolve";
+// Reconnect from the Race Tracking tab, after an hour without activity.
+export const RACE_RECONNECT_KEY = "ww-rando-hint-tracker-race-reconnect";
+export const RACE_EDITS_KEY = "ww-rando-hint-tracker-race-edits";
+// The relay in this repo's relay/ folder, as deployed for everyone to use. A
+// tournament can run its own copy and point Race Tracking at that instead.
+export const DEFAULT_RACE_RELAY = "https://jawrytracker-relay.jawrytracker-relay.workers.dev";
+// Where the host's tracker serves the stream display - fixed, so OBS scenes
+// keep working from one race to the next. Matches src-tauri/src/race_display.rs.
+export const RACE_DISPLAY_ORIGIN = "http://127.0.0.1:4747";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
@@ -163,6 +183,20 @@ export interface Settings {
   showPathIcons: boolean;
   /** Sphere board: the locations each sphere opens up, beside its items. */
   showSphereLocations: boolean;
+  /** The relay Race Tracking connects through. */
+  raceRelayUrl: string;
+  /**
+   * The race's browser sources show each runner's items as a grid of cells,
+   * this many across and down, rather than as the tracker's own item grid.
+   */
+  raceStreamGrid: boolean;
+  raceGridColumns: number;
+  raceGridRows: number;
+  /**
+   * The race's browser sources count every runner's Triforce shards, as
+   * genericTriforceShards does, whichever way their own tracker shows them.
+   */
+  raceStreamGenericShards: boolean;
   /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
@@ -238,5 +272,10 @@ export const DEFAULT_SETTINGS: Settings = {
   sphereFilters: { ...DEFAULT_SPHERE_FILTERS },
   showPathIcons: true,
   showSphereLocations: true,
+  raceRelayUrl: DEFAULT_RACE_RELAY,
+  raceStreamGrid: false,
+  raceGridColumns: 8,
+  raceGridRows: 4,
+  raceStreamGenericShards: false,
   popoutZoom: {}
 };

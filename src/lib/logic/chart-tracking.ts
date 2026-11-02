@@ -14,6 +14,7 @@ import { WWRSphereEngine } from "$lib/logic";
 import { CHART_FOR_ISLAND } from "$lib/gameData";
 import { checked, setChecked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
+import { trimSpherePlacementsForItem } from "$lib/state/sphere.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -51,6 +52,10 @@ export function isChartAcquired(chart: string): boolean {
 
 export function setChartAcquired(chart: string, acquired: boolean): void {
   setChecked(getChartCheckedId(chart), acquired);
+  // Not held after all, so not found anywhere either: its card goes too, as a
+  // dungeon row's key gives up its own. Left behind, the board went on
+  // holding a chart the menu says you don't have.
+  if (!acquired) trimSpherePlacementsForItem(chart, 0);
 }
 
 export function toggleChartAcquired(chart: string): void {

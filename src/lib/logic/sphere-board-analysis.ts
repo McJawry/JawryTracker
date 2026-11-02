@@ -34,7 +34,9 @@ import {
   type PathProgressEntry
 } from "$lib/logic/sphere-path-progress";
 import { getRequiredAndUnfinishedPlacementIds } from "$lib/logic/sphere-usefulness";
-import { getAvailableLocations } from "$lib/logic/locations";
+import { getAvailableLocations, isLocationMarked } from "$lib/logic/locations";
+import { getBossRequirements } from "$lib/logic/dead-locations";
+import { BOSS_LOCATIONS } from "$lib/gameData";
 import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
 import { isTriforceShardItem } from "$lib/logic/shard-tracking";
 import { data } from "$lib/state/data.svelte";
@@ -75,6 +77,7 @@ export interface SphereAnalysisResult {
   relativeUnknown: RelativeUnknownResult | null;
   certainLocationKeys: Set<string> | null;
   inventoryReachableKeys: Set<string> | null;
+  finishable: boolean;
   goMode: boolean;
   board: SphereBoardDerived | null;
 }
@@ -141,9 +144,26 @@ const UNTRACKED_PROGRESS_ITEMS = ["Light Arrows"];
  * items and about getting into the dungeons the required bosses live in - both
  * of which the tracker does know.
  */
-function computeGoMode(): boolean {
+function computeFinishable(): boolean {
   const items = [...getOwnedInventory(), ...UNTRACKED_PROGRESS_ITEMS];
   return getSphereReachableLocationSet(items).has(normalize(GOAL_LOCATION));
+}
+
+/**
+ * Go mode: the run is finishable, and every boss it may ask for is beaten.
+ * Race mode's barrier keeps Puppet Ganon's room shut until the required
+ * bosses are down, and the logic reads holding what beats a boss as having
+ * beaten it - so being finishable came on with the last fights still ahead.
+ *
+ * A boss is beaten once its heart container is checked. Only the bosses the
+ * tracker knows race mode leaves out are spared: until the required ones are
+ * all named, any of the rest could be one of them.
+ */
+function computeGoMode(finishable: boolean): boolean {
+  if (!finishable) return false;
+  return Object.entries(getBossRequirements()).every(
+    ([boss, requirement]) => requirement === "unrequired" || isLocationMarked(BOSS_LOCATIONS[boss] ?? "")
+  );
 }
 
 /**
@@ -267,15 +287,24 @@ async function computeBoardDerived(
  */
 export async function computeSphereAnalysis({ board }: { board: boolean }): Promise<SphereAnalysisResult> {
   if (!data.sphereLogicLoaded) {
-    return { calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys: null, goMode: false, board: null };
+    return {
+      calculation: null,
+      relativeUnknown: null,
+      certainLocationKeys: null,
+      inventoryReachableKeys: null,
+      finishable: false,
+      goMode: false,
+      board: null
+    };
   }
 
   // What the map is colored from is not the spheres but plain "can I reach
   // this with what I hold", so it is worked out even with the calculation off.
   const inventoryReachableKeys = computeInventoryReachableKeys();
-  const goMode = computeGoMode();
+  const finishable = computeFinishable();
+  const goMode = computeGoMode(finishable);
   if (!settings.sphereCalculation) {
-    return { calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys, goMode, board: null };
+    return { calculation: null, relativeUnknown: null, certainLocationKeys: null, inventoryReachableKeys, finishable, goMode, board: null };
   }
 
   const knowledge = getSphereTrackingKnowledge();
@@ -283,15 +312,16 @@ export async function computeSphereAnalysis({ board }: { board: boolean }): Prom
   const relativeUnknown = inferRelativeUnknownSpheres(knowledge, calculation);
   const certainLocationKeys = computeCertainLocationKeys();
 
-  // The requirement walk asks isGoMode(), which reads the shared cache - so the
-  // cache has to describe this answer before the board's half is worked out.
-  Object.assign(sphereAnalysisCache, { calculation, relativeUnknown, certainLocationKeys, inventoryReachableKeys, goMode });
+  // The requirement walk asks isFinishable(), which reads the shared cache - so
+  // the cache has to describe this answer before the board's half is worked out.
+  Object.assign(sphereAnalysisCache, { calculation, relativeUnknown, certainLocationKeys, inventoryReachableKeys, finishable, goMode });
 
   return {
     calculation,
     relativeUnknown,
     certainLocationKeys,
     inventoryReachableKeys,
+    finishable,
     goMode,
     board: board ? await computeBoardDerived(knowledge, calculation, relativeUnknown) : null
   };

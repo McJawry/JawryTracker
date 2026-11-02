@@ -143,6 +143,7 @@ function finishSphereAnalysis(key: string, analysis: SphereAnalysisResult | null
     relativeUnknown: rawTable(analysis.relativeUnknown),
     certainLocationKeys: analysis.certainLocationKeys,
     inventoryReachableKeys: analysis.inventoryReachableKeys,
+    finishable: analysis.finishable,
     goMode: analysis.goMode,
     board: rawTable(analysis.board),
     pending: false,

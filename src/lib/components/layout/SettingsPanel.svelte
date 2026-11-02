@@ -36,6 +36,8 @@
     openRunSaveFolder
   } from "$lib/tauri/tracker-autosave";
   import { applySpoilerLog, readSpoilerLogFile } from "$lib/tauri/spoiler-log";
+  import RaceTrackingSettings from "./RaceTrackingSettings.svelte";
+  import { confirmAction } from "$lib/tauri/confirm-dialog";
   import {
     describeDataRoots,
     openDataRoot,
@@ -112,13 +114,13 @@
   }
 
   async function deletePreset() {
-    if (!selectedPreset || !confirm(`Delete preset "${selectedPreset}"?`)) return;
+    if (!selectedPreset || !(await confirmAction(`Delete preset "${selectedPreset}"?`))) return;
     presetStatus = (await deletePreferencePreset(selectedPreset, location)).message;
     await refreshPresets();
   }
 
   async function resetLayout() {
-    if (!confirm("Reset every panel back to its default size, position and visibility?")) return;
+    if (!(await confirmAction("Reset every panel back to its default size, position and visibility?"))) return;
     presetStatus = (await resetLayoutToDefaults()).message;
   }
 
@@ -176,13 +178,13 @@
   }
 
   async function deleteColors() {
-    if (!selectedColor || !confirm(`Delete color preset "${selectedColor}"?`)) return;
+    if (!selectedColor || !(await confirmAction(`Delete color preset "${selectedColor}"?`))) return;
     colorStatus = (await deletePreferencePreset(selectedColor, colorLocation, "colors")).message;
     await refreshColorPresets();
   }
 
-  function resetColors() {
-    if (!confirm("Reset page background, panel color and stream backdrop to defaults?")) return;
+  async function resetColors() {
+    if (!(await confirmAction("Reset page background, panel color and stream backdrop to defaults?"))) return;
     resetColorsToDefaults();
     colorStatus = "Colors reset to defaults.";
   }
@@ -219,7 +221,7 @@
 
   async function loadRun() {
     if (!selectedRun) return;
-    if (!confirm(`Replace the current run with "${selectedRun}"?`)) return;
+    if (!(await confirmAction(`Replace the current run with "${selectedRun}"?`))) return;
     const result = await loadRunSave(selectedRun, runLocation);
     autosaveStatus = result.message;
     if (result.ok) window.location.reload();
@@ -234,7 +236,7 @@
    * pick up a file swapped in from elsewhere.
    */
   async function refreshAutosave() {
-    if (!confirm("Replace the current run with whatever is in autosave.json?")) return;
+    if (!(await confirmAction("Replace the current run with whatever is in autosave.json?"))) return;
     autosaveStatus = "Reading autosave.json...";
     const result = await loadTrackerAutosave();
     autosaveStatus = result.message;
@@ -259,14 +261,14 @@
     autosaveStatus = message;
     if (!log) return;
     const seed = log.hash || (log.seed ? `seed ${log.seed}` : "this spoiler log");
-    if (!confirm(`Replace the current run with ${seed}'s settings, entrances and playthrough?`)) return;
+    if (!(await confirmAction(`Replace the current run with ${seed}'s settings, entrances and playthrough?`))) return;
     autosaveStatus = "Loading spoiler log...";
     autosaveStatus = (await applySpoilerLog(log)).message;
   }
 
   async function deleteRun() {
     if (!selectedRun) return;
-    if (!confirm(`Delete the saved run "${selectedRun}"?`)) return;
+    if (!(await confirmAction(`Delete the saved run "${selectedRun}"?`))) return;
     const result = await deleteRunSave(selectedRun, runLocation);
     autosaveStatus = result.message;
     await refreshRunSaves();
@@ -320,6 +322,14 @@
       aria-selected={activeTab === "run-saves"}
       onclick={() => (activeTab = "run-saves")}
     >Load saves</button>
+    <button
+      type="button"
+      role="tab"
+      class="settings-tab"
+      class:active={activeTab === "race-tracking"}
+      aria-selected={activeTab === "race-tracking"}
+      onclick={() => (activeTab = "race-tracking")}
+    >Race Tracking</button>
   </div>
 
   {#if activeTab === "appearance"}
@@ -483,6 +493,10 @@
 
     {#if autosaveStatus}<p class="setting-status">{autosaveStatus}</p>{/if}
   </fieldset>
+  {/if}
+
+  {#if activeTab === "race-tracking"}
+  <RaceTrackingSettings />
   {/if}
 
   {#if activeTab === "general"}

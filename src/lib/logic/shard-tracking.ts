@@ -9,7 +9,7 @@ import { hints, type Hint } from "$lib/state/hints.svelte";
 import { checked, setChecked } from "$lib/state/checked.svelte";
 import { data } from "$lib/state/data.svelte";
 import { settings } from "$lib/state/settings.svelte";
-import { sphere } from "$lib/state/sphere.svelte";
+import { sphere, trimSpherePlacementsForItem } from "$lib/state/sphere.svelte";
 import { getHintIconId } from "$lib/logic/map-icons";
 import { getEffectiveItemStage } from "$lib/logic/starting-gear-items";
 
@@ -41,6 +41,10 @@ export function setShardTrackingChecked(number: number, isChecked: boolean): voi
   const { shardHintIds, fallbackId } = getShardTrackingState(number);
   setChecked(fallbackId, isChecked);
   shardHintIds.forEach((id) => setChecked(id, isChecked));
+  // Not held after all, so not found anywhere either: its card goes too, as a
+  // dungeon row's key gives up its own. Left behind, the placement went on
+  // counting the shard as held, whatever the shard column said.
+  if (!isChecked) trimSpherePlacementsForItem(`Triforce Shard ${number}`, 0);
 }
 
 /** Eight shards make the Triforce of Courage, and there are no more than that. */
@@ -58,6 +62,17 @@ export const TRIFORCE_SHARD_COUNT = 8;
  */
 export function isStartingShard(number: number): boolean {
   return settings.startingGearShards.includes(number) || data.sphereStartingGear.some((gear) => getTriforceShardNumber(gear) === number);
+}
+
+/**
+ * The shards a Triforce shows piece by piece, when shards aren't just being
+ * counted: each one crossed off in the shard column, and the run's starting
+ * shards, marked as such.
+ */
+export function getShownTriforceShards(): Array<{ number: number; starting: boolean }> {
+  return Array.from({ length: TRIFORCE_SHARD_COUNT }, (_, index) => index + 1)
+    .map((number) => ({ number, starting: isStartingShard(number) }))
+    .filter(({ number, starting }) => starting || getShardTrackingState(number).isChecked);
 }
 
 /** Whether an item is a Triforce shard at all, numbered or generic. */

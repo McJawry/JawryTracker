@@ -153,6 +153,52 @@ function getUnrequiredDungeonRule(): DungeonRule | null {
   return { unrequired, note: `Race mode dungeons: ${required.length} of ${needed} required dungeons known` };
 }
 
+export type BossRequirement = "required" | "unrequired" | "unknown";
+
+/**
+ * What the seed asks of each dungeon boss, as far as the tracker knows - for
+ * the race stream's grid, which mutes the bosses race mode leaves out.
+ *
+ * The config's list, the path hints and the chart marks name required bosses,
+ * and a dungeon found on a marked island gives up its boss too. Once as many
+ * are named as the seed requires, the rest are left out; once enough are left
+ * out - a dungeon found on an unmarked island when every mark is placed - the
+ * rest are required. More named than the seed requires means something was
+ * written down wrong, and nothing is left out on the strength of it.
+ */
+export function getBossRequirements(): Record<string, BossRequirement> {
+  const bosses = Object.keys(REQUIRED_BOSS_OPTION_KEYS);
+  const raceMode = normalize(String(data.sphereOptions.progression_dungeons ?? "")) === "race mode";
+  if (!raceMode) return Object.fromEntries(bosses.map((boss) => [boss, "unrequired"]));
+
+  const needed = data.requiredBosses.size || Number(data.sphereOptions.num_required_dungeons) || 0;
+  const required = new Set(getKnownRequiredBosses());
+  const unrequired = new Set<string>();
+  // A boss mixed in with the dungeons may stand behind none of them.
+  const mixed = getShuffledEntrances().some(
+    (entrance) => (entrance.type === "DUNGEON" || entrance.type === "BOSS") && entrance.poolType === "MIXED"
+  );
+  if (needed && !mixed) {
+    const dungeons = getDungeonFacts();
+    const decided = decideUnrequiredDungeons({ dungeons, requiredBosses: [...required], markedIslands: sphere.highlightedSectors, needed });
+    dungeons
+      .filter((dungeon) => dungeon.boss)
+      .forEach((dungeon) => {
+        if (decided.required.includes(dungeon.name)) required.add(dungeon.boss);
+        if (decided.unrequired.includes(dungeon.name)) unrequired.add(dungeon.boss);
+      });
+  }
+  if (needed && required.size === needed) bosses.filter((boss) => !required.has(boss)).forEach((boss) => unrequired.add(boss));
+  if (needed && bosses.length - unrequired.size === needed) bosses.filter((boss) => !unrequired.has(boss)).forEach((boss) => required.add(boss));
+
+  return Object.fromEntries(
+    bosses.map((boss): [string, BossRequirement] => {
+      if (required.has(boss) && unrequired.has(boss)) return [boss, "unknown"];
+      return [boss, required.has(boss) ? "required" : unrequired.has(boss) ? "unrequired" : "unknown"];
+    })
+  );
+}
+
 /** The island a foolish hint names, if it names one - a dungeon's name is the dungeon. */
 function getFoolishIsland(areaName: string): string {
   if (TRACKED_AREAS.some((area) => normalize(area.name) === normalize(areaName))) return "";
