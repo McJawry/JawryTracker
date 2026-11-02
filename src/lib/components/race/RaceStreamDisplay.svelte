@@ -130,10 +130,26 @@
     display: none;
   }
 
-  /* How many of each dungeon's locations are left is the tracker
-     operator's business; the stream shows the bosses as artwork alone. */
-  .race-stream-content :global(.tracker-area-fraction) {
-    display: none;
+  /* Each area's location count, below it as on the tracker - on a dark gray
+     box of its own, as there's nothing but the stream behind it. The
+     tracker's colors were made for its light panel, so they're lightened to
+     read on the box: open blue, stuck red, and a finished area's black as
+     light gray. No padding above or below, so the box keeps to the room the
+     row leaves for the count. */
+  .race-stream-content :global(.tracking-area-row .tracker-area-fraction) {
+    padding: 0 5px;
+    border-radius: 5px;
+    background: #2b2b2b;
+    color: #8ea2ff;
+    text-shadow: none;
+  }
+
+  .race-stream-content :global(.tracking-area-row .tracker-area-fraction.stuck) {
+    color: #ff8080;
+  }
+
+  .race-stream-content :global(.tracking-area-row .tracker-area-fraction.done) {
+    color: #d6d6d6;
   }
 
   .race-stream-content :global(.tracking-boss-entry .tracker-area-cell),

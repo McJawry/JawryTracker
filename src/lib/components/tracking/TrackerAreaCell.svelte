@@ -11,7 +11,8 @@
   // purple when the pending location is one of its own. The real tracker's
   // right-click-clears-the-area is not implemented here, flagged to the user
   // as a deliberate divergence.
-  import { clearLocations, getAreaAccessibility, getAreaLocationChoices } from "$lib/logic/locations";
+  import { clearLocations, getAreaCount, getAreaLocationChoices } from "$lib/logic/locations";
+  import { streamLook } from "$lib/state/stream-look.svelte";
   import {
     openLocationDropList,
     ui,
@@ -56,16 +57,9 @@
     mark?: "cross" | "check" | null;
   } = $props();
 
-  const accessibility = $derived(getAreaAccessibility(areaName, targetKind));
-  // An area the seed puts nothing in reads as a dash. Keyed on the area
-  // having no locations at all, not on the counts being zero - a sector you
-  // have fully checked also reads 0/0 and should keep showing that.
-  const hasNoLocations = $derived(getAreaLocationChoices(areaName, targetKind).length === 0);
-  const fractionText = $derived(
-    hasNoLocations && !accessibility.hasUndiscoveredEntrances
-      ? "-"
-      : `${accessibility.accessible}/${accessibility.hasUndiscoveredEntrances ? "?" : accessibility.remaining}`
-  );
+  // A browser source shows the tracker's own count, sent along with the run:
+  // it works out no logic itself, so it can't tell what is accessible.
+  const count = $derived(streamLook.areaCounts?.[areaName] ?? getAreaCount(areaName, targetKind));
 
   // Preserves the parsed-hint icon overlays SeaGrid.svelte/AreaStrip.svelte
   // used to show, now on the unified TrackerAreaCell.
@@ -204,7 +198,7 @@
   {:else if mark === "check"}
     <svg class="tracker-area-mark check" viewBox="0 0 24 24" aria-label="Beaten"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5" /></svg>
   {/if}
-  <div class="tracker-area-fraction {accessibility.colorClass}">{fractionText}</div>
+  <div class="tracker-area-fraction {count.colorClass}">{count.text}</div>
   {#if entranceBadges.length}
     <div class="tracker-area-entrance-badges">
       {#each entranceBadges as dungeon (dungeon.name)}

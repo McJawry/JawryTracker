@@ -357,6 +357,38 @@ export function getAreaAccessibility(areaName: string, targetKind: "sector" | "a
   return { accessible, remaining, colorClass, hasUndiscoveredEntrances };
 }
 
+/** What an area's cell shows under it, and in which color. */
+export interface AreaCount {
+  text: string;
+  colorClass: AreaAccessibility["colorClass"];
+}
+
+/**
+ * An area's location count as its cell shows it: "accessible/remaining", with
+ * a "?" for a total not knowable while an entrance is unrecorded. An area the
+ * seed puts nothing in reads as a dash - keyed on the area having no locations
+ * at all, not on the counts being zero: a sector you have fully checked also
+ * reads 0/0 and should keep showing that.
+ */
+export function getAreaCount(areaName: string, targetKind: "sector" | "area"): AreaCount {
+  const accessibility = getAreaAccessibility(areaName, targetKind);
+  const hasNoLocations = getAreaLocationChoices(areaName, targetKind).length === 0;
+  const text =
+    hasNoLocations && !accessibility.hasUndiscoveredEntrances
+      ? "-"
+      : `${accessibility.accessible}/${accessibility.hasUndiscoveredEntrances ? "?" : accessibility.remaining}`;
+  return { text, colorClass: accessibility.colorClass };
+}
+
+/**
+ * The count of every area on the tracker's row of dungeons and misc areas -
+ * what a browser source shows under them. Sent along with the run, since a
+ * browser source works out no logic of its own.
+ */
+export function getTrackedAreaCounts(): Record<string, AreaCount> {
+  return Object.fromEntries(TRACKED_AREAS.map((area) => [area.name, getAreaCount(area.name, "area")]));
+}
+
 /**
  * Whether coming out here means the door led anywhere new.
  *

@@ -17,6 +17,10 @@ import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { settings } from "$lib/state/settings.svelte";
 import { data } from "$lib/state/data.svelte";
 import { setSoloDisplayProblem } from "$lib/state/solo-display.svelte";
+import { getTrackedAreaCounts } from "$lib/logic/locations";
+import { getDungeonLooks } from "$lib/logic/dead-locations";
+import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
+import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
 import { currentAutosave } from "./tracker-autosave";
 import { describeStreamLayout } from "./stream-layout";
 import { isTauriRuntime } from "./is-tauri";
@@ -48,6 +52,12 @@ export function initSoloDisplay(): void {
         settings.raceGridRows;
         settings.raceStreamGenericShards;
         settings.raceStreamTransparent;
+        // The location counts come from the logic's analysis, which runs
+        // wherever it's asked for - so it's asked for here too, and they go
+        // again when its answer lands. The dungeons' marks come with them.
+        const analysis = getSphereBoardAnalysis(getSphereTrackingKnowledge());
+        analysis.inventoryReachableKeys;
+        analysis.calculation;
       }
       clearTimeout(sendTimer);
       sendTimer = setTimeout(() => void serve(on ? describeSoloRun() : null), SEND_DELAY_MS);
@@ -66,7 +76,11 @@ function describeSoloRun(): string {
       sphere: JSON.stringify(save.sphere ?? {}),
       dungeonItems: JSON.stringify(save.dungeonItems ?? {}),
       config: settings.randoConfigText ?? "",
-      display: JSON.stringify({ genericTriforceShards: settings.genericTriforceShards })
+      display: JSON.stringify({
+        genericTriforceShards: settings.genericTriforceShards,
+        areaCounts: getTrackedAreaCounts(),
+        dungeons: getDungeonLooks()
+      })
     },
     genericShards: settings.raceStreamGenericShards,
     transparent: settings.raceStreamTransparent,
