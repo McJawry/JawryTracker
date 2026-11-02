@@ -37,6 +37,50 @@ export function getRaceGridSize(columns: number, rows: number): { cell: number; 
   };
 }
 
+/** Which part of the tracker a browser source shows - see RaceStreamDisplay.svelte. */
+export type StreamPart = "all" | "items" | "areas";
+
+/**
+ * Each part's own size in pixels, as the stream page lays it out in the
+ * tracker's look. Measured from the page, which lays out the same whatever the
+ * run and the seed - the hint and dungeon-item strips keep their room when
+ * empty - so it follows the tracker's CSS, not this.
+ */
+export const STREAM_PART_SIZES: Record<StreamPart, { width: number; height: number }> = {
+  all: { width: 536, height: 438 },
+  items: { width: 368, height: 280 },
+  areas: { width: 888, height: 150 }
+};
+
+/**
+ * How much larger than the page's own size to recommend a Browser Source be:
+ * enough for the boss portraits - 80-pixel artwork in 76-pixel cells - to be
+ * drawn at their own resolution, neither shrunk nor stretched. A Browser
+ * Source draws at exactly its size, so at the page's own size everything was
+ * drawn a little under its artwork, and stretching that in OBS softened it;
+ * past this, there's no more of the artwork to show.
+ */
+export const STREAM_SOURCE_SCALE = 80 / 76;
+
+/**
+ * What to set a Browser Source to for a part, so the picture fills it with no
+ * empty space: the grid layout's size when the whole is shown as one - always
+ * RACE_GRID_WIDTH wide - else the part's own size at STREAM_SOURCE_SCALE, to
+ * the nearest pixel. The page scales to fit, so any size of the same shape
+ * works too.
+ */
+export function getStreamSourceSize(
+  part: StreamPart,
+  look: { grid: boolean; config: string; columns: number; rows: number }
+): { width: number; height: number } {
+  if (part !== "all" || !look.grid) {
+    const { width, height } = STREAM_PART_SIZES[part];
+    return { width: Math.round(width * STREAM_SOURCE_SCALE), height: Math.round(height * STREAM_SOURCE_SCALE) };
+  }
+  const { columns, rows } = planRaceStreamGrid(look.config, look.columns, look.rows);
+  return { width: RACE_GRID_WIDTH, height: getRaceGridSize(columns, rows).height };
+}
+
 export type RaceGridCell =
   | { kind: "item"; item: string }
   | { kind: "pearls" }

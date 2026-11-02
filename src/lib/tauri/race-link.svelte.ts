@@ -60,8 +60,6 @@ import {
 import { describeHintLine } from "$lib/logic/hint-canonical";
 import { findRaceConflicts } from "$lib/logic/race-conflicts";
 import { getFindableCopies } from "$lib/logic/assignment";
-import { planRaceStreamGrid } from "$lib/logic/race-stream-grid";
-import { getBossRequirements } from "$lib/logic/dead-locations";
 import {
   canTrackForRunner,
   currentRaceRoster,
@@ -88,6 +86,7 @@ import { reloadFromStorage } from "./storage-sync";
 import { applySeedConfigText } from "./rando-sync";
 import { openRelayConnection, type RelayConnection, type RelayMessage } from "./relay-socket";
 import { createRaceDelay } from "./race-delay";
+import { describeStreamLayout } from "./stream-layout";
 import { isTauriRuntime } from "./is-tauri";
 
 // Runner: long enough to send a burst of clicks as one update.
@@ -208,6 +207,7 @@ export function initRaceLink(): void {
       settings.raceGridColumns;
       settings.raceGridRows;
       settings.raceStreamGenericShards;
+      settings.raceStreamTransparent;
       race.roster;
       if (race.session?.role !== "host" || race.view) return;
       clearTimeout(displayTimer);
@@ -825,20 +825,12 @@ function describeDisplay(session: RaceSession): string {
     relay: session.relay,
     room: session.room,
     genericShards: settings.raceStreamGenericShards,
+    transparent: settings.raceStreamTransparent,
     config: settings.randoConfigText ?? "",
     // How many seconds each runner's browser source holds their updates back.
     delays: Object.fromEntries(Array.from({ length: session.slot }, (_, index) => [index + 1, runnerDelay(index + 1)]))
   };
-  if (!settings.raceStreamGrid) return JSON.stringify(room);
-  const { columns, rows, cells } = planRaceStreamGrid(settings.randoConfigText ?? "", settings.raceGridColumns, settings.raceGridRows);
-  let bosses = {};
-  try {
-    bosses = getBossRequirements();
-  } catch (error) {
-    // Before the seed's logic has loaded, nothing is known about them.
-    console.error("Could not work out the required bosses", error);
-  }
-  return JSON.stringify({ ...room, grid: { columns, rows, cells }, bosses });
+  return JSON.stringify({ ...room, ...describeStreamLayout() });
 }
 
 let servedDisplay: string | null = null;

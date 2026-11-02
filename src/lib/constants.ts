@@ -42,6 +42,16 @@ export const DEFAULT_RACE_RELAY = "https://jawrytracker-relay.jawrytracker-relay
 // Where the host's tracker serves the stream display - fixed, so OBS scenes
 // keep working from one race to the next. Matches src-tauri/src/race_display.rs.
 export const RACE_DISPLAY_ORIGIN = "http://127.0.0.1:4747";
+// The solo browser sources: this tracker's own items, for OBS (Settings →
+// General) - the item grid and the dungeons' row together, or either alone.
+export const SOLO_DISPLAY_ADDRESS = `${RACE_DISPLAY_ORIGIN}/?stream=solo`;
+export const SOLO_DISPLAY_SOURCES = [
+  { label: "Items and dungeons", part: "all", address: SOLO_DISPLAY_ADDRESS },
+  { label: "Item grid", part: "items", address: `${SOLO_DISPLAY_ADDRESS}&part=items` },
+  { label: "Dungeons and misc areas", part: "areas", address: `${SOLO_DISPLAY_ADDRESS}&part=areas` }
+] as const;
+// Why the main window can't serve the solo browser source, for the Settings window.
+export const SOLO_DISPLAY_STATUS_KEY = "ww-rando-hint-tracker-solo-display-status";
 // package.json is the single source of truth for the version: tauri.conf.json
 // reads it too (its "version" is the path "../package.json"), so the number
 // shown in the UI can never drift from the one the updater compares against.
@@ -200,6 +210,16 @@ export interface Settings {
    */
   raceStreamGenericShards: boolean;
   /**
+   * The browser sources show the tracker's item grid without its backdrop
+   * artwork, the items alone over the stream - when not showing the grid layout.
+   */
+  raceStreamTransparent: boolean;
+  /**
+   * Serve this tracker's own items to an OBS Browser Source (SOLO_DISPLAY_ADDRESS),
+   * shown the way the race's browser sources are. Off, nothing listens for it.
+   */
+  soloStreamDisplay: boolean;
+  /**
    * Explicit content scale (percent) for a popped-out section, keyed by id.
    * Absent = scale to fit the window, which the window's own minimum size
    * otherwise puts a floor under.
@@ -279,5 +299,7 @@ export const DEFAULT_SETTINGS: Settings = {
   raceGridColumns: 8,
   raceGridRows: 4,
   raceStreamGenericShards: false,
+  raceStreamTransparent: false,
+  soloStreamDisplay: false,
   popoutZoom: {}
 };

@@ -76,7 +76,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet, portable_data_dir, race_display::serve_race_display])
+        .invoke_handler(tauri::generate_handler![greet, portable_data_dir, race_display::serve_race_display, race_display::serve_solo_display])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

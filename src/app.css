@@ -3756,8 +3756,6 @@ body.stream-mode .empty-state {
   font-weight: 600;
 }
 
-/* Race Tracking tab. The relay address is tucked away: a race only works if
-   everyone in it uses the same one, so it is rarely the thing to change. */
 /* An (i) beside a setting, with what it does in a popup (InfoTip.svelte). */
 .info-tip {
   display: inline-flex;
@@ -3811,6 +3809,27 @@ body.stream-mode .empty-state {
   white-space: normal;
 }
 
+/* Options tucked under a heading that opens them, set up once and then left
+   alone - the browser sources'. */
+.settings-disclosure > summary {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-disclosure[open] > summary {
+  margin-bottom: 8px;
+}
+
+.settings-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Race Tracking tab. The relay address is tucked away: a race only works if
+   everyone in it uses the same one, so it is rarely the thing to change. */
 .race-relay {
   margin-top: 12px;
   padding-top: 12px;
@@ -3895,6 +3914,37 @@ body.stream-mode .empty-state {
 
 .race-grid-size {
   gap: 16px;
+}
+
+/* The solo browser sources' addresses and layout, under their toggle (General tab). */
+.solo-stream-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.solo-stream-source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A browser source's name, with the size to set it to in OBS. */
+.stream-source-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stream-source-size {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .race-grid-size input {

@@ -17,7 +17,8 @@ import {
   RACE_VIEW_KEY,
   RACE_ROSTER_KEY,
   RACE_RESOLVE_KEY,
-  RACE_RECONNECT_KEY
+  RACE_RECONNECT_KEY,
+  SOLO_DISPLAY_STATUS_KEY
 } from "$lib/constants";
 import { sphere, loadSphereState } from "$lib/state/sphere.svelte";
 import { reloadMarkStartingModeFromStorage, reloadPendingLocationFromStorage } from "$lib/state/ui.svelte";
@@ -37,6 +38,7 @@ import {
   reloadRaceStatusFromStorage,
   reloadRaceViewFromStorage
 } from "$lib/state/race.svelte";
+import { reloadSoloDisplayFromStorage } from "$lib/state/solo-display.svelte";
 import { restoreRandoSync } from "./rando-sync";
 
 let initialized = false;
@@ -146,6 +148,10 @@ export function reloadFromStorage(key: string, newValue: string | null): void {
       break;
     case RACE_RECONNECT_KEY:
       reloadRaceReconnectFromStorage();
+      break;
+    // Served by the main window, shown in the Settings window.
+    case SOLO_DISPLAY_STATUS_KEY:
+      reloadSoloDisplayFromStorage();
       break;
   }
 }

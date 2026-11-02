@@ -37,6 +37,11 @@
   } from "$lib/tauri/tracker-autosave";
   import { applySpoilerLog, readSpoilerLogFile } from "$lib/tauri/spoiler-log";
   import RaceTrackingSettings from "./RaceTrackingSettings.svelte";
+  import StreamDisplaySettings from "./StreamDisplaySettings.svelte";
+  import InfoTip from "$lib/components/shared/InfoTip.svelte";
+  import { SOLO_DISPLAY_SOURCES } from "$lib/constants";
+  import { getStreamSourceSize } from "$lib/logic/race-stream-grid";
+  import { soloDisplay } from "$lib/state/solo-display.svelte";
   import { confirmAction } from "$lib/tauri/confirm-dialog";
   import {
     describeDataRoots,
@@ -47,6 +52,20 @@
 
   function update() {
     saveSettings();
+  }
+
+  let copiedSoloAddress = $state("");
+
+  async function copySoloAddress(address: string) {
+    try {
+      await navigator.clipboard.writeText(address);
+      copiedSoloAddress = address;
+      setTimeout(() => {
+        if (copiedSoloAddress === address) copiedSoloAddress = "";
+      }, 1500);
+    } catch {
+      // Selecting the address shows it to copy by hand.
+    }
   }
 
   // Color inputs fire `input` continuously while dragging but `change` only
@@ -506,6 +525,58 @@
       <input type="checkbox" bind:checked={settings.groupPopoutWindows} onchange={update} />
       <span>Group popout windows</span>
     </label>
+    <div class="setting-row">
+      <label class="setting-toggle">
+        <input type="checkbox" bind:checked={settings.soloStreamDisplay} onchange={update} />
+        <span>Browser source for OBS</span>
+      </label>
+      <InfoTip
+        label="About the browser source"
+        text={[
+          "Shows this tracker's items to OBS: add an address as a Browser Source. It follows what you track, on a transparent background, scaled to the source's size.",
+          "The first shows the item grid and the dungeons together. The other two show the item grid alone, and the whole row of dungeons and misc areas, to place apart.",
+          "Set each Browser Source in OBS to the size above its address: it draws everything at the size it's set to, and at that size the boss portraits are drawn at their own resolution. Any size of the same shape fills it.",
+          "It shows whatever this tracker shows, in a race too. A race host's runners each have their own address in the Race Tracking tab.",
+          "Turned off, the tracker serves nothing and listens on no port."
+        ]}
+      />
+    </div>
+    {#if settings.soloStreamDisplay}
+      {#if soloDisplay.problem}<p class="setting-status">{soloDisplay.problem}</p>{/if}
+      <details class="settings-disclosure">
+        <summary>Addresses and options</summary>
+        <div class="solo-stream-settings">
+          {#each SOLO_DISPLAY_SOURCES as source (source.address)}
+            {@const size = getStreamSourceSize(source.part, {
+              grid: settings.raceStreamGrid,
+              config: settings.randoConfigText ?? "",
+              columns: settings.raceGridColumns,
+              rows: settings.raceGridRows
+            })}
+            <div class="solo-stream-source">
+              <p class="stream-source-heading">
+                <span>{source.label}</span>
+                <span class="stream-source-size" title="Recommended Browser Source size in OBS">{size.width} × {size.height}</span>
+              </p>
+              <div class="setting-row">
+                <input
+                  class="preset-name race-code"
+                  type="text"
+                  readonly
+                  value={source.address}
+                  title={`OBS Browser Source: ${source.label.toLowerCase()}`}
+                  onfocus={(event) => event.currentTarget.select()}
+                />
+                <button class="tool-button" type="button" onclick={() => copySoloAddress(source.address)}>
+                  {copiedSoloAddress === source.address ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+          {/each}
+          <StreamDisplaySettings solo />
+        </div>
+      </details>
+    {/if}
   </fieldset>
   {/if}
 
