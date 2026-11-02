@@ -29,6 +29,7 @@ import { hintNotes, updateHintsFromNotes } from "$lib/state/hints.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
 import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { settings } from "$lib/state/settings.svelte";
+import { streamLook } from "$lib/state/stream-look.svelte";
 import { restoreRandoSync } from "./rando-sync";
 import { openRelayConnection, type RelayConnection } from "./relay-socket";
 import { createRaceDelay } from "./race-delay";
@@ -132,10 +133,18 @@ function applyStore(store: RaceStore, value: string) {
       runnerConfig = value;
       applyConfig();
       break;
-    case "display":
-      runnerGenericShards = Boolean(parseRecord(value).genericTriforceShards);
+    case "display": {
+      const display = parseRecord<unknown>(value);
+      runnerGenericShards = Boolean(display.genericTriforceShards);
       showGenericShards();
+      // The tracker's own location counts and dungeon marks, as it shows
+      // them - a tracker from before it sent them leaves the row to work
+      // them out itself.
+      const { areaCounts, dungeons } = display;
+      streamLook.areaCounts = areaCounts && typeof areaCounts === "object" ? (areaCounts as typeof streamLook.areaCounts) : null;
+      streamLook.dungeons = dungeons && typeof dungeons === "object" ? (dungeons as typeof streamLook.dungeons) : null;
       break;
+    }
   }
 }
 

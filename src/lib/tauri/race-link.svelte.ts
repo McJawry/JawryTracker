@@ -74,6 +74,10 @@ import {
   type RaceRunnerStatus,
   type RaceSession
 } from "$lib/state/race.svelte";
+import { getTrackedAreaCounts } from "$lib/logic/locations";
+import { getDungeonLooks } from "$lib/logic/dead-locations";
+import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
+import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
 import { checked } from "$lib/state/checked.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
 import { hintNotes, hintsRevision } from "$lib/state/hints.svelte";
@@ -155,6 +159,14 @@ export function initRaceLink(): void {
       settings.randoConfigText;
       settings.genericTriforceShards;
       if (!race.session) return;
+      // A runner's location counts go to the browser sources with the run,
+      // and come from the logic's analysis - asked for here too, so they go
+      // again when its answer lands.
+      if (race.session.role === "runner") {
+        const analysis = getSphereBoardAnalysis(getSphereTrackingKnowledge());
+        analysis.inventoryReachableKeys;
+        analysis.calculation;
+      }
       untrack(markRaceActivity);
       clearTimeout(sendTimer);
       sendTimer = setTimeout(sendChangedStores, SEND_DELAY_MS);
@@ -372,7 +384,14 @@ function currentStores(role: RaceSession["role"]): Record<string, string> {
     sphere: JSON.stringify(save.sphere ?? {}),
     dungeonItems: JSON.stringify(save.dungeonItems ?? {}),
     config,
-    display: JSON.stringify({ genericTriforceShards: settings.genericTriforceShards })
+    // How the runner's tracker shows things: the shards, and the location
+    // counts and dungeon marks on its row of dungeons and misc areas, which a
+    // browser source can't work out for itself.
+    display: JSON.stringify({
+      genericTriforceShards: settings.genericTriforceShards,
+      areaCounts: getTrackedAreaCounts(),
+      dungeons: getDungeonLooks()
+    })
   };
 }
 

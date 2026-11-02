@@ -191,6 +191,39 @@ export function getDungeonRequirements(): Record<string, DungeonRequirement> {
   return decideRequirements().dungeons;
 }
 
+/** How the tracker's row shows a dungeon. */
+export interface DungeonLook {
+  dimmed: boolean;
+  mark: "cross" | "check" | null;
+}
+
+/**
+ * How the tracker's row shows each dungeon, the way the race stream's grid
+ * layout shows the bosses: one race mode leaves out is dimmed and crossed out,
+ * and a required one whose boss is beaten is dimmed with a check. Only a
+ * required one gets the check: Clear dead checks off the heart containers of
+ * dungeons it rules out, so any other checked one may mean nothing was beaten
+ * - it's just dimmed, as done.
+ */
+export function getDungeonLooks(): Record<string, DungeonLook> {
+  let requirements: Record<string, DungeonRequirement> = {};
+  try {
+    requirements = getDungeonRequirements();
+  } catch {
+    // Before the seed's logic has loaded, nothing is known about them.
+  }
+  return Object.fromEntries(
+    Object.entries(DUNGEON_REQUIRED_BOSSES).map(([dungeon, vanillaBoss]): [string, DungeonLook] => {
+      const known = requirements[dungeon];
+      const boss = known ? known.boss : vanillaBoss;
+      const beaten = Boolean(boss) && isLocationMarked(BOSS_LOCATIONS[boss] ?? "");
+      if (known?.requirement === "unrequired") return [dungeon, { dimmed: true, mark: "cross" }];
+      if (beaten) return [dungeon, { dimmed: true, mark: known?.requirement === "required" ? "check" : null }];
+      return [dungeon, { dimmed: false, mark: null }];
+    })
+  );
+}
+
 function decideRequirements(): {
   bosses: Record<string, BossRequirement>;
   dungeons: Record<string, DungeonRequirement>;

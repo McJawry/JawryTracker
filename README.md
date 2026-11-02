@@ -399,7 +399,8 @@ Open **Settings** from the Control Panel.
     - `http://127.0.0.1:4747/?stream=solo`: the item grid and the dungeons together.
     - `http://127.0.0.1:4747/?stream=solo&part=items`: the item grid alone.
     - `http://127.0.0.1:4747/?stream=solo&part=areas`: the whole row of dungeons and misc
-      areas (Mailbox, Great Sea, Hyrule, Ganon's Tower), as the tracker shows it.
+      areas (Mailbox, Great Sea, Hyrule, Ganon's Tower), as the tracker shows it, location
+      counts included.
 
     The first one can use the grid layout; the other two keep the tracker's look. Each address
     has the size to set its Browser Source to above it, like `387 × 295` for the item grid. A
