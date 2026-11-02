@@ -29,18 +29,13 @@
   } from "$lib/state/race.svelte";
   import { clearRun } from "$lib/state/new-run";
   import { loadReferenceData } from "$lib/logic/data-loading";
-  import {
-    getRaceGridSize,
-    planRaceStreamGrid,
-    RACE_GRID_MAX_COLUMNS,
-    RACE_GRID_MAX_ROWS,
-    RACE_GRID_WIDTH
-  } from "$lib/logic/race-stream-grid";
   import { checkRelayRoom, relayBase } from "$lib/tauri/relay-socket";
+  import { getStreamSourceSize } from "$lib/logic/race-stream-grid";
   import { describeRaceConflict } from "$lib/logic/race-conflicts";
   import { applySeedConfigText } from "$lib/tauri/rando-sync";
   import { confirmAction } from "$lib/tauri/confirm-dialog";
   import InfoTip from "$lib/components/shared/InfoTip.svelte";
+  import StreamDisplaySettings from "./StreamDisplaySettings.svelte";
 
   const MAX_RUNNERS = 4;
 
@@ -56,16 +51,15 @@
     session && session.role !== "runner" ? Array.from({ length: session.slot }, (_, index) => index + 1) : []
   );
   const adminCode = $derived(session?.role === "host" && status.adminKey ? formatAdminCode(session.room, status.adminKey) : "");
-
-  // What the browser sources' grid holds for this seed, so the host can size
-  // it to fit - and how big the Browser Sources have to be to show it.
-  const gridPlan = $derived(planRaceStreamGrid(settings.randoConfigText ?? "", settings.raceGridColumns, settings.raceGridRows));
-  const gridSize = $derived(getRaceGridSize(gridPlan.columns, gridPlan.rows));
-  const gridSummary = $derived.by(() => {
-    if (gridPlan.leftOut.length) return `Too small for this seed. Left out: ${gridPlan.leftOut.join(", ")}.`;
-    const filled = gridPlan.cells.filter((cell) => cell.kind !== "blank").length;
-    return filled === gridPlan.cells.length ? "This seed fills every cell." : `This seed fills ${filled} of the ${gridPlan.cells.length} cells.`;
-  });
+  // What to set each runner's Browser Source to: the grid layout's size, or the tracker look's.
+  const sourceSize = $derived(
+    getStreamSourceSize("all", {
+      grid: settings.raceStreamGrid,
+      config: settings.randoConfigText ?? "",
+      columns: settings.raceGridColumns,
+      rows: settings.raceGridRows
+    })
+  );
 
   /** What the host calls a runner - empty for no name, which shows as "Runner 2". */
   function renameRunner(slot: number, name: string) {
@@ -86,12 +80,6 @@
     input.value = String(delay);
     const roster = currentRaceRoster();
     setRaceRoster({ ...roster, delays: { ...roster.delays, [slot]: delay } });
-  }
-
-  function saveGridSize() {
-    settings.raceGridColumns = gridPlan.columns;
-    settings.raceGridRows = gridPlan.rows;
-    saveSettings();
   }
 
   async function hostRace() {
@@ -298,6 +286,7 @@
           text={[
             "Send each runner's tracker operator their runner code.",
             "Add each runner's address to OBS as a Browser Source. It shows that runner's items, and keeps working from one race to the next.",
+            "Set each Browser Source in OBS to the size above its address: it draws everything at the size it's set to, and at that size the boss portraits are drawn at their own resolution. Any size of the same shape fills it.",
             "A name tells runners apart here, on the buttons above the map and for your admins."
           ]}
         />
@@ -324,7 +313,7 @@
     </p>
     {#if status.idle}
       <div class="setting-row">
-        <button class="tool-button" type="button" onclick={requestRaceReconnect}>Reconnect</button>
+        <button class="tool-button" type="button" onclick={requestRaceReconnect}>Stay connected</button>
       </div>
     {/if}
 
@@ -389,6 +378,10 @@
             <input class="preset-name race-code" type="text" readonly value={code} title="Runner code" onfocus={(event) => event.currentTarget.select()} />
             <button class="tool-button" type="button" onclick={() => copy(code)}>{copied === code ? "Copied" : "Copy code"}</button>
           </div>
+          <p class="stream-source-heading">
+            <span>Browser source</span>
+            <span class="stream-source-size" title="Recommended Browser Source size in OBS">{sourceSize.width} × {sourceSize.height}</span>
+          </p>
           <div class="setting-row">
             <input class="preset-name race-code" type="text" readonly value={display} title="OBS Browser Source" onfocus={(event) => event.currentTarget.select()} />
             <button class="tool-button" type="button" onclick={() => copy(display)}>{copied === display ? "Copied" : "Copy"}</button>
@@ -443,44 +436,12 @@
 
   {#if session.role === "host"}
     <fieldset class="settings-group">
-      <legend>Browser sources</legend>
-      <div class="setting-row">
-        <label class="setting-toggle">
-          <input type="checkbox" bind:checked={settings.raceStreamGrid} onchange={saveSettings} />
-          <span>Grid layout</span>
-        </label>
-        <InfoTip
-          label="About Grid layout"
-          text={[
-            `Shows each runner's items as a grid of square cells, always ${RACE_GRID_WIDTH} pixels wide, instead of the tracker's item grid on a transparent background.`,
-            "The items are the ones this seed's settings leave to find. Bosses the race doesn't need are crossed out once the runners' hints or chart marks show which ones they are, and a runner's beaten required bosses get a check."
-          ]}
-        />
-      </div>
-      {#if settings.raceStreamGrid}
-        <div class="setting-row race-grid-size">
-          <label class="setting-control">
-            <span>Columns</span>
-            <input type="number" min="1" max={RACE_GRID_MAX_COLUMNS} bind:value={settings.raceGridColumns} onchange={saveGridSize} />
-          </label>
-          <label class="setting-control">
-            <span>Rows</span>
-            <input type="number" min="1" max={RACE_GRID_MAX_ROWS} bind:value={settings.raceGridRows} onchange={saveGridSize} />
-          </label>
+      <details class="settings-disclosure">
+        <summary>Browser sources</summary>
+        <div class="settings-disclosure-body">
+          <StreamDisplaySettings />
         </div>
-        <p class="setting-status">{gridSummary}</p>
-        <p class="setting-status">Set each Browser Source in OBS to {RACE_GRID_WIDTH} × {gridSize.height}.</p>
-      {/if}
-      <div class="setting-row">
-        <label class="setting-toggle">
-          <input type="checkbox" bind:checked={settings.raceStreamGenericShards} onchange={saveSettings} />
-          <span>Generic Triforce shards</span>
-        </label>
-        <InfoTip
-          label="About Generic Triforce shards"
-          text="Every runner's Triforce shows how many shards they have, even when their tracker shows which ones. Turned off, each shows them the way that runner's tracker does."
-        />
-      </div>
+      </details>
     </fieldset>
   {/if}
 {/if}

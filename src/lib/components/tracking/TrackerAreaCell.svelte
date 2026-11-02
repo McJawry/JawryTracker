@@ -36,7 +36,9 @@
     fontSize = "0.68rem",
     entranceBadges = [],
     onEntranceBadgeClear,
-    hintIconsOutside = false
+    hintIconsOutside = false,
+    dimmed = false,
+    mark = null
   }: {
     areaName: string;
     targetKind: "sector" | "area";
@@ -48,6 +50,10 @@
     onEntranceBadgeClear?: (dungeonName: string) => void;
     /** The row draws this area's hint icons above the cell instead (AreaHintStrip). */
     hintIconsOutside?: boolean;
+    /** The artwork darkened - its location count left as it is. */
+    dimmed?: boolean;
+    /** A dungeon's boss: crossed out as not required, or checked as beaten. */
+    mark?: "cross" | "check" | null;
   } = $props();
 
   const accessibility = $derived(getAreaAccessibility(areaName, targetKind));
@@ -156,6 +162,7 @@
   class:pulsing={isPulsing}
   class:drag-target={ui.itemDrag !== null || (Boolean(placingDungeon) && !entranceBlocked)}
   class:sector-blocked={Boolean(blockedReason)}
+  class:dimmed
   style={background ? `background-image: url(${background})` : ""}
   title={blockedReason ? `${areaName} - ${blockedReason}` : areaName}
   data-area-name={areaName}
@@ -191,6 +198,11 @@
         <MapIcon {icon} interactive={false} />
       {/each}
     </div>
+  {/if}
+  {#if mark === "cross"}
+    <svg class="tracker-area-mark cross" viewBox="0 0 24 24" aria-label="Not required"><path d="M6 6 L18 18 M18 6 L6 18" /></svg>
+  {:else if mark === "check"}
+    <svg class="tracker-area-mark check" viewBox="0 0 24 24" aria-label="Beaten"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5" /></svg>
   {/if}
   <div class="tracker-area-fraction {accessibility.colorClass}">{fractionText}</div>
   {#if entranceBadges.length}

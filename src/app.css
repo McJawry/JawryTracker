@@ -2162,6 +2162,57 @@ body.stream-mode .empty-state {
   color: #fff;
 }
 
+/* After an hour without race activity: stay connected, or leave the race
+   (RaceIdlePrompt.svelte). Over everything in the main window, so it can't
+   go unnoticed. */
+.race-idle-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 14, 18, 0.45);
+}
+
+.race-idle-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  width: min(380px, 100%);
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.race-idle-prompt h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.race-idle-prompt p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.race-idle-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.race-idle-actions .stay-connected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
 .race-view-note {
   flex: 0 0 auto;
   color: var(--ink);
@@ -3317,6 +3368,42 @@ body.stream-mode .empty-state {
   margin-bottom: 17px;
 }
 
+/* A dungeon left out by race mode, or done - as the race grid layout shows
+   its bosses (TrackingBossChecklist.svelte). A darkened copy of the artwork
+   laid over it rather than a filter on the cell, which would darken the
+   location count hanging below it too. */
+.tracker-area-cell.dimmed::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  filter: brightness(0.35) saturate(0.6);
+  pointer-events: none;
+}
+
+.tracker-area-mark {
+  position: absolute;
+  right: 4%;
+  bottom: 4%;
+  width: 34%;
+  height: 34%;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
+  pointer-events: none;
+}
+
+.tracker-area-mark.cross {
+  stroke: #d4d4d4;
+  stroke-width: 3.4;
+}
+
+.tracker-area-mark.check {
+  stroke: #3ccf4e;
+  stroke-width: 3.6;
+}
+
 .tracking-area-row .tracker-area-fraction {
   bottom: -16px;
   color: #2f4fe0;
@@ -3705,8 +3792,6 @@ body.stream-mode .empty-state {
   font-weight: 600;
 }
 
-/* Race Tracking tab. The relay address is tucked away: a race only works if
-   everyone in it uses the same one, so it is rarely the thing to change. */
 /* An (i) beside a setting, with what it does in a popup (InfoTip.svelte). */
 .info-tip {
   display: inline-flex;
@@ -3760,6 +3845,27 @@ body.stream-mode .empty-state {
   white-space: normal;
 }
 
+/* Options tucked under a heading that opens them, set up once and then left
+   alone - the browser sources'. */
+.settings-disclosure > summary {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.settings-disclosure[open] > summary {
+  margin-bottom: 8px;
+}
+
+.settings-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Race Tracking tab. The relay address is tucked away: a race only works if
+   everyone in it uses the same one, so it is rarely the thing to change. */
 .race-relay {
   margin-top: 12px;
   padding-top: 12px;
@@ -3844,6 +3950,37 @@ body.stream-mode .empty-state {
 
 .race-grid-size {
   gap: 16px;
+}
+
+/* The solo browser sources' addresses and layout, under their toggle (General tab). */
+.solo-stream-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.solo-stream-source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A browser source's name, with the size to set it to in OBS. */
+.stream-source-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stream-source-size {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .race-grid-size input {

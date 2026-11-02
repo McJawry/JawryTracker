@@ -225,7 +225,13 @@ The row under the map holds the six dungeons and four other areas: **Mailbox**, 
 **Hyrule** and **Ganon's Tower**. They work like map sectors: click one for its location list,
 right-click to clear it.
 
-- A boss portrait changes to its defeated art once its heart container location is checked.
+- The dungeons show what race mode is known to ask of them, as the race grid layout does. A
+  dungeon left out is dimmed and crossed out, once path hints, chart marks or the seed's number
+  of required dungeons show which ones they are. A required dungeon gets dimmed with a green
+  check once its boss is beaten (its heart container checked). Any other checked heart
+  container just dims it, since **Clear dead** checks off the heart containers of dungeons it
+  rules out. With boss entrances shuffled, a dungeon's boss is whichever one is behind its boss
+  door. Ganon's Tower still changes to its defeated art.
 - Above each dungeon are its **small keys** (counted up to that dungeon's total), **big key**,
   **map** and **compass**. Click to add or cycle, right-click to step back, and drag one onto the
   map to record a hint.
@@ -261,7 +267,7 @@ closest item, area, location or boss, so short forms work.
 | `hookshot at needle rock` | **Item hint**: the Hookshot is somewhere in an area. `in` and `on` work too. |
 | `bombs in windfall jail maze chest` | **Location hint**: when the text matches a single location, the hint points at that location. |
 | `sword r at headstone` | Item hint marked **required**. Add `r`, `p` or `n` after the item for *required*, *possibly required* or *not required*. |
-| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. |
+| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. |
 
 Common abbreviations work for areas, for example **FF**, **DRI**, **DRC**, **FW**, **FH**,
 **GT**, **NFI** and **SFI**, and for bosses, for example **KD**. A line the tracker can't read
@@ -384,7 +390,24 @@ A spinning circle is displayed in the corner when the sphere calculation is runn
 
 Open **Settings** from the Control Panel.
 
-- **General**: **Group popout windows**, which brings every tracker window forward together.
+- **General**:
+  - **Group popout windows** brings every tracker window forward together.
+  - **Browser source for OBS** shows your items on stream when you play on your own. Turn it
+    on, open **Addresses and options** under it, and add an address to OBS as a
+    **Browser Source**. It follows what you track, on a
+    transparent background, scaled to the source's size. There are three:
+    - `http://127.0.0.1:4747/?stream=solo`: the item grid and the dungeons together.
+    - `http://127.0.0.1:4747/?stream=solo&part=items`: the item grid alone.
+    - `http://127.0.0.1:4747/?stream=solo&part=areas`: the whole row of dungeons and misc
+      areas (Mailbox, Great Sea, Hyrule, Ganon's Tower), as the tracker shows it.
+
+    The first one can use the grid layout; the other two keep the tracker's look. Each address
+    has the size to set its Browser Source to above it, like `387 × 295` for the item grid. A
+    source draws everything at the size it's set to, and at that size the boss portraits are
+    drawn at their own resolution, neither shrunk nor stretched. **Grid layout**,
+    **Transparent background** and **Generic Triforce shards** work the same as a race's browser sources (see
+    [Race Tracking](#race-tracking)) and share their settings. It shows whatever your tracker
+    shows, in a race too. Turned off, the tracker listens on no port at all.
 - **Appearance**:
   - Page background and panel colors, item icon size and hint arrow position.
   - **Stream mode** makes the Hint Panel see-through and paints a **stream backdrop** color
@@ -495,7 +518,7 @@ shows none of it.
     unless you're tracking for them (see **Editable when offline**). Anything changed there is
     put back, and undo is off. Which one you're looking at doesn't change the stream.
 - **Stream display**: each runner has an address like `http://127.0.0.1:4747/?stream=1`. Add it
-  to OBS as a **Browser Source**. It shows that runner's own items and dungeon row on a
+  to OBS as a **Browser Source**, at the size shown above the address. It shows that runner's own items and dungeon row on a
   transparent background, scaled to the source's size. The address stays the same from one race
   to the next, so the OBS scene only needs setting up once. It shows while your tracker is
   hosting.
@@ -514,6 +537,8 @@ shows none of it.
     bosses are required. Bosses that aren't required are dimmed and crossed out. A runner's
     beaten bosses get a green check once the race knows they're required. Until then a checked
     heart container could just be **Clear dead** ruling the dungeon out.
+- **Transparent background**: with the grid layout off, turn it on under **Browser sources**
+  to leave out the item grid's backdrop, so only the items show over the stream.
 - **Generic Triforce shards**: turn it on under **Browser sources** to make every runner's
   Triforce show a shard count, in either layout, even when their tracker shows which shards
   they have.
@@ -531,10 +556,11 @@ shows none of it.
 - **End race** or **Leave race** disconnects. The host and admins keep the combined run.
 - Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
   two days after they're created.
-- A tracker disconnects after an hour without activity: nothing changed in it, and for the
-  host and admins, nothing came in from the runners. A runner's tracker left open then stops
-  showing as online. It reconnects as soon as anything changes in it, or with **Reconnect** in
-  the Race Tracking tab.
+- A tracker disconnects after an hour without activity: nothing changed in it, and nothing
+  came in from the race. A runner's tracker left open then stops showing as online. The main
+  window asks whether to **Stay connected** or **Disconnect**, which ends the race for the host
+  and leaves it for anyone else. Starting the tracker more than an hour after the race's last
+  activity asks the same before connecting, so an old race isn't picked back up by accident.
 - Races go through a small relay server, the `relay` folder in this repository. Trackers use a
   public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))
   and enter its address under **Relay server**. Everyone in a race has to use the same one.

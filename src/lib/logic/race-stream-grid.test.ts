@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("$lib/state/data.svelte", () => ({ data: { sphereStartingGear: [] } }));
 vi.mock("$lib/state/sphere.svelte", () => ({}));
 
-const { getRaceGridSize, planRaceStreamGrid } = await import("./race-stream-grid");
+const { getRaceGridSize, getStreamSourceSize, planRaceStreamGrid } = await import("./race-stream-grid");
 
 /** A seed's config, with the starting gear a race commonly has. */
 function config(options: { mode?: string; swordless?: boolean; startingGear?: string[] } = {}): string {
@@ -84,5 +84,24 @@ describe("the race stream's grid", () => {
     const cells = names(planRaceStreamGrid(config({ startingGear }), 8, 4).cells);
     expect(cells).not.toContain("pearls");
     expect(cells).not.toContain("triforce");
+  });
+});
+
+describe("the browser sources' recommended sizes", () => {
+  const look = { grid: false, config: config(), columns: 8, rows: 4 };
+
+  it("draws the boss portraits at their own resolution in the tracker's look", () => {
+    expect(getStreamSourceSize("all", look)).toEqual({ width: 564, height: 461 });
+    expect(getStreamSourceSize("items", look)).toEqual({ width: 387, height: 295 });
+    expect(getStreamSourceSize("areas", look)).toEqual({ width: 935, height: 158 });
+  });
+
+  it("is the grid layout's size for the whole, which the grid layout replaces", () => {
+    expect(getStreamSourceSize("all", { ...look, grid: true })).toEqual({ width: 800, height: 398 });
+  });
+
+  it("keeps the tracker's look for the parts shown on their own, grid layout or not", () => {
+    expect(getStreamSourceSize("items", { ...look, grid: true })).toEqual(getStreamSourceSize("items", look));
+    expect(getStreamSourceSize("areas", { ...look, grid: true })).toEqual(getStreamSourceSize("areas", look));
   });
 });

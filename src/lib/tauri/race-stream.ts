@@ -1,5 +1,7 @@
 // The stream display's own end of a race: follows one runner on the relay as
-// a viewer and shows their run, loaded into this page's state.
+// a viewer and shows their run, loaded into this page's state. Or, for the
+// solo browser source, this machine's tracker's own run, straight from the
+// tracker (followSoloDisplay).
 //
 // This page runs in OBS, not in the tracker, so it has nothing of the run to
 // start from. Which race to follow comes from the host's tracker, which
@@ -32,6 +34,8 @@ import { openRelayConnection, type RelayConnection } from "./relay-socket";
 import { createRaceDelay } from "./race-delay";
 
 const RACE_POLL_MS = 3000;
+// Solo: how long to wait before asking again a tracker that didn't answer.
+const SOLO_RETRY_MS = 2000;
 
 interface DisplayedRace {
   relay: string;
@@ -44,11 +48,19 @@ export interface RaceDisplayLayout {
   bosses: Record<string, BossRequirement>;
 }
 
+/** How the page is to look: the grid layout, or null for the tracker's own item grid - with or without its backdrop. */
+export interface StreamLook {
+  layout: RaceDisplayLayout | null;
+  transparent: boolean;
+}
+
 interface HostedRace extends DisplayedRace {
   grid?: RaceDisplayLayout["grid"];
   bosses?: RaceDisplayLayout["bosses"];
   /** Count every runner's Triforce shards, whichever way their tracker shows them. */
   genericShards?: boolean;
+  /** The tracker's item grid without its backdrop. */
+  transparent?: boolean;
   /**
    * The race's seed config - the host's. A runner only ever tracked for by the
    * host or an admin, while their own tracker was offline, never sent one.
@@ -155,12 +167,83 @@ async function readHostedRace(): Promise<HostedRace | null> {
   }
 }
 
+/** Calls `onLook` whenever the look changes - not again for the same one. */
+function lookShower(onLook: (look: StreamLook) => void): (look: StreamLook) => void {
+  let shown = JSON.stringify({ layout: null, transparent: false });
+  return (look) => {
+    const signature = JSON.stringify(look);
+    if (signature === shown) return;
+    shown = signature;
+    onLook(look);
+  };
+}
+
+/** What the solo browser source reads from /solo.json - see tauri/solo-display.svelte.ts. */
+interface SoloRun extends Partial<RaceDisplayLayout> {
+  stores: Record<string, string>;
+  genericShards?: boolean;
+  transparent?: boolean;
+}
+
+/**
+ * Shows this machine's tracker's own run - the solo browser source - for as
+ * long as the page is open. The tracker answers as soon as its run changes,
+ * so this asks again as soon as it has an answer; a tracker that's closed, or
+ * has the solo browser source turned off, shows nothing.
+ */
+export function followSoloDisplay(onLook: (look: StreamLook) => void): () => void {
+  let stopped = false;
+  /** The run shown, as the tracker numbers them - null to take whatever it has now. */
+  let version: number | null = null;
+  const shown: Partial<Record<RaceStore, string>> = {};
+  const showLook = lookShower(onLook);
+
+  // Only what changed is loaded again: the notes are read hint by hint.
+  function show(run: SoloRun | null) {
+    STORES.forEach((store) => {
+      const value = typeof run?.stores?.[store] === "string" ? run.stores[store] : EMPTY_STORES[store];
+      if (shown[store] === value) return;
+      shown[store] = value;
+      applyStore(store, value);
+    });
+    hostGenericShards = Boolean(run?.genericShards);
+    showGenericShards();
+    showLook({
+      layout: run?.grid?.cells ? { grid: run.grid, bosses: run.bosses ?? {} } : null,
+      transparent: Boolean(run?.transparent)
+    });
+  }
+
+  async function follow() {
+    while (!stopped) {
+      try {
+        const response = await fetch(`${RACE_DISPLAY_ORIGIN}/solo.json${version === null ? "" : `?after=${version}`}`, {
+          cache: "no-store"
+        });
+        const answer = await response.json();
+        if (stopped) return;
+        version = Number(answer.version);
+        show(answer.run ?? null);
+      } catch {
+        if (stopped) return;
+        version = null;
+        show(null);
+        await new Promise((resolve) => setTimeout(resolve, SOLO_RETRY_MS));
+      }
+    }
+  }
+
+  void follow();
+  return () => {
+    stopped = true;
+  };
+}
+
 /**
  * Shows runner `slot` of whatever race is on, for as long as the page is open.
- * `onLayout` hears how the host wants it shown whenever that changes - null
- * for the tracker's own layout.
+ * `onLook` hears how the host wants it shown whenever that changes.
  */
-export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLayout | null) => void): () => void {
+export function followRaceDisplay(slot: number, onLook: (look: StreamLook) => void): () => void {
   const params = new URL(window.location.href).searchParams;
   const pinned = params.get("room") ? { room: params.get("room")!.toUpperCase(), relay: params.get("relay") || settings.raceRelayUrl } : null;
 
@@ -209,13 +292,7 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
     );
   }
 
-  let layout = "null";
-  function show(next: RaceDisplayLayout | null) {
-    const signature = JSON.stringify(next);
-    if (signature === layout) return;
-    layout = signature;
-    onLayout(next);
-  }
+  const showLook = lookShower(onLook);
 
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   async function poll() {
@@ -229,7 +306,10 @@ export function followRaceDisplay(slot: number, onLayout: (layout: RaceDisplayLa
       raceConfig = race?.config ?? "";
       applyConfig();
     }
-    show(race?.grid?.cells ? { grid: race.grid, bosses: race.bosses ?? {} } : null);
+    showLook({
+      layout: race?.grid?.cells ? { grid: race.grid, bosses: race.bosses ?? {} } : null,
+      transparent: Boolean(race?.transparent)
+    });
     pollTimer = setTimeout(poll, RACE_POLL_MS);
   }
 

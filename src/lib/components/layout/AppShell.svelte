@@ -6,6 +6,7 @@
   // resize its edge, dock/undock, or hide it (see DockableSection.svelte for
   // all of that behavior). This file just lays out the rows/columns.
   import DockableSection from "./DockableSection.svelte";
+  import RaceIdlePrompt from "$lib/components/race/RaceIdlePrompt.svelte";
   import { layoutState } from "$lib/state/layout.svelte";
 </script>
 
@@ -25,4 +26,6 @@
     </div>
   {/each}
 </main>
+
+<RaceIdlePrompt />
 
