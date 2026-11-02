@@ -167,21 +167,55 @@ export type BossRequirement = "required" | "unrequired" | "unknown";
  * written down wrong, and nothing is left out on the strength of it.
  */
 export function getBossRequirements(): Record<string, BossRequirement> {
+  return decideRequirements().bosses;
+}
+
+/** A dungeon as race mode has it, and the boss behind its boss door - empty while that's unknown. */
+export interface DungeonRequirement {
+  requirement: BossRequirement;
+  boss: string;
+}
+
+/**
+ * What the seed asks of each dungeon, as far as the tracker knows - for the
+ * dungeon row's cells, which show it the way the race grid shows the bosses.
+ *
+ * Race mode requires dungeons, and with them whichever boss stands behind each
+ * one's boss door: with boss entrances shuffled, the randomizer counts a boss
+ * arena as part of the dungeon it's entered from, heart container and all
+ * (World::setDungeonLocations). So a dungeon goes by its boss once the one
+ * behind its door is known, and until then by what's known of the dungeon
+ * itself. Outside race mode no dungeon is asked for, and none is left out.
+ */
+export function getDungeonRequirements(): Record<string, DungeonRequirement> {
+  return decideRequirements().dungeons;
+}
+
+function decideRequirements(): {
+  bosses: Record<string, BossRequirement>;
+  dungeons: Record<string, DungeonRequirement>;
+} {
   const bosses = Object.keys(REQUIRED_BOSS_OPTION_KEYS);
+  const facts = getDungeonFacts();
   const raceMode = normalize(String(data.sphereOptions.progression_dungeons ?? "")) === "race mode";
-  if (!raceMode) return Object.fromEntries(bosses.map((boss) => [boss, "unrequired"]));
+  if (!raceMode) {
+    return {
+      bosses: Object.fromEntries(bosses.map((boss) => [boss, "unrequired"])),
+      dungeons: Object.fromEntries(facts.map((dungeon) => [dungeon.name, { requirement: "unknown", boss: dungeon.boss }]))
+    };
+  }
 
   const needed = data.requiredBosses.size || Number(data.sphereOptions.num_required_dungeons) || 0;
   const required = new Set(getKnownRequiredBosses());
   const unrequired = new Set<string>();
+  let decided: { required: string[]; unrequired: string[] } = { required: [], unrequired: [] };
   // A boss mixed in with the dungeons may stand behind none of them.
   const mixed = getShuffledEntrances().some(
     (entrance) => (entrance.type === "DUNGEON" || entrance.type === "BOSS") && entrance.poolType === "MIXED"
   );
   if (needed && !mixed) {
-    const dungeons = getDungeonFacts();
-    const decided = decideUnrequiredDungeons({ dungeons, requiredBosses: [...required], markedIslands: sphere.highlightedSectors, needed });
-    dungeons
+    decided = decideUnrequiredDungeons({ dungeons: facts, requiredBosses: [...required], markedIslands: sphere.highlightedSectors, needed });
+    facts
       .filter((dungeon) => dungeon.boss)
       .forEach((dungeon) => {
         if (decided.required.includes(dungeon.name)) required.add(dungeon.boss);
@@ -191,12 +225,24 @@ export function getBossRequirements(): Record<string, BossRequirement> {
   if (needed && required.size === needed) bosses.filter((boss) => !required.has(boss)).forEach((boss) => unrequired.add(boss));
   if (needed && bosses.length - unrequired.size === needed) bosses.filter((boss) => !unrequired.has(boss)).forEach((boss) => required.add(boss));
 
-  return Object.fromEntries(
+  const bossRequirements = Object.fromEntries(
     bosses.map((boss): [string, BossRequirement] => {
       if (required.has(boss) && unrequired.has(boss)) return [boss, "unknown"];
       return [boss, required.has(boss) ? "required" : unrequired.has(boss) ? "unrequired" : "unknown"];
     })
   );
+  const dungeonRequirements = Object.fromEntries(
+    facts.map((dungeon): [string, DungeonRequirement] => {
+      if (dungeon.boss) return [dungeon.name, { requirement: bossRequirements[dungeon.boss] ?? "unknown", boss: dungeon.boss }];
+      const requirement = decided.required.includes(dungeon.name)
+        ? "required"
+        : decided.unrequired.includes(dungeon.name)
+          ? "unrequired"
+          : "unknown";
+      return [dungeon.name, { requirement, boss: "" }];
+    })
+  );
+  return { bosses: bossRequirements, dungeons: dungeonRequirements };
 }
 
 /** The island a foolish hint names, if it names one - a dungeon's name is the dungeon. */

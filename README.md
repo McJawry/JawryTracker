@@ -225,7 +225,13 @@ The row under the map holds the six dungeons and four other areas: **Mailbox**, 
 **Hyrule** and **Ganon's Tower**. They work like map sectors: click one for its location list,
 right-click to clear it.
 
-- A boss portrait changes to its defeated art once its heart container location is checked.
+- The dungeons show what race mode is known to ask of them, as the race grid layout does. A
+  dungeon left out is dimmed and crossed out, once path hints, chart marks or the seed's number
+  of required dungeons show which ones they are. A required dungeon gets dimmed with a green
+  check once its boss is beaten (its heart container checked). Any other checked heart
+  container just dims it, since **Clear dead** checks off the heart containers of dungeons it
+  rules out. With boss entrances shuffled, a dungeon's boss is whichever one is behind its boss
+  door. Ganon's Tower still changes to its defeated art.
 - Above each dungeon are its **small keys** (counted up to that dungeon's total), **big key**,
   **map** and **compass**. Click to add or cycle, right-click to step back, and drag one onto the
   map to record a hint.

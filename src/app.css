@@ -3368,6 +3368,42 @@ body.stream-mode .empty-state {
   margin-bottom: 17px;
 }
 
+/* A dungeon left out by race mode, or done - as the race grid layout shows
+   its bosses (TrackingBossChecklist.svelte). A darkened copy of the artwork
+   laid over it rather than a filter on the cell, which would darken the
+   location count hanging below it too. */
+.tracker-area-cell.dimmed::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  filter: brightness(0.35) saturate(0.6);
+  pointer-events: none;
+}
+
+.tracker-area-mark {
+  position: absolute;
+  right: 4%;
+  bottom: 4%;
+  width: 34%;
+  height: 34%;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
+  pointer-events: none;
+}
+
+.tracker-area-mark.cross {
+  stroke: #d4d4d4;
+  stroke-width: 3.4;
+}
+
+.tracker-area-mark.check {
+  stroke: #3ccf4e;
+  stroke-width: 3.6;
+}
+
 .tracking-area-row .tracker-area-fraction {
   bottom: -16px;
   color: #2f4fe0;
