@@ -531,10 +531,11 @@ shows none of it.
 - **End race** or **Leave race** disconnects. The host and admins keep the combined run.
 - Trackers reconnect by themselves if the connection drops, and after a restart. Rooms expire
   two days after they're created.
-- A tracker disconnects after an hour without activity: nothing changed in it, and for the
-  host and admins, nothing came in from the runners. A runner's tracker left open then stops
-  showing as online. It reconnects as soon as anything changes in it, or with **Reconnect** in
-  the Race Tracking tab.
+- A tracker disconnects after an hour without activity: nothing changed in it, and nothing
+  came in from the race. A runner's tracker left open then stops showing as online. The main
+  window asks whether to **Stay connected** or **Disconnect**, which ends the race for the host
+  and leaves it for anyone else. Starting the tracker more than an hour after the race's last
+  activity asks the same before connecting, so an old race isn't picked back up by accident.
 - Races go through a small relay server, the `relay` folder in this repository. Trackers use a
   public one by default. A tournament can run its own copy (see [relay/README.md](relay/README.md))
   and enter its address under **Relay server**. Everyone in a race has to use the same one.

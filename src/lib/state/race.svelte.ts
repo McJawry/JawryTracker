@@ -43,7 +43,7 @@ export interface RaceStatus {
   edits: number;
   /** Host only: the room's admin key, once the relay has sent it - a relay from before admins doesn't. */
   adminKey: string;
-  /** Disconnected after an hour without activity, until something changes - see race-link. */
+  /** Disconnected after an hour without activity, until asked to stay connected - see race-link. */
   idle: boolean;
 }
 
@@ -119,7 +119,7 @@ export const race: {
   view: number;
   roster: RaceRoster;
   resolution: RaceResolution | null;
-  /** When the Race Tracking tab last asked to reconnect. */
+  /** When this tracker was last asked to stay connected, after an hour without activity. */
   reconnect: number;
 } = $state({
   session: loadSession(),
@@ -189,7 +189,7 @@ export function reloadRaceResolutionFromStorage(): void {
   race.resolution = readJson<RaceResolution>(RACE_RESOLVE_KEY);
 }
 
-/** Reconnects a tracker that disconnected after an hour without activity. */
+/** Stay connected: reconnects a tracker that disconnected after an hour without activity. */
 export function requestRaceReconnect(): void {
   race.reconnect = Date.now();
   localStorage.setItem(RACE_RECONNECT_KEY, String(race.reconnect));

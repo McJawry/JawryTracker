@@ -31,8 +31,10 @@ export const RACE_VIEW_KEY = "ww-rando-hint-tracker-race-view";
 export const RACE_ROSTER_KEY = "ww-rando-hint-tracker-race-roster";
 // A conflict settled from the Race conflicts window, for the main window to apply.
 export const RACE_RESOLVE_KEY = "ww-rando-hint-tracker-race-resolve";
-// Reconnect from the Race Tracking tab, after an hour without activity.
+// Stay connected, asked for after an hour without activity.
 export const RACE_RECONNECT_KEY = "ww-rando-hint-tracker-race-reconnect";
+// When the race last had any activity, to ask again on startup after a long gap.
+export const RACE_ACTIVITY_KEY = "ww-rando-hint-tracker-race-activity";
 export const RACE_EDITS_KEY = "ww-rando-hint-tracker-race-edits";
 // The relay in this repo's relay/ folder, as deployed for everyone to use. A
 // tournament can run its own copy and point Race Tracking at that instead.

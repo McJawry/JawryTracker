@@ -324,7 +324,7 @@
     </p>
     {#if status.idle}
       <div class="setting-row">
-        <button class="tool-button" type="button" onclick={requestRaceReconnect}>Reconnect</button>
+        <button class="tool-button" type="button" onclick={requestRaceReconnect}>Stay connected</button>
       </div>
     {/if}
 

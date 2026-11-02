@@ -37,7 +37,7 @@
 // would; the runner's tracker takes that run when it comes back.
 import { untrack } from "svelte";
 import { invoke } from "@tauri-apps/api/core";
-import { CHECKED_KEY, ITEM_STORAGE_KEY, RACE_EDITS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
+import { CHECKED_KEY, ITEM_STORAGE_KEY, RACE_ACTIVITY_KEY, RACE_EDITS_KEY, SPHERE_STORAGE_KEY, STORAGE_KEY } from "$lib/constants";
 import {
   mergeRaceRuns,
   RACE_STORES,
@@ -104,9 +104,16 @@ const WELCOME_WAIT_MS = 3000;
 // An hour with nothing changing in this tracker and nothing coming in from the
 // race: the race is over, or the tracker was left open. Its connection goes -
 // a runner left open stayed online for good, which also kept the host and
-// admins from tracking for them - and comes back as soon as anything changes.
+// admins from tracking for them - and the main window asks whether to stay
+// connected or leave the race (RaceIdlePrompt.svelte). A tracker started more
+// than an hour after the race's last activity asks first, rather than picking
+// an old race back up: a host's still hosting it, and a runner's would send a
+// new seed's run into it.
 const IDLE_DISCONNECT_MS = 60 * 60 * 1000;
 const IDLE_CHECK_MS = 60 * 1000;
+// The last activity is kept for the next startup at most this often.
+const ACTIVITY_SAVE_MS = 60 * 1000;
+const IDLE_MESSAGE = "Disconnected after an hour without activity.";
 
 let started = false;
 let connection: RelayConnection | null = null;
@@ -124,9 +131,13 @@ export function initRaceLink(): void {
   if (race.view) setRaceView(0);
   // The last conflict settled was settled then - not again now.
   settledRequest = race.resolution?.id ?? "";
+  // A race with no activity for an hour before this start waits to be asked about.
+  savedActivity = Number(localStorage.getItem(RACE_ACTIVITY_KEY)) || 0;
+  idle = Boolean(race.session) && savedActivity > 0 && Date.now() - savedActivity > IDLE_DISCONNECT_MS;
+  reconnectSeen = race.reconnect;
 
   setInterval(() => {
-    if (connection && Date.now() - lastActivity > IDLE_DISCONNECT_MS) disconnectIdle();
+    if (connection && !idle && Date.now() - lastActivity > IDLE_DISCONNECT_MS) disconnectIdle();
   }, IDLE_CHECK_MS);
 
   $effect.root(() => {
@@ -150,9 +161,11 @@ export function initRaceLink(): void {
       sendTimer = setTimeout(sendChangedStores, SEND_DELAY_MS);
     });
 
-    // Reconnect, asked for from the Race Tracking tab.
+    // Stay connected, asked for from any window.
     $effect(() => {
-      if (race.reconnect) untrack(markRaceActivity);
+      if (race.reconnect === reconnectSeen) return;
+      reconnectSeen = race.reconnect;
+      untrack(stayConnected);
     });
 
     // A host's or admin's change to the run, from any window: an edit to the
@@ -199,7 +212,7 @@ export function initRaceLink(): void {
       if (race.session?.role !== "host" || race.view) return;
       clearTimeout(displayTimer);
       displayTimer = setTimeout(() => {
-        if (race.session?.role === "host" && !shownView) void serveRaceDisplay(race.session);
+        if (race.session?.role === "host" && !shownView && !idle) void serveRaceDisplay(race.session);
       }, DISPLAY_DELAY_MS);
     });
   });
@@ -238,7 +251,13 @@ function follow(session: RaceSession | null) {
   hosting = session?.role === "host";
   combining = hosting || session?.role === "admin";
   if (!session) {
+    idle = false;
     resetRaceStatus();
+    return;
+  }
+  // Started long after the race's last activity: nothing until asked to stay connected.
+  if (idle) {
+    setRaceStatus({ connected: false, idle: true, message: IDLE_MESSAGE });
     return;
   }
 
@@ -247,8 +266,7 @@ function follow(session: RaceSession | null) {
     for (let slot = 1; slot <= session.slot; slot += 1) runners[slot] = { online: false, updatedAt: 0 };
   }
   if (hosting) void serveRaceDisplay(session);
-  idle = false;
-  lastActivity = Date.now();
+  saveActivity(Date.now());
   setRaceStatus({ connected: false, message: "Connecting...", runners, conflicts: [], display: "", edits: 0, adminKey: "", idle: false });
   if (combining) loadHostEdits(session.room);
 
@@ -294,14 +312,31 @@ function follow(session: RaceSession | null) {
 
 /** When this tracker last changed, or last heard from the race. */
 let lastActivity = Date.now();
-/** Disconnected for want of activity, to reconnect when there is some. */
+/** The last activity as kept for the next startup. */
+let savedActivity = 0;
+/** Disconnected for want of activity, until asked to stay connected. */
 let idle = false;
+/** The last request to stay connected already acted on. */
+let reconnectSeen = 0;
 
+function saveActivity(time: number) {
+  lastActivity = time;
+  if (time - savedActivity < ACTIVITY_SAVE_MS) return;
+  savedActivity = time;
+  localStorage.setItem(RACE_ACTIVITY_KEY, String(time));
+}
+
+/** Something changed here, or came in from the race - not counted while waiting to be asked. */
 function markRaceActivity() {
-  lastActivity = Date.now();
+  if (!idle) saveActivity(Date.now());
+}
+
+/**
+ * Stay connected: following again from scratch, as at startup - the room's
+ * snapshot, or its welcome, brings back whatever happened meanwhile.
+ */
+function stayConnected() {
   if (!idle || !race.session) return;
-  // Following again from scratch, as at startup - the room's snapshot, or its
-  // welcome, brings back whatever happened meanwhile.
   idle = false;
   connectedTo = "";
   follow(race.session);
@@ -311,11 +346,7 @@ function disconnectIdle() {
   idle = true;
   connection?.close();
   connection = null;
-  setRaceStatus({
-    connected: false,
-    idle: true,
-    message: "Disconnected after an hour without activity. It reconnects as soon as anything changes here."
-  });
+  setRaceStatus({ connected: false, idle: true, message: IDLE_MESSAGE });
 }
 
 // --- Sending ----------------------------------------------------------------
