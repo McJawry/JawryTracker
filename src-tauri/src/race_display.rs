@@ -105,6 +105,8 @@ fn respond(app: &AppHandle, mut stream: TcpStream) -> std::io::Result<()> {
     let mut request_line = String::new();
     reader.read_line(&mut request_line)?;
     let mut host = String::new();
+    // Kept for passing the request on to the dev server.
+    let mut headers = Vec::new();
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line)? == 0 || line.trim_end().is_empty() {
@@ -115,6 +117,7 @@ fn respond(app: &AppHandle, mut stream: TcpStream) -> std::io::Result<()> {
                 host = value.trim().to_string();
             }
         }
+        headers.push(line);
     }
 
     // Only requests made to this machine by name: a web page can't get at
@@ -125,8 +128,8 @@ fn respond(app: &AppHandle, mut stream: TcpStream) -> std::io::Result<()> {
 
     let target = request_line.split_whitespace().nth(1).unwrap_or("/");
     let path = target.split(['?', '#']).next().unwrap_or("/");
-    // Read cross-origin while developing, when the page itself comes from the
-    // dev server.
+    // Readable cross-origin too: from a page on the dev server's own address,
+    // say.
     let json_headers = [("Access-Control-Allow-Origin", "*"), ("Cache-Control", "no-store")];
 
     if path == "/race.json" {
@@ -150,11 +153,14 @@ fn respond(app: &AppHandle, mut stream: TcpStream) -> std::io::Result<()> {
         return send(&mut stream, "200 OK", "application/json", body.as_bytes(), &json_headers);
     }
 
-    // A dev build has no bundled pages to serve; the dev server has them.
+    // A dev build has no bundled pages to serve; the dev server has them, and
+    // they're passed on from here. It used to send OBS to the dev server's
+    // own address instead, which OBS then reloaded the page from - so a
+    // Browser Source stayed broken after switching to a built tracker, with
+    // the dev server gone, until its address was entered again.
     if tauri::is_dev() {
         if let Some(dev_url) = &app.config().build.dev_url {
-            let location = dev_url.join(target).map(|url| url.to_string()).unwrap_or_default();
-            return send(&mut stream, "302 Found", "text/plain", b"", &[("Location", &location)]);
+            return pass_to_dev_server(dev_url, &request_line, &headers, &mut stream);
         }
     }
 
@@ -162,6 +168,30 @@ fn respond(app: &AppHandle, mut stream: TcpStream) -> std::io::Result<()> {
         Some(asset) => send(&mut stream, "200 OK", &asset.mime_type, &asset.bytes, &[]),
         None => send(&mut stream, "404 Not Found", "text/plain", b"Not found", &[]),
     }
+}
+
+/// Passes a request on to the dev server, and its answer back byte for byte.
+/// The page's live updates connect to the dev server directly - Vite falls
+/// back to its own address when this one doesn't take its WebSocket.
+fn pass_to_dev_server(dev_url: &tauri::Url, request_line: &str, headers: &[String], client: &mut TcpStream) -> std::io::Result<()> {
+    let host = dev_url.host_str().unwrap_or("localhost");
+    let port = dev_url.port_or_known_default().unwrap_or(80);
+    let Ok(mut server) = TcpStream::connect((host, port)) else {
+        return send(client, "502 Bad Gateway", "text/plain", b"The dev server isn't running", &[]);
+    };
+    server.set_read_timeout(Some(Duration::from_secs(30)))?;
+    let mut head = format!("{}\r\nHost: {host}:{port}\r\nConnection: close\r\n", request_line.trim_end());
+    for header in headers {
+        let name = header.split(':').next().unwrap_or("").trim();
+        if !name.eq_ignore_ascii_case("host") && !name.eq_ignore_ascii_case("connection") {
+            head.push_str(header.trim_end());
+            head.push_str("\r\n");
+        }
+    }
+    head.push_str("\r\n");
+    server.write_all(head.as_bytes())?;
+    std::io::copy(&mut server, client)?;
+    client.flush()
 }
 
 fn send(stream: &mut TcpStream, status: &str, mime: &str, body: &[u8], headers: &[(&str, &str)]) -> std::io::Result<()> {
