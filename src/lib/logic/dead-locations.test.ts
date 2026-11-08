@@ -27,10 +27,17 @@ const VANILLA = [
   { name: "Wind Temple", island: "Gale Isle", boss: "Molgera" }
 ];
 
-function decide(input: { dungeons?: typeof VANILLA; requiredBosses?: string[]; markedIslands?: string[]; needed?: number }) {
+function decide(input: {
+  dungeons?: typeof VANILLA;
+  requiredBosses?: string[];
+  hintedDungeons?: string[];
+  markedIslands?: string[];
+  needed?: number;
+}) {
   return decideUnrequiredDungeons({
     dungeons: input.dungeons ?? VANILLA,
     requiredBosses: input.requiredBosses ?? [],
+    hintedDungeons: input.hintedDungeons ?? [],
     markedIslands: input.markedIslands ?? [],
     needed: input.needed ?? 3
   });
@@ -43,6 +50,20 @@ describe("decideUnrequiredDungeons", () => {
       "Forsaken Fortress",
       "Earth Temple"
     ]);
+  });
+
+  it("counts a dungeon a path hint points into as required, whoever its boss is", () => {
+    // "cliff to gohdan", "hyrule to molgera", "DRC to gohdan": Gohma is never
+    // named, but a path item sits in Dragon Roost Cavern.
+    const result = decide({ requiredBosses: ["Gohdan", "Molgera"], hintedDungeons: ["Dragon Roost Cavern"] });
+    expect(result.required).toEqual(["Dragon Roost Cavern", "Tower of the Gods", "Wind Temple"]);
+    expect(result.unrequired).toEqual(["Forbidden Woods", "Forsaken Fortress", "Earth Temple"]);
+  });
+
+  it("counts a hinted dungeon whose boss is still unknown", () => {
+    // Boss entrances shuffled, no boss door opened yet.
+    const dungeons = VANILLA.map((dungeon) => ({ ...dungeon, island: "", boss: "" }));
+    expect(decide({ dungeons, hintedDungeons: ["Earth Temple"] }).required).toEqual(["Earth Temple"]);
   });
 
   it("reads the markers as dungeons when nothing is shuffled", () => {

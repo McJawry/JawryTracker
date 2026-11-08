@@ -110,6 +110,8 @@ Each press checks off what the seed's settings, your hints and your boss marks r
   until the tracker knows enough: path hints naming every required boss, every required dungeon
   found, or every boss marker from the sea chart placed on the map. Once all the markers are
   placed, a dungeon recorded on an unmarked island is ruled out even before you know the rest.
+  A path hint that names a dungeon, like `DRC to Gohdan`, counts that dungeon as required,
+  whichever boss it points to: race mode leaves path items out of the other dungeons.
 - **Foolish areas**: every location in the area, plus any dungeon whose entrance is on a foolish
   island, as the randomizer counts it.
 - **Not-required items** (`n`): the location a location hint names, and every location that
