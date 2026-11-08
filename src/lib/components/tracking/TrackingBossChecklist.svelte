@@ -8,7 +8,9 @@
   // Each shows what race mode is known to ask of its dungeon, the way the race
   // stream's grid layout shows the bosses - see getDungeonLooks. A browser
   // source shows the tracker's own, sent along with the run: it works out no
-  // logic itself, so it couldn't tell which boss is behind which dungeon.
+  // logic itself, so it couldn't tell which boss is behind which dungeon. A
+  // race's goes by what the host's tracker knows of them, and by the runner's
+  // run for the bosses beaten - see state/stream-look.svelte.ts.
   import { TRACKED_AREAS, REQUIRED_BOSS_OPTION_KEYS } from "$lib/gameData";
   import { trackerBossImage } from "$lib/logic/tracker-images";
   import { getDungeonLooks } from "$lib/logic/dead-locations";
@@ -19,7 +21,9 @@
 
   const bossAreas = TRACKED_AREAS.filter((area) => area.imageName in REQUIRED_BOSS_OPTION_KEYS);
 
-  const looks = $derived(streamLook.dungeons ?? getDungeonLooks());
+  const looks = $derived(
+    streamLook.raceDungeons ? getDungeonLooks(streamLook.raceDungeons) : (streamLook.dungeons ?? getDungeonLooks())
+  );
 </script>
 
 <div class="tracking-boss-checklist" aria-label="Dungeon bosses">

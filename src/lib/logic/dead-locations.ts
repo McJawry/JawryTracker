@@ -204,11 +204,14 @@ export interface DungeonLook {
  * required one gets the check: Clear dead checks off the heart containers of
  * dungeons it rules out, so any other checked one may mean nothing was beaten
  * - it's just dimmed, as done.
+ *
+ * What's known of each dungeon is this tracker's own, unless `requirements`
+ * says otherwise - a race's browser source has the host's.
  */
-export function getDungeonLooks(): Record<string, DungeonLook> {
-  let requirements: Record<string, DungeonRequirement> = {};
+export function getDungeonLooks(given?: Record<string, DungeonRequirement>): Record<string, DungeonLook> {
+  let requirements: Record<string, DungeonRequirement> = given ?? {};
   try {
-    requirements = getDungeonRequirements();
+    if (!given) requirements = getDungeonRequirements();
   } catch {
     // Before the seed's logic has loaded, nothing is known about them.
   }

@@ -523,6 +523,9 @@ shows none of it.
   transparent background, scaled to the source's size. The address stays the same from one race
   to the next, so the OBS scene only needs setting up once. It shows while your tracker is
   hosting.
+  - The dungeon row's crosses and checks go by what the host's tracker knows from all the runs
+    together, as every runner races the same dungeons. A runner's own green checks come from
+    the boss heart containers checked in their run.
 - **Grid layout**: turn on **Grid layout** under **Browser sources** to show each runner's
   items as a grid of square black cells instead, like race restreams use. Set how many columns
   and rows it has, and the tab says whether this seed's items fit.
