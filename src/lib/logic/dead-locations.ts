@@ -46,7 +46,7 @@ import { sphere } from "$lib/state/sphere.svelte";
 const normalize = WWRSphereEngine.normalize;
 
 /** Sector names differ by a trailing "Sector" in places - the logic's own do. */
-function sectorKey(name: string): string {
+export function sectorKey(name: string): string {
   return normalize(name).replace(/\s+sector$/, "");
 }
 
@@ -61,10 +61,13 @@ export interface DungeonFacts {
 /**
  * Which dungeons race mode has left out, from what is known about each.
  *
- * A dungeon is required when its boss is one the seed asks for, or when its
- * front door stands on a marked island - the chart's marker sits on the island
- * a required boss is entered from (show_dungeon_markers_on_chart), and with
- * the dungeon pool unmixed only one dungeon can stand on an island.
+ * A dungeon is required when its boss is one the seed asks for, when a path
+ * hint points into it - race mode leaves progress items out of every other
+ * dungeon, so a path item inside one means it's required, whoever its boss is -
+ * or when its front door stands on a marked island - the chart's marker sits
+ * on the island a required boss is entered from
+ * (show_dungeon_markers_on_chart), and with the dungeon pool unmixed only one
+ * dungeon can stand on an island.
  *
  * Leaving one out needs a complete answer from somewhere: every required
  * dungeon identified, every marker on the chart placed (so a dungeon found on
@@ -76,14 +79,22 @@ export interface DungeonFacts {
 export function decideUnrequiredDungeons(input: {
   dungeons: DungeonFacts[];
   requiredBosses: string[];
+  /** The dungeons a path hint points into. */
+  hintedDungeons?: string[];
   markedIslands: string[];
   needed: number;
 }): { required: string[]; unrequired: string[] } {
   const { dungeons, needed } = input;
   const bosses = new Set(input.requiredBosses.map(normalize));
+  const hinted = new Set((input.hintedDungeons ?? []).map(normalize));
   const marked = new Set(input.markedIslands.map(sectorKey));
   const required = dungeons
-    .filter((dungeon) => (dungeon.boss && bosses.has(normalize(dungeon.boss))) || (dungeon.island && marked.has(sectorKey(dungeon.island))))
+    .filter(
+      (dungeon) =>
+        (dungeon.boss && bosses.has(normalize(dungeon.boss))) ||
+        hinted.has(normalize(dungeon.name)) ||
+        (dungeon.island && marked.has(sectorKey(dungeon.island)))
+    )
     .map((dungeon) => dungeon.name);
 
   if (!needed || needed >= dungeons.length || required.length > needed) return { required, unrequired: [] };
@@ -111,6 +122,27 @@ function getKnownRequiredBosses(): string[] {
     });
   getMarkedRequiredBosses().bosses.forEach((boss) => known.add(boss));
   return [...known];
+}
+
+/**
+ * The dungeons a path hint points into, to whichever boss: "DRC to Gohdan" puts
+ * a path item inside Dragon Roost Cavern. A hint names a dungeon's checks by
+ * the dungeon, whichever island its front door turned out to be on. One that
+ * names several areas means one check filed under all of them, so a dungeon
+ * among them still holds it.
+ */
+function getPathHintedDungeons(): string[] {
+  const dungeons = Object.keys(DUNGEON_REQUIRED_BOSSES);
+  const hinted = new Set<string>();
+  hints
+    .filter((hint) => hint.type === "path" && !hint.needsReview)
+    .forEach((hint) => {
+      (hint.areas ?? [hint.left.name]).forEach((area) => {
+        const dungeon = dungeons.find((name) => normalize(name) === normalize(area));
+        if (dungeon) hinted.add(dungeon);
+      });
+    });
+  return [...hinted];
 }
 
 function getDungeonFacts(): DungeonFacts[] {
@@ -146,6 +178,7 @@ function getUnrequiredDungeonRule(): DungeonRule | null {
   const { required, unrequired } = decideUnrequiredDungeons({
     dungeons: getDungeonFacts(),
     requiredBosses: getKnownRequiredBosses(),
+    hintedDungeons: getPathHintedDungeons(),
     markedIslands: sphere.highlightedSectors,
     needed
   });
@@ -160,7 +193,8 @@ export type BossRequirement = "required" | "unrequired" | "unknown";
  * the race stream's grid, which mutes the bosses race mode leaves out.
  *
  * The config's list, the path hints and the chart marks name required bosses,
- * and a dungeon found on a marked island gives up its boss too. Once as many
+ * and a dungeon a path hint points into or found on a marked island gives up
+ * its boss too. Once as many
  * are named as the seed requires, the rest are left out; once enough are left
  * out - a dungeon found on an unmarked island when every mark is placed - the
  * rest are required. More named than the seed requires means something was
@@ -204,11 +238,14 @@ export interface DungeonLook {
  * required one gets the check: Clear dead checks off the heart containers of
  * dungeons it rules out, so any other checked one may mean nothing was beaten
  * - it's just dimmed, as done.
+ *
+ * What's known of each dungeon is this tracker's own, unless `requirements`
+ * says otherwise - a race's browser source has the host's.
  */
-export function getDungeonLooks(): Record<string, DungeonLook> {
-  let requirements: Record<string, DungeonRequirement> = {};
+export function getDungeonLooks(given?: Record<string, DungeonRequirement>): Record<string, DungeonLook> {
+  let requirements: Record<string, DungeonRequirement> = given ?? {};
   try {
-    requirements = getDungeonRequirements();
+    if (!given) requirements = getDungeonRequirements();
   } catch {
     // Before the seed's logic has loaded, nothing is known about them.
   }
@@ -247,7 +284,13 @@ function decideRequirements(): {
     (entrance) => (entrance.type === "DUNGEON" || entrance.type === "BOSS") && entrance.poolType === "MIXED"
   );
   if (needed && !mixed) {
-    decided = decideUnrequiredDungeons({ dungeons: facts, requiredBosses: [...required], markedIslands: sphere.highlightedSectors, needed });
+    decided = decideUnrequiredDungeons({
+      dungeons: facts,
+      requiredBosses: [...required],
+      hintedDungeons: getPathHintedDungeons(),
+      markedIslands: sphere.highlightedSectors,
+      needed
+    });
     facts
       .filter((dungeon) => dungeon.boss)
       .forEach((dungeon) => {
@@ -407,13 +450,19 @@ export function findDeadLocations(): DeadLocationReport {
 
   // A check hinted to hold something that matters is never dead, whatever
   // else says so - one of the two lines is a typo, and it is not this one.
-  // Nor is beating Ganondorf, which is the goal rather than a check.
+  // Nor is beating Ganondorf, which is the goal rather than a check, or any
+  // boss race mode may still ask for: its heart container is how the tracker
+  // records it beaten, and a dungeon hinted foolish can still be a required
+  // one, its boss to beat with nothing in it worth having.
   const kept = new Set(
     hints
       .filter((hint) => hint.type === "location" && !hint.needsReview && hint.requirement && hint.requirement.key !== "not-required")
       .map((hint) => normalize(hint.right.name))
   );
   kept.add(normalize(BOSS_LOCATIONS.Ganondorf));
+  Object.entries(getBossRequirements())
+    .filter(([, requirement]) => requirement !== "unrequired")
+    .forEach(([boss]) => kept.add(normalize(BOSS_LOCATIONS[boss] ?? "")));
   const pool = new Set(getAvailableLocations().map(normalize));
   const claimed = new Set<string>();
   const locations: string[] = [];

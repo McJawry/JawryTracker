@@ -93,6 +93,9 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Right click clears dependent locations**: when you right-click an area to clear it, also
   clear the locations that can only be reached through it. This works like the randomizer
   tracker's *Clear All Includes Dependent Locations*.
+- **Highlighting location clears it** (off by default): right-clicking a location to highlight it
+  for an item also checks it off. Right-clicking it again removes the highlight but leaves it
+  checked.
 - **Generic Triforce shards**: count shards as a plain 0–8 total on the Triforce instead of
   tracking which shard is which.
 - **Display item on location list**: show the icon of the item recorded at each location in the
@@ -110,6 +113,8 @@ Each press checks off what the seed's settings, your hints and your boss marks r
   until the tracker knows enough: path hints naming every required boss, every required dungeon
   found, or every boss marker from the sea chart placed on the map. Once all the markers are
   placed, a dungeon recorded on an unmarked island is ruled out even before you know the rest.
+  A path hint that names a dungeon, like `DRC to Gohdan`, counts that dungeon as required,
+  whichever boss it points to: race mode leaves path items out of the other dungeons.
 - **Foolish areas**: every location in the area, plus any dungeon whose entrance is on a foolish
   island, as the randomizer counts it.
 - **Not-required items** (`n`): the location a location hint names, and every location that
@@ -120,7 +125,9 @@ Each press checks off what the seed's settings, your hints and your boss marks r
   are left out.
 
 A location behind an entrance you haven't recorded is never cleared, and neither is a location
-a hint says holds a required or possibly required item.
+a hint says holds a required or possibly required item. In race mode, a boss's heart container
+is only cleared once the tracker knows that boss isn't required: a foolish dungeon can still be
+a required one, with its boss to beat.
 
 ### Item Tracker
 
@@ -218,6 +225,13 @@ The narrow column beside the map:
   its entrance is on, or click the button and then the sector. While you place one, sectors
   where the seed's settings can't put that dungeon are shaded and won't take it. Placing a
   dungeon somewhere new moves it. Right-click a button to clear it.
+  - When you record a dungeon entrance, the map offers to fill in any entrance left that can
+    only be one dungeon, with **Yes** and **No**. That's the last entrance once all the
+    other dungeons are placed. In race mode the sea chart markers narrow it down further: a
+    marked island's entrance leads into a required dungeon, and once every marker is placed,
+    an unmarked island's entrance leads into one that isn't. So once the other two required
+    dungeons are placed, the last marked island gets offered the last required dungeon, even
+    with other entrances still open.
 
 ### Dungeons and other areas
 
@@ -267,7 +281,7 @@ closest item, area, location or boss, so short forms work.
 | `hookshot at needle rock` | **Item hint**: the Hookshot is somewhere in an area. `in` and `on` work too. |
 | `bombs in windfall jail maze chest` | **Location hint**: when the text matches a single location, the hint points at that location. |
 | `sword r at headstone` | Item hint marked **required**. Add `r`, `p` or `n` after the item for *required*, *possibly required* or *not required*. |
-| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. |
+| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. In race mode, a line naming a dungeon leaves its boss unchecked, since a required dungeon's boss still has to be beaten. **Clear dead** checks off the bosses race mode leaves out. |
 
 Common abbreviations work for areas, for example **FF**, **DRI**, **DRC**, **FW**, **FH**,
 **GT**, **NFI** and **SFI**, and for bosses, for example **KD**. A line the tracker can't read
@@ -523,6 +537,9 @@ shows none of it.
   transparent background, scaled to the source's size. The address stays the same from one race
   to the next, so the OBS scene only needs setting up once. It shows while your tracker is
   hosting.
+  - The dungeon row's crosses and checks go by what the host's tracker knows from all the runs
+    together, as every runner races the same dungeons. A runner's own green checks come from
+    the boss heart containers checked in their run.
 - **Grid layout**: turn on **Grid layout** under **Browser sources** to show each runner's
   items as a grid of square black cells instead, like race restreams use. Set how many columns
   and rows it has, and the tab says whether this seed's items fit.

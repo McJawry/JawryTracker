@@ -8,8 +8,9 @@
 // serves it at /race.json (src-tauri/src/race_display.rs) for as long as it
 // hosts one - the page keeps asking, so a new race is picked up without
 // touching OBS. The host's tracker also says there how to show it - as the
-// grid layout or not, counting the shards or not - and which bosses the race
-// is known to ask for, so a change there reaches OBS within a few seconds too.
+// grid layout or not, counting the shards or not - and which bosses and
+// dungeons the race is known to ask for, so a change there reaches OBS within
+// a few seconds too.
 // And the race's seed config, for a runner whose tracker never sent its own,
 // and how long to hold the runner's updates back for, as far as their stream
 // lags behind (race-delay.ts). `?room=` (and `?relay=`) in the address follow
@@ -21,7 +22,7 @@
 import { RACE_DISPLAY_ORIGIN } from "$lib/constants";
 import { toSphereState, type RaceStore } from "$lib/logic/race-merge";
 import type { RaceGridCell } from "$lib/logic/race-stream-grid";
-import type { BossRequirement } from "$lib/logic/dead-locations";
+import type { BossRequirement, DungeonRequirement } from "$lib/logic/dead-locations";
 import { refreshSphereStartingGear } from "$lib/logic/sphere-logic-loading";
 import { checked } from "$lib/state/checked.svelte";
 import { sphere } from "$lib/state/sphere.svelte";
@@ -69,6 +70,8 @@ interface HostedRace extends DisplayedRace {
   config?: string;
   /** Seconds, by slot: how long to hold each runner's updates back. */
   delays?: Record<string, number>;
+  /** What the combined run knows of each dungeon, for the row of dungeons. */
+  dungeons?: Record<string, DungeonRequirement>;
 }
 
 function replaceContents<T>(target: Record<string, T>, next: Record<string, T>) {
@@ -315,6 +318,10 @@ export function followRaceDisplay(slot: number, onLook: (look: StreamLook) => vo
       raceConfig = race?.config ?? "";
       applyConfig();
     }
+    // Asked every few seconds: the row only hears of it when it changes. A
+    // host from before it was sent leaves the row to the runner's tracker.
+    const dungeons = race?.dungeons && typeof race.dungeons === "object" ? race.dungeons : null;
+    if (JSON.stringify(dungeons) !== JSON.stringify(streamLook.raceDungeons)) streamLook.raceDungeons = dungeons;
     showLook({
       layout: race?.grid?.cells ? { grid: race.grid, bosses: race.bosses ?? {} } : null,
       transparent: Boolean(race?.transparent)

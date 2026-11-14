@@ -23,8 +23,8 @@
 //
 // The host's tracker also tells the stream display server
 // (src-tauri/src/race_display.rs) which room to follow, and how to show it:
-// the grid layout's cells, and which bosses the runs between them have shown
-// the seed asks for - every runner races the same ones.
+// the grid layout's cells, and which bosses and dungeons the runs between them
+// have shown the seed asks for - every runner races the same ones.
 //
 // The host's seed config is the race's: the host's tracker shares it, and a
 // runner's or admin's tracker takes it - before joining
@@ -75,7 +75,7 @@ import {
   type RaceSession
 } from "$lib/state/race.svelte";
 import { getTrackedAreaCounts } from "$lib/logic/locations";
-import { getDungeonLooks } from "$lib/logic/dead-locations";
+import { getDungeonLooks, getDungeonRequirements, type DungeonRequirement } from "$lib/logic/dead-locations";
 import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
 import { checked } from "$lib/state/checked.svelte";
@@ -847,9 +847,21 @@ function describeDisplay(session: RaceSession): string {
     transparent: settings.raceStreamTransparent,
     config: settings.randoConfigText ?? "",
     // How many seconds each runner's browser source holds their updates back.
-    delays: Object.fromEntries(Array.from({ length: session.slot }, (_, index) => [index + 1, runnerDelay(index + 1)]))
+    delays: Object.fromEntries(Array.from({ length: session.slot }, (_, index) => [index + 1, runnerDelay(index + 1)])),
+    // What the combined run knows of each dungeon, for every runner's row of
+    // dungeons: one runner's own run often has none of the hints or marks.
+    dungeons: describeRaceDungeons()
   };
   return JSON.stringify({ ...room, ...describeStreamLayout() });
+}
+
+function describeRaceDungeons(): Record<string, DungeonRequirement> {
+  try {
+    return getDungeonRequirements();
+  } catch {
+    // Before the seed's logic has loaded, nothing is known about them.
+    return {};
+  }
 }
 
 let servedDisplay: string | null = null;

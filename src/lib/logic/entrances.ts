@@ -21,6 +21,7 @@ import {
   sphere,
   saveSphereState
 } from "$lib/state/sphere.svelte";
+import { noteDungeonDoorRecorded } from "$lib/state/ui.svelte";
 
 const normalize = WWRSphereEngine.normalize;
 
@@ -640,6 +641,10 @@ export function isEntranceConnected(entrance: TrackerEntrance): boolean {
 export function connectEntrance(source: TrackerEntrance, target: TrackerEntrance): void {
   sphere.entranceConnections[source.name] = target.name;
   saveSphereState();
+  // Every way of recording a dungeon door ends up here - the entrance list and
+  // the dungeon buttons alike - so this is where the map is told to see
+  // whether a door left can only be one dungeon (logic/last-dungeon-entrance.ts).
+  if (source.poolType === "DUNGEON") noteDungeonDoorRecorded();
 }
 
 export function disconnectEntrance(source: TrackerEntrance): void {
@@ -814,18 +819,24 @@ export function getEffectiveEntranceMappings(): Record<string, string> {
     const target = world.shuffleEntranceByEdge?.[normalize(targetName)];
     if (!source || !target || target.entry.type !== "DUNGEON") return;
     const dungeon = world.areas[normalize(target.side.connected)]?.dungeon;
-    // Where the door *stands*, which is not simply the first region its area
-    // reports: once the door is connected, that area also belongs to the
-    // region it now leads into, and for the Dragon Roost door that came back
-    // first - so the dungeon was recorded as being on itself and no
-    // abbreviation ever reached the sector. Dungeon regions are dropped, since
-    // a door is never standing inside the dungeon it opens.
-    const vanillaSectors = WWRSphereEngine.VANILLA_DUNGEON_SECTORS ?? {};
-    const regions = findEntranceRegions(source.side.parent);
-    const sector = regions.find((region) => !(normalize(region) in vanillaSectors)) ?? regions[0];
+    const sector = getDungeonDoorSector(source.side.parent);
     if (dungeon && sector) mappings[dungeon] = sector;
   });
   return mappings;
+}
+
+/**
+ * The sector a dungeon door stands on, from the area it is in. Not simply the
+ * first region that area reports: once the door is connected, the area also
+ * belongs to the region it now leads into, and for the Dragon Roost door that
+ * came back first - so the dungeon was recorded as being on itself and no
+ * abbreviation ever reached the sector. Dungeon regions are dropped, since a
+ * door is never standing inside the dungeon it opens.
+ */
+export function getDungeonDoorSector(doorParent: string): string {
+  const vanillaSectors = WWRSphereEngine.VANILLA_DUNGEON_SECTORS ?? {};
+  const regions = findEntranceRegions(doorParent);
+  return regions.find((region) => !(normalize(region) in vanillaSectors)) ?? regions[0] ?? "";
 }
 
 /** The world area a location physically sits in. */

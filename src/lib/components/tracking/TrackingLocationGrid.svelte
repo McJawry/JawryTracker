@@ -4,13 +4,19 @@
   // matching tracker.cpp:798-807 upstream's overworld_map_layout_2. Dungeon
   // entrance drag-and-drop/badges are preserved from the earlier SeaGrid
   // implementation.
+  import { untrack } from "svelte";
   import { data } from "$lib/state/data.svelte";
-  import { sphere } from "$lib/state/sphere.svelte";
-  import { clearDungeonAssignment, getEffectiveEntranceMappings } from "$lib/logic/entrances";
+  import { clearDungeonAssignment, connectEntrance, getEffectiveEntranceMappings } from "$lib/logic/entrances";
+  import { describeLastDungeonEntranceReason, getLastDungeonEntrances } from "$lib/logic/last-dungeon-entrance";
   import { WWRSphereEngine } from "$lib/logic";
   import { DUNGEON_ENTRANCE_TRACKERS } from "$lib/gameData";
   import TrackerAreaCell from "./TrackerAreaCell.svelte";
-  import { ui, setHighlightSectorMode } from "$lib/state/ui.svelte";
+  import {
+    ui,
+    setHighlightSectorMode,
+    offerLastDungeonEntrance,
+    dismissLastDungeonEntrancePrompt
+  } from "$lib/state/ui.svelte";
 
   const normalize = WWRSphereEngine.normalize;
 
@@ -18,6 +24,34 @@
   // buttons under the shards and the sector's own entrance page write the same
   // thing, so a badge must not depend on which one was used.
   const dungeonSectors = $derived(getEffectiveEntranceMappings());
+
+  // Each dungeon door recorded in this window, by the entrance list or the
+  // dungeon buttons, is when the map looks for a door left that can only be
+  // one dungeon. Yes records it the same way, so the next one is offered then.
+  $effect(() => {
+    if (!ui.dungeonDoorRecords) return;
+    untrack(() => {
+      const next = getLastDungeonEntrances()[0];
+      offerLastDungeonEntrance(next ? { door: next.door.name, target: next.target.name } : null);
+    });
+  });
+
+  // The prompt, while what it offers still holds: undo the assignment that
+  // raised it, or record that door some other way, and the question no longer
+  // stands.
+  const lastDungeonEntrance = $derived.by(() => {
+    const offered = ui.lastDungeonEntrancePrompt;
+    if (!offered) return null;
+    return (
+      getLastDungeonEntrances().find((last) => last.door.name === offered.door && last.target.name === offered.target) ?? null
+    );
+  });
+
+  function acceptLastDungeonEntrance() {
+    const last = lastDungeonEntrance;
+    dismissLastDungeonEntrancePrompt();
+    if (last) connectEntrance(last.door, last.target);
+  }
 
   function entrancesFor(sector: string) {
     return DUNGEON_ENTRANCE_TRACKERS.filter(
@@ -40,6 +74,17 @@
 >
   {#if ui.highlightSectorMode}
     <p class="sector-highlight-prompt">CLICK ON SECTORS WITH REQUIRED BOSSES. RIGHT CLICK TO CANCEL.</p>
+  {/if}
+  {#if lastDungeonEntrance}
+    {@const heading = describeLastDungeonEntranceReason(lastDungeonEntrance.reason)}
+    <div class="last-dungeon-entrance-prompt" role="alertdialog" aria-label={heading}>
+      <p>{heading}</p>
+      <p>Assign {lastDungeonEntrance.sector} to {lastDungeonEntrance.dungeon}?</p>
+      <div class="last-dungeon-entrance-actions">
+        <button type="button" class="tool-button map-toolbar-button active" onclick={acceptLastDungeonEntrance}>Yes</button>
+        <button type="button" class="tool-button map-toolbar-button" onclick={dismissLastDungeonEntrancePrompt}>No</button>
+      </div>
+    </div>
   {/if}
   {#each data.sectors as sector (sector)}
     <!-- No per-sector art: the grid paints one sea chart behind the whole

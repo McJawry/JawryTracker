@@ -109,6 +109,16 @@ export const ui: {
    * armed location a held copy is being moved to. See answerArmedLocation.
    */
   itemCardPickerTarget: string | null;
+  /**
+   * Counts the dungeon doors recorded in this window: each one is when the map
+   * looks for a door left that can only be one dungeon.
+   */
+  dungeonDoorRecords: number;
+  /**
+   * The map's "one remaining dungeon" prompt, by the entrance names it offers
+   * to connect - see logic/last-dungeon-entrance.ts.
+   */
+  lastDungeonEntrancePrompt: { door: string; target: string } | null;
 } = $state({
   dataStatus: "Loading data...",
   locationDropList: null,
@@ -121,7 +131,9 @@ export const ui: {
   highlightSectorMode: false,
   hoveredRowName: "",
   itemCardPicker: null,
-  itemCardPickerTarget: null
+  itemCardPickerTarget: null,
+  dungeonDoorRecords: 0,
+  lastDungeonEntrancePrompt: null
 });
 
 /**
@@ -206,6 +218,18 @@ export function armEntranceAssignment(dungeonName: string): void {
 
 export function clearPendingEntranceAssignment(): void {
   ui.pendingEntranceAssignment = null;
+}
+
+export function noteDungeonDoorRecorded(): void {
+  ui.dungeonDoorRecords += 1;
+}
+
+export function offerLastDungeonEntrance(prompt: { door: string; target: string } | null): void {
+  ui.lastDungeonEntrancePrompt = prompt;
+}
+
+export function dismissLastDungeonEntrancePrompt(): void {
+  ui.lastDungeonEntrancePrompt = null;
 }
 
 /** Clicking the same area again closes the list and shows the map. */

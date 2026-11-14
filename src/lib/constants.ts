@@ -145,6 +145,12 @@ export interface Settings {
    */
   rightClickClearsDependentLocations: boolean;
   /**
+   * Right-clicking a location to highlight it for an item checks it off as
+   * well, for whoever records a find by highlighting the location they just
+   * opened. Letting go of the highlight leaves it checked.
+   */
+  highlightingLocationClearsIt: boolean;
+  /**
    * Size of the requirement tooltip, as a percentage. Its own setting rather
    * than following the panel scale: the tooltip is drawn against the window
    * rather than inside a panel, so on a small screen with large system text it
@@ -269,6 +275,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sphereCalculation: true,
   showPlacedItemIcons: true,
   rightClickClearsDependentLocations: true,
+  highlightingLocationClearsIt: false,
   tooltipScale: 100,
   streamMode: false,
   parsedHintsFilters: true,
