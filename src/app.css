@@ -4538,6 +4538,49 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   animation: mark-starting-flash 0.5s ease-in-out infinite;
 }
 
+/* "One remaining dungeon" - offered over the middle of the map when a dungeon
+   door left can only lead into one dungeon (TrackingLocationGrid.svelte). It
+   waits for an answer rather than flashing, and takes clicks. */
+.last-dungeon-entrance-prompt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: 90%;
+  padding: 8px 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.last-dungeon-entrance-prompt p {
+  margin: 0 0 4px;
+}
+
+.last-dungeon-entrance-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.last-dungeon-entrance-actions .map-toolbar-button {
+  min-width: 56px;
+}
+
+.last-dungeon-entrance-actions .map-toolbar-button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

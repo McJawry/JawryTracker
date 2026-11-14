@@ -46,7 +46,7 @@ import { sphere } from "$lib/state/sphere.svelte";
 const normalize = WWRSphereEngine.normalize;
 
 /** Sector names differ by a trailing "Sector" in places - the logic's own do. */
-function sectorKey(name: string): string {
+export function sectorKey(name: string): string {
   return normalize(name).replace(/\s+sector$/, "");
 }
 

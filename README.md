@@ -222,6 +222,13 @@ The narrow column beside the map:
   its entrance is on, or click the button and then the sector. While you place one, sectors
   where the seed's settings can't put that dungeon are shaded and won't take it. Placing a
   dungeon somewhere new moves it. Right-click a button to clear it.
+  - When you record a dungeon entrance, the map offers to fill in any entrance left that can
+    only be one dungeon, with **Yes** and **No**. That's the last entrance once all the
+    other dungeons are placed. In race mode the sea chart markers narrow it down further: a
+    marked island's entrance leads into a required dungeon, and once every marker is placed,
+    an unmarked island's entrance leads into one that isn't. So once the other two required
+    dungeons are placed, the last marked island gets offered the last required dungeon, even
+    with other entrances still open.
 
 ### Dungeons and other areas
 
