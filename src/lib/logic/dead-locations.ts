@@ -450,13 +450,19 @@ export function findDeadLocations(): DeadLocationReport {
 
   // A check hinted to hold something that matters is never dead, whatever
   // else says so - one of the two lines is a typo, and it is not this one.
-  // Nor is beating Ganondorf, which is the goal rather than a check.
+  // Nor is beating Ganondorf, which is the goal rather than a check, or any
+  // boss race mode may still ask for: its heart container is how the tracker
+  // records it beaten, and a dungeon hinted foolish can still be a required
+  // one, its boss to beat with nothing in it worth having.
   const kept = new Set(
     hints
       .filter((hint) => hint.type === "location" && !hint.needsReview && hint.requirement && hint.requirement.key !== "not-required")
       .map((hint) => normalize(hint.right.name))
   );
   kept.add(normalize(BOSS_LOCATIONS.Ganondorf));
+  Object.entries(getBossRequirements())
+    .filter(([, requirement]) => requirement !== "unrequired")
+    .forEach(([boss]) => kept.add(normalize(BOSS_LOCATIONS[boss] ?? "")));
   const pool = new Set(getAvailableLocations().map(normalize));
   const claimed = new Set<string>();
   const locations: string[] = [];

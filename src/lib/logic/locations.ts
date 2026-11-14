@@ -5,7 +5,7 @@
 // excluded autosave-polling feature, so isLocationMarked is exactly equivalent
 // to the local-checked test.
 import { WWRSphereEngine } from "$lib/logic";
-import { TRACKED_AREAS, LOCATION_ORDER_OVERRIDES } from "$lib/gameData";
+import { BOSS_LOCATIONS, TRACKED_AREAS, LOCATION_ORDER_OVERRIDES } from "$lib/gameData";
 import { getAreaFromLocation, unique } from "$lib/logic/data-loading";
 import {
   getEntranceConnection,
@@ -100,7 +100,28 @@ export function isLocationLocallyChecked(location: string): boolean {
 }
 
 const NO_NOTE_CHECKS = new Set<string>();
-let noteCheckCache: { revision: number; available: string[]; hasLines: boolean; doors: string; keys: Set<string> } | null = null;
+let noteCheckCache: {
+  revision: number;
+  available: string[];
+  raceMode: boolean;
+  hasLines: boolean;
+  doors: string;
+  keys: Set<string>;
+} | null = null;
+
+/**
+ * The bosses a "no" line naming a whole area leaves alone, as their locations.
+ *
+ * A boss's heart container is also how the tracker records the boss beaten.
+ * In race mode a dungeon hinted foolish can still be a required one - nothing
+ * in it moves the seed on, but its boss has to fall all the same - so checking
+ * the boss off with the rest would show it beaten. Clear dead checks off the
+ * ones race mode leaves out. Beating Ganondorf is the goal, never a check.
+ */
+function getNoteKeptBossLocations(raceMode: boolean): Set<string> {
+  const bosses = raceMode ? Object.keys(BOSS_LOCATIONS) : ["Ganondorf"];
+  return new Set(bosses.map((boss) => normalize(BOSS_LOCATIONS[boss])));
+}
 
 /**
  * Every location a "no" line in the hint notes checks off, normalized.
@@ -109,26 +130,35 @@ let noteCheckCache: { revision: number; available: string[]; hasLines: boolean; 
  * the checked state, so deleting the line unchecks them again - and so they
  * can be told apart from a check made by hand. An area's checks are the ones
  * its list on the map shows, which can grow as entrances are recorded, so the
- * recorded entrances are part of what this is kept against.
+ * recorded entrances are part of what this is kept against. A line naming a
+ * boss's location itself checks it off.
  */
 export function getNoteCheckedLocationKeys(): Set<string> {
   const revision = hintsRevision.value;
   const available = getAvailableLocations();
-  const sameLines = noteCheckCache?.revision === revision && noteCheckCache.available === available;
+  const raceMode = normalize(String(data.sphereOptions.progression_dungeons ?? "")) === "race mode";
+  const sameLines = noteCheckCache?.revision === revision && noteCheckCache.available === available && noteCheckCache.raceMode === raceMode;
   // No "no" lines at all: nothing to check off, whatever the entrances say.
   if (sameLines && !noteCheckCache!.hasLines) return NO_NOTE_CHECKS;
   const doors = JSON.stringify([sphere.entranceConnections, sphere.entranceMappings]);
   if (sameLines && noteCheckCache!.doors === doors) return noteCheckCache!.keys;
 
   const lines = hints.filter((hint) => hint.type === "no" && !hint.needsReview);
+  const kept = getNoteKeptBossLocations(raceMode);
   const keys = new Set<string>();
   lines.forEach((hint) => {
     (hint.checks ?? []).forEach((check) => {
-      const locations = check.kind === "location" ? [check.name] : getSphereHintAreaLocations(check.name);
-      locations.forEach((location) => keys.add(normalize(location)));
+      if (check.kind === "location") {
+        keys.add(normalize(check.name));
+        return;
+      }
+      getSphereHintAreaLocations(check.name)
+        .map(normalize)
+        .filter((key) => !kept.has(key))
+        .forEach((key) => keys.add(key));
     });
   });
-  noteCheckCache = { revision, available, hasLines: lines.length > 0, doors, keys: keys.size ? keys : NO_NOTE_CHECKS };
+  noteCheckCache = { revision, available, raceMode, hasLines: lines.length > 0, doors, keys: keys.size ? keys : NO_NOTE_CHECKS };
   return noteCheckCache.keys;
 }
 

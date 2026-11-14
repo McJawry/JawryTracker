@@ -122,7 +122,9 @@ Each press checks off what the seed's settings, your hints and your boss marks r
   are left out.
 
 A location behind an entrance you haven't recorded is never cleared, and neither is a location
-a hint says holds a required or possibly required item.
+a hint says holds a required or possibly required item. In race mode, a boss's heart container
+is only cleared once the tracker knows that boss isn't required: a foolish dungeon can still be
+a required one, with its boss to beat.
 
 ### Item Tracker
 
@@ -269,7 +271,7 @@ closest item, area, location or boss, so short forms work.
 | `hookshot at needle rock` | **Item hint**: the Hookshot is somewhere in an area. `in` and `on` work too. |
 | `bombs in windfall jail maze chest` | **Location hint**: when the text matches a single location, the hint points at that location. |
 | `sword r at headstone` | Item hint marked **required**. Add `r`, `p` or `n` after the item for *required*, *possibly required* or *not required*. |
-| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. |
+| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. In race mode, a line naming a dungeon leaves its boss unchecked, since a required dungeon's boss still has to be beaten. **Clear dead** checks off the bosses race mode leaves out. |
 
 Common abbreviations work for areas, for example **FF**, **DRI**, **DRC**, **FW**, **FH**,
 **GT**, **NFI** and **SFI**, and for bosses, for example **KD**. A line the tracker can't read
