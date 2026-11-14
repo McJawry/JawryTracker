@@ -154,7 +154,12 @@
     if (ui.itemDrag) return;
     const option = (event.target as HTMLElement).closest<HTMLElement>(".location-drop-option");
     const location = option?.dataset.location;
-    if (location) onAssignRequest(location);
+    if (!location) return;
+    // Highlighting it, not letting go of it: with the setting on, that checks
+    // it off too. One already checked - by hand or by a "no" line - is left be.
+    const highlighting = ui.pendingLocationForItemAssignment !== location;
+    if (highlighting && settings.highlightingLocationClearsIt && !isLocationMarked(location)) clearLocations([location]);
+    onAssignRequest(location);
   }
 
   function clearAll() {

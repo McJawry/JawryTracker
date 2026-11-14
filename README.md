@@ -93,6 +93,9 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 - **Right click clears dependent locations**: when you right-click an area to clear it, also
   clear the locations that can only be reached through it. This works like the randomizer
   tracker's *Clear All Includes Dependent Locations*.
+- **Highlighting location clears it** (off by default): right-clicking a location to highlight it
+  for an item also checks it off. Right-clicking it again removes the highlight but leaves it
+  checked.
 - **Generic Triforce shards**: count shards as a plain 0–8 total on the Triforce instead of
   tracking which shard is which.
 - **Display item on location list**: show the icon of the item recorded at each location in the

@@ -93,6 +93,14 @@
       </label>
 
       <label class="tracker-settings-option">
+        <input type="checkbox" bind:checked={settings.highlightingLocationClearsIt} onchange={saveSettings} />
+        <span>
+          <strong>Highlighting location clears it</strong>
+          <em>Right-clicking a location to highlight it also checks it off.</em>
+        </span>
+      </label>
+
+      <label class="tracker-settings-option">
         <input type="checkbox" bind:checked={settings.genericTriforceShards} onchange={saveSettings} />
         <span>
           <strong>Generic Triforce shards</strong>
