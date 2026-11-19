@@ -24,7 +24,9 @@
 // The host's tracker also tells the stream display server
 // (src-tauri/src/race_display.rs) which room to follow, and how to show it:
 // the grid layout's cells, and which bosses and dungeons the runs between them
-// have shown the seed asks for - every runner races the same ones.
+// have shown the seed asks for - every runner races the same ones. Those come
+// from the combined run even while a runner's is on screen: a worker works
+// them out then (logic/race-requirements-client.svelte.ts).
 //
 // The host's seed config is the race's: the host's tracker shares it, and a
 // runner's or admin's tracker takes it - before joining
@@ -75,7 +77,8 @@ import {
   type RaceSession
 } from "$lib/state/race.svelte";
 import { getTrackedAreaCounts } from "$lib/logic/locations";
-import { getDungeonLooks, getDungeonRequirements, type DungeonRequirement } from "$lib/logic/dead-locations";
+import { getBossRequirements, getDungeonLooks, getDungeonRequirements } from "$lib/logic/dead-locations";
+import { getRunRequirements, stopRunRequirements, type RunRequirements } from "$lib/logic/race-requirements-client.svelte";
 import { getSphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import { getSphereBoardAnalysis } from "$lib/logic/sphere-worker-client.svelte";
 import { checked } from "$lib/state/checked.svelte";
@@ -207,9 +210,8 @@ export function initRaceLink(): void {
 
     // What the stream displays are told turns on the layout and on everything
     // the bosses are worked out from: the hints, the marks, the entrances and
-    // the seed's logic - in the combined run, so not while a host is showing a
-    // runner's.
-    let displayTimer: ReturnType<typeof setTimeout> | undefined;
+    // the seed's logic. While a runner's run is shown, the combined run's
+    // changes don't reach the screen, and the merge asks instead.
     $effect(() => {
       JSON.stringify([sphere, checked]);
       hintNotes.value;
@@ -221,11 +223,7 @@ export function initRaceLink(): void {
       settings.raceStreamGenericShards;
       settings.raceStreamTransparent;
       race.roster;
-      if (race.session?.role !== "host" || race.view) return;
-      clearTimeout(displayTimer);
-      displayTimer = setTimeout(() => {
-        if (race.session?.role === "host" && !shownView && !idle) void serveRaceDisplay(race.session);
-      }, DISPLAY_DELAY_MS);
+      if (race.session?.role === "host") scheduleRaceDisplay();
     });
   });
 }
@@ -253,6 +251,9 @@ function follow(session: RaceSession | null) {
   shownView = 0;
   if (race.view) setRaceView(0);
   clearTimeout(mergeTimer);
+  clearTimeout(displayTimer);
+  stopRunRequirements();
+  servedRequirements = NO_REQUIREMENTS;
   held.clear();
   welcomed = false;
   clearTimeout(welcomeTimer);
@@ -689,6 +690,7 @@ function changeHostEdits(next: RaceEdits) {
   hostEdits = next;
   saveHostEdits();
   publishConflicts();
+  if (shownView) scheduleRaceDisplay();
 }
 
 let publishedConflicts = "[]";
@@ -738,6 +740,7 @@ function adoptRoomEdits(edits: RaceEdits) {
   saveHostEdits();
   publishConflicts();
   if (mergedRun && !shownView) writeRun(viewedRun()!);
+  if (shownView) scheduleRaceDisplay();
 }
 
 /** The room's corrections on joining - or, from a relay that keeps none, nothing. */
@@ -834,10 +837,11 @@ async function applyMergedRun() {
   saveHostEdits();
   publishConflicts();
   writeRun(viewedRun()!);
+  if (shownView) scheduleRaceDisplay();
 }
 
 /** What the stream displays read from /race.json: the room, and how to show it. */
-function describeDisplay(session: RaceSession): string {
+function describeDisplay(session: RaceSession, requirements: RunRequirements): string {
   // The race's seed config too, for a runner whose own tracker never sent one -
   // one only ever tracked for while offline - to light the starting gear.
   const room = {
@@ -850,26 +854,69 @@ function describeDisplay(session: RaceSession): string {
     delays: Object.fromEntries(Array.from({ length: session.slot }, (_, index) => [index + 1, runnerDelay(index + 1)])),
     // What the combined run knows of each dungeon, for every runner's row of
     // dungeons: one runner's own run often has none of the hints or marks.
-    dungeons: describeRaceDungeons()
+    dungeons: requirements.dungeons
   };
-  return JSON.stringify({ ...room, ...describeStreamLayout() });
+  return JSON.stringify({ ...room, ...describeStreamLayout(requirements.bosses) });
 }
 
-function describeRaceDungeons(): Record<string, DungeonRequirement> {
+const NO_REQUIREMENTS: RunRequirements = { bosses: {}, dungeons: {} };
+/** What the combined run was last known to know of the bosses and dungeons. */
+let servedRequirements = NO_REQUIREMENTS;
+
+/** What the combined run knows of the bosses and dungeons, while it is the run on screen. */
+function describeShownRequirements(): RunRequirements {
   try {
-    return getDungeonRequirements();
-  } catch {
+    servedRequirements = { bosses: getBossRequirements(), dungeons: getDungeonRequirements() };
+  } catch (error) {
     // Before the seed's logic has loaded, nothing is known about them.
-    return {};
+    console.error("Could not work out the required bosses", error);
+    servedRequirements = NO_REQUIREMENTS;
   }
+  return servedRequirements;
+}
+
+/**
+ * What the combined run knows of the bosses and dungeons, while a runner's run
+ * is on screen: the logic reads the run on screen, so the combined one is asked
+ * in a worker. Until it answers, or if it can't, what was known before stands -
+ * a runner's own run often has none of the hints or marks.
+ */
+async function describeMergedRequirements(): Promise<RunRequirements> {
+  const run = mergedRun && applyRaceEdits(mergedRun, hostEdits, describeNoteLine);
+  const requirements = run ? await getRunRequirements(run) : null;
+  if (requirements) servedRequirements = requirements;
+  return servedRequirements;
+}
+
+let displayTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Tells the stream displays again, once changes have settled. The run on
+ * screen changing asks from the effect in initRaceLink; with a runner's run
+ * shown, a change to the combined run doesn't reach the screen, so the merge
+ * and the corrections ask too.
+ */
+function scheduleRaceDisplay() {
+  clearTimeout(displayTimer);
+  displayTimer = setTimeout(() => {
+    if (race.session?.role === "host" && !idle) void serveRaceDisplay(race.session);
+  }, DISPLAY_DELAY_MS);
 }
 
 let servedDisplay: string | null = null;
+let serveCount = 0;
 
 /** Points the stream display server at a room, or at nothing once the race is over. */
 async function serveRaceDisplay(session: RaceSession | null) {
   if (!isTauriRuntime()) return;
-  const display = session ? describeDisplay(session) : null;
+  const serving = ++serveCount;
+  let display: string | null = null;
+  if (session) {
+    const requirements = shownView ? await describeMergedRequirements() : describeShownRequirements();
+    // Overtaken while the worker worked it out - by a newer change, or the race ending.
+    if (serving !== serveCount) return;
+    display = describeDisplay(session, requirements);
+  }
   if (display === servedDisplay) return;
   servedDisplay = display;
   try {

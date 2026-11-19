@@ -19,7 +19,7 @@
 import { untrack } from "svelte";
 import { WWRSphereEngine } from "$lib/logic";
 import { checked } from "$lib/state/checked.svelte";
-import { data } from "$lib/state/data.svelte";
+import { data, type ReferenceData } from "$lib/state/data.svelte";
 import { dungeonItemsState } from "$lib/state/dungeon-items.svelte";
 import { hints } from "$lib/state/hints.svelte";
 import { itemTrackerState } from "$lib/state/item-tracker.svelte";
@@ -165,16 +165,17 @@ let sphereAnalysisDispatchStart = 0;
 let sentLogicTables = new Map<string, unknown>();
 
 /**
- * Everything the analysis reads, as plain data the worker can be sent. The
- * logic tables go only when they differ from what the worker already has; the
- * rest is small and goes every time, so nothing edited in place can be missed.
+ * Every field of `data` as plain data a worker can be sent. The logic tables
+ * go only when they differ from the ones in `sent`, which a worker already
+ * has; the rest is small and goes every time, so nothing edited in place can
+ * be missed.
  */
-function collectWorkerState(): WorkerStateSnapshot {
+export function snapshotWorkerData(sent: Map<string, unknown>): Partial<ReferenceData> {
   const tables = new Set<string>(LOGIC_TABLE_FIELDS);
   const fields: Record<string, unknown> = {};
   Object.entries(data).forEach(([field, value]) => {
     if (tables.has(field)) {
-      if (sentLogicTables.get(field) === value) return;
+      if (sent.get(field) === value) return;
       // Loaded tables are raw objects (raw-table.ts), which post as they are;
       // only the empty placeholders from before any logic loaded are proxies.
       const proxied = value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype;
@@ -183,6 +184,18 @@ function collectWorkerState(): WorkerStateSnapshot {
     }
     fields[field] = $state.snapshot(value);
   });
+  return fields as Partial<ReferenceData>;
+}
+
+/** Once a worker has been sent `fields`, the logic tables among them are ones it has. */
+export function noteSentLogicTables(sent: Map<string, unknown>, fields: Partial<ReferenceData>): void {
+  LOGIC_TABLE_FIELDS.forEach((field) => {
+    if (field in fields) sent.set(field, fields[field]);
+  });
+}
+
+/** Everything the analysis reads, as plain data the worker can be sent. */
+function collectWorkerState(): WorkerStateSnapshot {
   return {
     checked: $state.snapshot(checked),
     sphere: $state.snapshot(sphere),
@@ -190,7 +203,7 @@ function collectWorkerState(): WorkerStateSnapshot {
     dungeonItemsState: $state.snapshot(dungeonItemsState),
     hints: $state.snapshot(hints),
     settings: $state.snapshot(settings),
-    data: fields
+    data: snapshotWorkerData(sentLogicTables)
   };
 }
 
@@ -270,9 +283,7 @@ function dispatchSphereAnalysisJob(): void {
   try {
     const state = collectWorkerState();
     worker.postMessage({ jobId, state, board });
-    LOGIC_TABLE_FIELDS.forEach((field) => {
-      if (field in state.data) sentLogicTables.set(field, state.data[field]);
-    });
+    noteSentLogicTables(sentLogicTables, state.data);
   } catch (error) {
     sphereAnalysisWorkerBusy = false;
     console.error("[sphere-analysis] failed to dispatch to worker", error);
