@@ -117,7 +117,7 @@
   }
 
   /* The grid's 7th row only ever holds the tracker operator's controls - the
-     chart menu's button, Mark starting's Done button, the name of whatever is
+     chart menu's button, KorL+Starting's Done button, the name of whatever is
      hovered - not the stream's. Left in, any of them added a row, so the
      page's size changed with the seed: charts that matter brought the button. */
   .race-stream-content :global(.tracking-item-grid.item-palette) {

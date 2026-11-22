@@ -6,8 +6,8 @@
   // always records a placement (see $lib/logic/assignment.ts).
   import MapMarkerToggles from "$lib/components/map/MapMarkerToggles.svelte";
   import TrackerSettingsMenu from "$lib/components/tracking/TrackerSettingsMenu.svelte";
-  import { data } from "$lib/state/data.svelte";
   import { clearDeadLocations } from "$lib/logic/dead-locations";
+  import { marksStartingItems } from "$lib/logic/foolish-marks";
   import { redoTrackerAction, startTrackerHistory, trackerHistory, undoTrackerAction } from "$lib/state/tracker-history.svelte";
   import { ui, toggleMarkStartingMode } from "$lib/state/ui.svelte";
   import { race } from "$lib/state/race.svelte";
@@ -16,15 +16,15 @@
   // keeps the history - including actions taken in other windows.
   startTrackerHistory();
 
-  // Only meaningful when the seed actually grants random starting items -
-  // these are the two config flags that do so.
-  const RANDOM_START_OPTIONS = ["start_with_random_item", "random_item_slide_item"];
-  const showMarkStarting = $derived(RANDOM_START_OPTIONS.some((key) => Boolean(data.sphereOptions[key])));
+  // Shown for every seed: the mode marks foolish areas too, and the seed's
+  // random starting items only where it hands any out.
+  const startingItemsToMark = $derived(marksStartingItems());
+  const MARK_TITLE = 'Right-click an area, or click a location, to mark it foolish with a "no" line in the hint notes';
 
   // What the last Clear dead did, rule by rule, goes in front of the button's
   // own description in its tooltip - the row has no room for it.
   const CLEAR_DEAD_TITLE =
-    "Check off the locations that can't hold anything the seed needs: race mode dungeons that aren't required, foolish areas, and what a not-required item hint rules out";
+    "Check off the locations that can't hold anything the seed needs: race mode dungeons that aren't required, foolish areas (no lines included), and what an item that isn't required rules out";
   let clearDeadTitle = $state(CLEAR_DEAD_TITLE);
 
   function handleClearDead() {
@@ -59,19 +59,21 @@
     &#x21aa;&#xfe0e;
   </button>
   <TrackerSettingsMenu />
-  {#if showMarkStarting}
-    <button
-      class="tool-button map-toolbar-button mark-starting-button"
-      class:active={ui.markStartingMode}
-      type="button"
-      title={ui.markStartingMode
-        ? "Click items to mark them as this seed's starting items - click here to stop"
-        : "Mark this seed's random starting items"}
-      onclick={toggleMarkStartingMode}
-    >
-      Mark starting
-    </button>
-  {/if}
+  <button
+    class="tool-button map-toolbar-button mark-starting-button"
+    class:active={ui.markStartingMode}
+    type="button"
+    title={[
+      startingItemsToMark ? "Click items to mark them as this seed's random starting items." : "",
+      `${MARK_TITLE}.`,
+      ui.markStartingMode ? "Click here to stop." : ""
+    ]
+      .filter(Boolean)
+      .join("\n")}
+    onclick={toggleMarkStartingMode}
+  >
+    KorL+Starting
+  </button>
   <button
     class="tool-button map-toolbar-button"
     type="button"

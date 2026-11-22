@@ -33,6 +33,7 @@
   } from "$lib/logic/entrances";
   import { isSphereExitTraversable } from "$lib/logic/sphere-calculation";
   import { clearLocations, toggleLocationChecked } from "$lib/logic/locations";
+  import { getFoolishMarkName, toggleFoolishMark } from "$lib/logic/foolish-marks";
   import { trackerAreaImage } from "$lib/logic/tracker-images";
   import { itemImage } from "$lib/logic/images";
   import { WWRSphereEngine } from "$lib/logic";
@@ -155,6 +156,10 @@
     const option = (event.target as HTMLElement).closest<HTMLElement>(".location-drop-option");
     const location = option?.dataset.location;
     if (!location) return;
+    if (ui.markStartingMode) {
+      markLocationFoolish(location);
+      return;
+    }
     // Highlighting it, not letting go of it: with the setting on, that checks
     // it off too. One already checked - by hand or by a "no" line - is left be.
     const highlighting = ui.pendingLocationForItemAssignment !== location;
@@ -163,7 +168,20 @@
   }
 
   function clearAll() {
+    // In mark mode, the area is marked foolish, as right-clicking it on the map does.
+    if (ui.markStartingMode && (targetKind === "sector" || targetKind === "area")) {
+      toggleFoolishMark("area", getFoolishMarkName(areaName, targetKind));
+      return;
+    }
     clearLocations(locations);
+  }
+
+  /**
+   * Mark mode: a location clicked either way is marked foolish with a "no"
+   * line. One its area's line already checks off is left to that line.
+   */
+  function markLocationFoolish(location: string) {
+    toggleFoolishMark("location", location, isLocationCheckedByNote(location));
   }
 
   function onToggle(location: string) {
@@ -171,6 +189,10 @@
     // this exact location rather than the whole area.
     if (dropDraggedItemOnLocation(location)) {
       onClose();
+      return;
+    }
+    if (ui.markStartingMode) {
+      markLocationFoolish(location);
       return;
     }
     toggleLocationChecked(location);
@@ -287,7 +309,9 @@
                 class:inaccessible={!isLocationAccessible(location)}
                 class:pulsing={ui.pendingLocationForItemAssignment === location}
                 data-location={location}
-                title={getLocationMarkedTitle(location)}
+                title={ui.markStartingMode
+                  ? 'Click to mark foolish with a "no" line in the hint notes - again to take it out'
+                  : getLocationMarkedTitle(location)}
                 onclick={() => onToggle(location)}
                 onmouseenter={(event) => {
                   // The row shows a shortened name, so half a dozen of them

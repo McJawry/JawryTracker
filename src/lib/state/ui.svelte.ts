@@ -84,7 +84,7 @@ export const ui: {
    */
   requirementTooltip: { location: string; x: number; y: number; kind: "location" | "entrance" } | null;
   /**
-   * "Mark starting" - while on, clicking an item in the Item Tracker records
+   * "KorL+Starting" - while on, clicking an item in the Item Tracker records
    * it as one of the seed's random starting items instead of acquiring it.
    * Replaces the old modal dialog; armed automatically after Start New
    * Tracker, since that is when a run's starting items get entered.
@@ -137,7 +137,7 @@ export const ui: {
 });
 
 /**
- * Mark starting is the one piece of `ui` that has to cross windows. Everything
+ * KorL+Starting is the one piece of `ui` that has to cross windows. Everything
  * else here is per-window by design, but Start New Tracker lives in the
  * Control Panel while the Item Tracker you would click is in Main Tracker -
  * undock either and arming the mode in one window never reached the other.

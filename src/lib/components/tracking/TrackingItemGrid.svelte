@@ -38,6 +38,7 @@
   import ItemCardPicker from "./ItemCardPicker.svelte";
   import { WWRSphereEngine } from "$lib/logic";
   import { getUnplacedAcquiredItems } from "$lib/logic/unplaced-items";
+  import { marksStartingItems } from "$lib/logic/foolish-marks";
 
   // Jellies are marked on each sector's location list; this is the running
   // total, in the gap beside Tingle Statue.
@@ -91,6 +92,10 @@
     return stem ? trackerAsset(stem) : trackerAsset("background");
   }
 
+  // Mark mode marks starting items here only for a seed that hands any out;
+  // otherwise the mode is for marking foolish areas, and the items work as usual.
+  const markingStartingItems = $derived(ui.markStartingMode && marksStartingItems());
+
   /** Toggles an item in the seed's random starting items. */
   function toggleStartingItem(itemName: string) {
     const current = sphere.randomStartingItems ?? [];
@@ -113,7 +118,7 @@
   }
 
   function handleLeftClick(itemName: string) {
-    if (ui.markStartingMode) {
+    if (markingStartingItems) {
       toggleStartingItem(itemName);
       return;
     }
@@ -156,7 +161,7 @@
   // popup is raised through shared state rather than owned by this component.
 </script>
 
-<div class="item-palette tracking-item-grid" class:marking-starting={ui.markStartingMode} aria-label="Item Tracker">
+<div class="item-palette tracking-item-grid" class:marking-starting={markingStartingItems} aria-label="Item Tracker">
   <!-- Everything needed to finish is in hand. Sits over the grid rather than
        taking a row of its own, and ignores the pointer so the items under it
        stay clickable. -->
@@ -273,15 +278,15 @@
   {/each}
   {#if ui.markStartingMode}
     <!-- Second way out of the mode, right where the clicking is happening -
-         reaching back up to the toolbar's "Mark starting" button to turn it
+         reaching back up to the toolbar's "KorL+Starting" button to turn it
          off is easy to miss. Lives in the grid's empty 7th row. -->
     <button
       type="button"
       class="done-marking-button"
-      title="Stop marking this seed's random starting items"
+      title="Stop marking starting items and foolish areas"
       onclick={() => setMarkStartingMode(false)}
     >
-      &gt;DONE MARKING STARTING ITEMS&lt;
+      &gt;DONE MARKING&lt;
     </button>
   {:else if ui.hoveredRowName}
     <!-- The full name of whatever is under the pointer: the area a map cell

@@ -2155,7 +2155,7 @@ body.stream-mode .empty-state {
   animation: mark-starting-flash 0.5s ease-in-out infinite;
 }
 
-/* The run being shown, filled in the way an armed Mark starting flashes. */
+/* The run being shown, filled in the way an armed KorL+Starting flashes. */
 .race-view-switcher .map-toolbar-button.active {
   border-color: var(--accent);
   background: var(--accent);
@@ -4246,7 +4246,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   color: #fff;
 }
 
-/* "Mark starting" toggle. While armed it flashes so it is obvious the Item
+/* "KorL+Starting" toggle. While armed it flashes so it is obvious the Item
    Tracker is in a different mode - clicks record starting items rather than
    acquiring them. The fill flashes, not the outline: an opacity pulse on the
    whole button read as the button going faint rather than as an alarm. */
@@ -4510,7 +4510,7 @@ body.popout-window.stream-mode[data-popout="hint-panel"] .popout-section-content
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-/* Same 0.5s flash as "Mark starting" - the two modes read as the same kind of
+/* Same 0.5s flash as "KorL+Starting" - the two modes read as the same kind of
    thing, so they should catch the eye at the same rate. */
 .sector-highlight-prompt {
   position: absolute;

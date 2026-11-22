@@ -11,12 +11,15 @@
 //   island it is entered from as well as under its own name when it picks
 //   foolish areas (calculatePossibleBarrenRegions). A check whose dependent
 //   letter held something required would have kept the area off the list, so
-//   those letters go too.
+//   those letters go too. A "no" line naming an area means foolish as well.
 // - A location hinted to hold a not-required item holds nothing required.
-// - Nor does anything that needs that item to reach: whatever sat there would
-//   make the item required. Only checks that need every copy of it, though -
-//   one spare Progressive Sword not being required says nothing about a chest
-//   behind the first one.
+// - An item found somewhere foolish - by a hint, or recorded there - is not
+//   required either: upstream only lets an area be foolish when each of its
+//   items could be left out (Location::currentItemCanBeBarren).
+// - Nor does anything that needs a not-required item to reach: whatever sat
+//   there would make the item required. Only checks that need every copy of
+//   it, though - one spare Progressive Sword not being required says nothing
+//   about a chest behind the first one.
 //
 // Only what the tracker knows is used: an entrance not recorded yet leads
 // nowhere, so a check behind it is never ruled out on a guess.
@@ -351,6 +354,85 @@ function isNotRequiredHint(hint: Hint): boolean {
   return (hint.type === "item" || hint.type === "location") && !hint.needsReview && hint.requirement?.key === "not-required";
 }
 
+/**
+ * The areas hinted foolish, by "<area> foolish" lines and by "no" lines - a
+ * "no" line naming an area means it is foolish too, whether it was typed or
+ * marked from the map.
+ */
+function getFoolishAreaNames(): string[] {
+  const named = new Map<string, string>();
+  hints
+    .filter((hint) => !hint.needsReview)
+    .forEach((hint) => {
+      if (hint.type === "barren") named.set(normalize(hint.left.name), hint.left.name);
+      if (hint.type !== "no") return;
+      (hint.checks ?? [])
+        .filter((check) => check.kind === "area")
+        .forEach((check) => named.set(normalize(check.name), check.name));
+    });
+  return [...named.values()];
+}
+
+/** The single locations a "no" line names: ones that hold nothing the seed needs. */
+function getFoolishLocationNames(): string[] {
+  return hints
+    .filter((hint) => hint.type === "no" && !hint.needsReview)
+    .flatMap((hint) => (hint.checks ?? []).filter((check) => check.kind === "location").map((check) => check.name));
+}
+
+/**
+ * Items known to sit somewhere foolish - by an item or location hint, or
+ * recorded at the location - so not required.
+ *
+ * The randomizer only lets an area be foolish when every item in it could
+ * be left out without anything that needs it holding something required
+ * (Location::currentItemCanBeBarren upstream). Two kinds of check can hold
+ * one that matters all the same, and are not read:
+ * - A dungeon key kept to its own dungeon may sit in a foolish area
+ *   (GameItem::canBeInBarrenRegion).
+ * - With Require Boss Items on, a required dungeon's boss holds a major item
+ *   the area's foolishness says nothing about (placeBossItems marks it as
+ *   expected). An item hint never points at one, but a location hint, or an
+ *   item recorded there, can.
+ * Nor is an item a hint calls required or possibly required: one of the two
+ * lines is a typo.
+ */
+function getItemsAtFoolishPlaces(
+  foolishAreas: string[],
+  foolish: Set<string>,
+  bosses: Record<string, BossRequirement>
+): string[] {
+  const areaNames = new Set(foolishAreas.map(normalize));
+  const isFoolishArea = (area: string) => {
+    if (areaNames.has(normalize(area))) return true;
+    const inside = getSphereHintAreaLocations(area);
+    return inside.length > 0 && inside.every((location) => foolish.has(normalize(location)));
+  };
+  const bossItems = data.sphereOptions.required_boss_items
+    ? new Set(
+        Object.entries(bosses)
+          .filter(([, requirement]) => requirement !== "unrequired")
+          .map(([boss]) => normalize(BOSS_LOCATIONS[boss] ?? ""))
+      )
+    : new Set<string>();
+  const isFoolishCheck = (location: string) => foolish.has(normalize(location)) && !bossItems.has(normalize(location));
+
+  const labeled = hints.filter((hint) => (hint.type === "item" || hint.type === "location") && !hint.needsReview);
+  const mattering = new Set(
+    labeled.filter((hint) => hint.requirement && hint.requirement.key !== "not-required").map((hint) => normalize(hint.left.name))
+  );
+  const found = [
+    ...labeled
+      .filter((hint) => hint.type === "item" && (hint.areas ?? [hint.right.name]).some(isFoolishArea))
+      .map((hint) => hint.left.name),
+    ...labeled.filter((hint) => hint.type === "location" && isFoolishCheck(hint.right.name)).map((hint) => hint.left.name),
+    ...sphere.placements.filter((placement) => isFoolishCheck(placement.location)).map((placement) => placement.item)
+  ];
+  return [...new Set(found)].filter(
+    (item) => !mattering.has(normalize(item)) && !isDungeonKeyName(item) && Boolean(getSphereInventoryItemKey(item))
+  );
+}
+
 /** The inventory with one copy of an item out - never one the seed starts you with. */
 function withoutOneCopy(inventory: string[], itemKey: string): string[] | null {
   const starting = data.sphereStartingGear.filter(
@@ -428,23 +510,35 @@ export function findDeadLocations(): DeadLocationReport {
     else notes.push(dungeonRule.note);
   }
 
-  hints
-    .filter((hint) => hint.type === "barren" && !hint.needsReview)
-    .forEach((hint) => rules.push({ label: `Foolish: ${hint.left.name}`, locations: withOutsideDependents(getFoolishLocations(hint.left.name)) }));
+  // A "no" line's own area is checked off by the line itself; what this adds
+  // is the rest of what foolish means - a dungeon entered from a foolish
+  // island, and the letters elsewhere that hang on the area's checks.
+  const foolishAreas = getFoolishAreaNames();
+  const foolish = new Set(getFoolishLocationNames().map(normalize));
+  foolishAreas.forEach((area) => {
+    const inside = getFoolishLocations(area);
+    inside.forEach((location) => foolish.add(normalize(location)));
+    rules.push({ label: `Foolish: ${area}`, locations: withOutsideDependents(inside) });
+  });
 
   const notRequired = hints.filter(isNotRequiredHint);
   const holding = notRequired.filter((hint) => hint.type === "location").map((hint) => hint.right.name);
   if (holding.length) rules.push({ label: "Holding a not-required item", locations: holding });
 
-  const items = [...new Set(notRequired.map((hint) => hint.left.name))];
+  // Why each item is known not to be required: hinted so, or found somewhere foolish.
+  const bosses = getBossRequirements();
+  const items = new Map<string, string>(notRequired.map((hint) => [hint.left.name, "not required"]));
+  getItemsAtFoolishPlaces(foolishAreas, foolish, bosses).forEach((item) => {
+    if (![...items.keys()].some((known) => normalize(known) === normalize(item))) items.set(item, "in a foolish area");
+  });
   const goals = [BOSS_LOCATIONS.Ganondorf, ...getKnownRequiredBosses().map((boss) => BOSS_LOCATIONS[boss] ?? "")];
-  if (items.length && hasUnknownSideRoutes()) {
+  if (items.size && hasUnknownSideRoutes()) {
     notes.push("Checks needing a not-required item: left alone while cave, door or misc entrances are unrecorded");
   } else {
-    items.forEach((item) => {
+    items.forEach((reason, item) => {
       const locations = getLocationsNeedingItem(item, goals);
-      if (locations) rules.push({ label: `Needs ${item} (not required)`, locations });
-      else notes.push(`Needs ${item} (not required): left alone - as far as the tracker knows, beating the seed needs it`);
+      if (locations) rules.push({ label: `Needs ${item} (${reason})`, locations });
+      else notes.push(`Needs ${item} (${reason}): left alone - as far as the tracker knows, beating the seed needs it`);
     });
   }
 
@@ -460,7 +554,7 @@ export function findDeadLocations(): DeadLocationReport {
       .map((hint) => normalize(hint.right.name))
   );
   kept.add(normalize(BOSS_LOCATIONS.Ganondorf));
-  Object.entries(getBossRequirements())
+  Object.entries(bosses)
     .filter(([, requirement]) => requirement !== "unrequired")
     .forEach(([boss]) => kept.add(normalize(BOSS_LOCATIONS[boss] ?? "")));
   const pool = new Set(getAvailableLocations().map(normalize));

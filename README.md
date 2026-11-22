@@ -50,7 +50,7 @@ what you have found, and shows where each boss path can still lead.
    settings. If you generate a new seed later, ⚙️ and its **Sync** button show ⚠️ until you
    press **Sync**. Your current run never changes on its own.
 4. Press **Start New Tracker** in the Control Panel when you start a new seed. If the seed gives
-   you random starting items, the tracker switches to *Mark starting* mode so you can click them
+   you random starting items, the tracker switches to *KorL+Starting* mode so you can click them
    in (see [Toolbar](#toolbar)).
 
 ---
@@ -81,7 +81,7 @@ The tracker is split into sections: **Control Panel**, **Main Tracker**, **Spher
 | **↩︎** (red) | Undo the last action. Undo covers everything that changes the run: notes, checked locations, items, dungeon items, charts, placements, entrances and marked sectors, including actions taken in other windows. Typing in the notes undoes a line at a time. Settings, layout and menus aren't affected. The history lasts while the app is open. |
 | **↪︎** (green) | Redo the last undone action. |
 | **⚙️** | Tracker settings: see below. Shows ⚠️ when no randomizer folder is set, or when the randomizer's `config.yaml` has changed since the last sync. |
-| **Mark starting** | Only shown when the seed gives out random starting items. While it flashes, clicking an item in the Item Tracker marks it as one of this seed's starting items. Click it again, or **>DONE MARKING STARTING ITEMS<** under the item grid, to stop. |
+| **KorL+Starting** | While it's on, right-clicking an area on the map, or clicking a location in a location list, marks it foolish: the tracker adds a `no` line for it to the hint notes, just as if you'd typed it. Do the same again to take the line out. **Clear All** in a location list marks the whole area. If the seed gives out random starting items, clicking an item in the Item Tracker marks it as one of them, and the item grid flashes. Click the button again, or **>DONE MARKING<** under the item grid, to stop. |
 | **Clear dead** | Checks off every location that can't hold anything the seed needs (see [Clear dead](#clear-dead) below). One undo puts them all back, and the tooltip lists what the last press cleared. |
 | Ho Ho / Blue Chu checkboxes | Show or hide the Old Man Ho Ho and Blue Chu Jelly markers on the map, when the seed tracks them. |
 | **Mark sectors leading to a required boss** | Click sectors on the map to flag them with a marker. While you're marking, sectors where the seed's entrance settings can't put a required boss are shaded and can't be clicked. The marker spins once you can open the door on that sector, and settles once the boss behind it is found. Right-click the map to stop marking. |
@@ -115,14 +115,23 @@ Each press checks off what the seed's settings, your hints and your boss marks r
   placed, a dungeon recorded on an unmarked island is ruled out even before you know the rest.
   A path hint that names a dungeon, like `DRC to Gohdan`, counts that dungeon as required,
   whichever boss it points to: race mode leaves path items out of the other dungeons.
-- **Foolish areas**: every location in the area, plus any dungeon whose entrance is on a foolish
-  island, as the randomizer counts it.
-- **Not-required items** (`n`): the location a location hint names, and every location that
-  needs that item to reach. For an item with several copies, only locations that need every copy
-  are cleared. This part waits while any cave, door or misc entrance is still unrecorded, since
-  one of those could open another way in. It also skips an item the tracker thinks beating the
-  seed needs: either the hint is wrong, or the tracker doesn't know yet which race mode bosses
-  are left out.
+- **Foolish areas**, from `foolish` lines and from `no` lines naming an area: every location in
+  the area, plus any dungeon whose entrance is on a foolish island, as the randomizer counts it,
+  and the letters elsewhere that hang on those locations.
+- **Not-required items**: the location a location hint names, and every location that needs
+  that item to reach. For an item with several copies, only locations that need every copy are
+  cleared. An item counts as not required when a hint says so (`n`), or when it's known to be
+  somewhere foolish: an item or location hint puts it in a foolish area or at a location a `no`
+  line names, or it's recorded at such a location. The randomizer only hints an area foolish
+  when none of its items are needed. Two exceptions, which can still matter in a foolish area:
+  - a small or big key kept to its own dungeon
+  - with **Require Boss Items** on, the item at a required dungeon's boss, which the randomizer
+    places there whether or not the dungeon is foolish
+
+  A hint that calls the item required or possibly required wins. This part waits while any cave,
+  door or misc entrance is still unrecorded, since one of those could open another way in. It
+  also skips an item the tracker thinks beating the seed needs: either a hint is wrong, or the
+  tracker doesn't know yet which race mode bosses are left out.
 
 A location behind an entrance you haven't recorded is never cleared, and neither is a location
 a hint says holds a required or possibly required item. In race mode, a boss's heart container
@@ -281,7 +290,7 @@ closest item, area, location or boss, so short forms work.
 | `hookshot at needle rock` | **Item hint**: the Hookshot is somewhere in an area. `in` and `on` work too. |
 | `bombs in windfall jail maze chest` | **Location hint**: when the text matches a single location, the hint points at that location. |
 | `sword r at headstone` | Item hint marked **required**. Add `r`, `p` or `n` after the item for *required*, *possibly required* or *not required*. |
-| `no ganon maze` | Marks an area or a single location as checked without visiting it. Several areas can be named at once, and the line shows in red. It isn't a hint, so it doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. In race mode, a line naming a dungeon leaves its boss unchecked, since a required dungeon's boss still has to be beaten. **Clear dead** checks off the bosses race mode leaves out. |
+| `no ganon maze` | Marks an area or a single location as **foolish**, and checks it off without visiting it. Several areas can be named at once, and the line shows in red. **KorL+Starting** mode writes these lines for you (see [Toolbar](#toolbar)). It doesn't show in the Hint Panel, unless the tracker can't tell what it names: then it shows under **Review**. In race mode, a line naming a dungeon leaves its boss unchecked, since a required dungeon's boss still has to be beaten. **Clear dead** checks off the bosses race mode leaves out, and treats the line as foolish (see [Clear dead](#clear-dead)). |
 
 Common abbreviations work for areas, for example **FF**, **DRI**, **DRC**, **FW**, **FH**,
 **GT**, **NFI** and **SFI**, and for bosses, for example **KD**. A line the tracker can't read

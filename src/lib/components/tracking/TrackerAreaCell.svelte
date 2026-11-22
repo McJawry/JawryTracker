@@ -12,6 +12,7 @@
   // right-click-clears-the-area is not implemented here, flagged to the user
   // as a deliberate divergence.
   import { clearLocations, getAreaCount, getAreaLocationChoices } from "$lib/logic/locations";
+  import { getFoolishMarkName, toggleFoolishMark } from "$lib/logic/foolish-marks";
   import { streamLook } from "$lib/state/stream-look.svelte";
   import {
     openLocationDropList,
@@ -144,6 +145,12 @@
     if ((event.target as HTMLElement).closest("button")) return;
     const locations = getAreaLocationChoices(areaName, targetKind);
     if (!locations.length) return;
+    // In mark mode the area is marked foolish instead - a "no" line, which
+    // checks it off the same way.
+    if (ui.markStartingMode) {
+      toggleFoolishMark("area", getFoolishMarkName(areaName, targetKind));
+      return;
+    }
     clearLocations(locations, { withDependents: true });
   }
 
