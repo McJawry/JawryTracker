@@ -16,7 +16,7 @@ import type { Hint } from "$lib/state/hints.svelte";
 import type { SpherePlacement } from "$lib/state/sphere.svelte";
 import type { SphereTrackingKnowledge } from "$lib/logic/sphere-tracking-knowledge";
 import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
-import { answersPathBoss, getBossLocation } from "$lib/logic/sphere-boss-icons";
+import { answersPathBoss, createPathCopyFilter, getBossLocation, pathCopySphereOf } from "$lib/logic/sphere-boss-icons";
 import { getPathHintAreaLocations, getSphereHintAreaLocations } from "$lib/logic/locations";
 import {
   getMaximalSphereLogicInventory,
@@ -394,8 +394,9 @@ function buildPathHintCandidates(
     ...Object.values(calculation.dependencies).flat(),
     ...[...relativeUnknown.dependencies.values()].flat()
   ]);
+  const copyFilter = createPathCopyFilter(knowledge.placements, pathCopySphereOf(calculation));
   const answering = new Set(
-    exactCandidates.filter((placement) => answersPathBoss(placement, hint.right.name)).map((placement) => placement.id)
+    exactCandidates.filter((placement) => answersPathBoss(placement, hint.right.name, copyFilter)).map((placement) => placement.id)
   );
   // A recorded item in the hinted area is a candidate - drawn a line to - when
   // the logic asks for it anywhere, or it measures as this boss's path item.

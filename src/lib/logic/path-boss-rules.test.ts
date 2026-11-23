@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAreaBranchModel,
   capDuplicateBossIcons,
+  isAmongNeededCopies,
   planDuplicatePathBossIcons,
   planPathBossIcons,
   withoutSettledBosses
@@ -286,6 +287,93 @@ describe("what the bosses get paired against", () => {
   it("leaves a location that needs nothing from the area in no branch at all", () => {
     const loose = model({ ...pawprint, locations: { ...pawprint.locations, areaChest: [] } });
     expect(loose.branchesOf("areaChest")).toEqual([]);
+  });
+});
+
+/**
+ * Windfall as it really was: Farore's Pearl opened the Tower of the Gods
+ * sector's door, which led into Dragon Roost Cavern, whose Deku Leaf both
+ * bosses needed - and the Spoils Bag found in there is what the Potion Shop
+ * and Dampa wanted. Both are Windfall's own checks, reached through the
+ * Pearl's branch. Scenario 3 clears the branch of both bosses, but only what
+ * lies outside the area: a Windfall check can still hold the other boss's
+ * path item, since one Pearl cannot be both.
+ */
+describe("the hinted area's own locations", () => {
+  const placements: Record<string, { deps?: string[]; hard?: string[] }> = {
+    pearl: {},
+    wallet: {},
+    bottle: {},
+    dekuLeaf: { deps: ["pearl"], hard: ["boss1", "boss2"] },
+    spoilsBag: { deps: ["pearl"] }
+  };
+  const locations: Record<string, string[]> = { potionShop: ["spoilsBag"], dragonRoostChest: ["spoilsBag"] };
+  const areaLocations = new Set(["potionShop"]);
+
+  function plan() {
+    const built = buildAreaBranchModel({
+      bosses: TWO,
+      rootIds: ["pearl", "wallet", "bottle"],
+      placementIds: Object.keys(placements),
+      dependenciesOf: (id) => placements[id]?.deps ?? [],
+      isHardRequired: (id, boss) => (placements[id]?.hard ?? []).includes(boss),
+      availableLocations: Object.keys(locations),
+      locationDependenciesOf: (location) => locations[location] ?? [],
+      isAreaLocation: (location) => areaLocations.has(location)
+    });
+    const drawn = planPathBossIcons(TWO, built.candidatesByBoss, built.locations, built.openRootIds);
+    return { built, icons: (key: string) => [...(drawn.get(key) ?? [])].sort() };
+  }
+
+  it("marks which locations are the area's own", () => {
+    const { built } = plan();
+    expect(built.locations.map((location) => [location.key, location.inArea])).toEqual([
+      ["potionShop", true],
+      ["dragonRoostChest", false]
+    ]);
+  });
+
+  it("keeps searching an area location reached through a branch that answers both bosses", () => {
+    expect(plan().icons("potionShop")).toEqual(["boss1", "boss2"]);
+  });
+
+  it("still clears that branch of both bosses outside the area - scenario 3", () => {
+    expect(plan().icons("dragonRoostChest")).toEqual([]);
+  });
+});
+
+/**
+ * Which recorded copies of an item can be a path item. Windfall again: the
+ * Potion Shop's Magic Meter (sphere 5) is a second copy, and both bosses need
+ * just one - the one from Dragon Roost (sphere 1). Counted as a path item, it
+ * and the Pearl looked like one item per boss, and every Windfall icon went
+ * while Molgera's real path item, the Bow at the Cafe Postman, was unfound.
+ */
+describe("which copies can be a path item", () => {
+  it("keeps the earliest copy and drops a later one when one is enough", () => {
+    expect(isAmongNeededCopies(1, [1, 5], 1)).toBe(true);
+    expect(isAmongNeededCopies(5, [1, 5], 1)).toBe(false);
+  });
+
+  it("keeps as many as the boss needs", () => {
+    expect(isAmongNeededCopies(5, [1, 5, 9], 2)).toBe(true);
+    expect(isAmongNeededCopies(9, [1, 5, 9], 2)).toBe(false);
+  });
+
+  it("keeps copies tied in sphere - nothing says which came first", () => {
+    expect(isAmongNeededCopies(3, [3, 3], 1)).toBe(true);
+  });
+
+  it("drops a copy the spheres can't place once an earlier one is placed", () => {
+    expect(isAmongNeededCopies(Infinity, [2, Infinity], 1)).toBe(false);
+    // Neither placed: no telling, so both stay.
+    expect(isAmongNeededCopies(Infinity, [Infinity, Infinity], 1)).toBe(true);
+  });
+
+  it("keeps every copy when the boss needs all of them, none, or can't be reached", () => {
+    expect(isAmongNeededCopies(5, [1, 5], 2)).toBe(true);
+    expect(isAmongNeededCopies(5, [1, 5], 0)).toBe(true);
+    expect(isAmongNeededCopies(5, [1, 5], null)).toBe(true);
   });
 });
 

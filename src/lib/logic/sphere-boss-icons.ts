@@ -30,6 +30,7 @@ import type { RelativeUnknownResult } from "$lib/logic/sphere-inference";
 import {
   buildAreaBranchModel,
   capDuplicateBossIcons,
+  isAmongNeededCopies,
   planDuplicatePathBossIcons,
   planPathBossIcons,
   withoutSettledBosses
@@ -50,6 +51,7 @@ const sphereHardBossRequirementCache = new Map<string, boolean>();
 export function clearHardBossRequirementCache(): void {
   sphereHardBossRequirementCache.clear();
   sphereSoftBossCandidateCache.clear();
+  sphereNeededCopiesCache.clear();
 }
 
 /**
@@ -272,8 +274,94 @@ export function isPossiblePathItemForBoss(placement: SpherePlacement | undefined
   return !!itemKey && getPossiblePathItemKeysForBoss(bossName).has(itemKey);
 }
 
-/** Either test: the item the boss cannot do without, or one it could turn on. */
-export function answersPathBoss(placement: SpherePlacement | undefined, bossName: string): boolean {
+const sphereNeededCopiesCache = new Map<string, number | null>();
+
+/**
+ * How many copies of an item beyond the seed's starting ones the boss needs,
+ * everything else in hand - or null when it can't be reached however many
+ * there are. Asked from the start and, as isHardRequiredItemForBoss does, from
+ * the boss's own dungeon; the larger answer counts.
+ */
+function getNeededCopiesForBoss(bossName: string, itemKey: string): number | null {
+  const bossLocation = getBossLocation(bossName);
+  if (!bossLocation) return null;
+  const cacheKey = `${bossAnswerWorldKey()}|${placedOwnDungeonKeySignature()}|${normalize(bossName)}|${itemKey}`;
+  if (sphereNeededCopiesCache.has(cacheKey)) return sphereNeededCopiesCache.get(cacheKey)!;
+
+  const maximal = getMaximalSphereLogicInventory();
+  const reduced = withoutFoundCopies(maximal, itemKey);
+  const copies = maximal.filter((item) => getSphereInventoryItemKey(item) === itemKey).slice(0, maximal.length - reduced.length);
+  const bossKey = normalize(bossLocation);
+  const dungeonStart = data.sphereWorld?.dungeonStarts?.[normalize(getAreaFromLocation(bossLocation))];
+  const variants: ReachabilityOptions[] = [{ ignoreCheckedLocations: true }];
+  if (dungeonStart) variants.push({ ignoreCheckedLocations: true, additionalStartAreas: [dungeonStart] });
+
+  let needed: number | null = null;
+  variants.forEach((options) => {
+    const reaches = (items: string[]) => getSphereReachabilityWithPlacedDungeonKeys(items, options).has(bossKey);
+    if (!reaches(maximal)) return;
+    let count = 0;
+    while (count < copies.length && !reaches([...reduced, ...copies.slice(0, count)])) count += 1;
+    needed = Math.max(needed ?? 0, count);
+  });
+  sphereNeededCopiesCache.set(cacheKey, needed);
+  return needed;
+}
+
+/** Whether a recorded copy can be a boss's path item - see createPathCopyFilter. */
+export type PathCopyFilter = (placement: SpherePlacement, bossName: string) => boolean;
+
+/**
+ * Which recorded copies of an item can be a boss's path item.
+ *
+ * The tests above ask whether the boss needs the item at all, every copy
+ * withheld. But a path item is one location's: the boss can't be reached with
+ * that location's item taken away (calculatePossiblePathLocations upstream).
+ * Where the boss needs fewer copies than were found, the earliest ones in
+ * sphere order are obtained without the later ones, so taking a later one away
+ * leaves the boss where it was - it is no one's path item. Two Magic Meters
+ * where one is enough: only the first answers a boss, and the second can't
+ * stand in for another boss's path item beside it.
+ *
+ * Copies in the same sphere are all kept, as is every copy while the spheres
+ * don't place enough of them to tell.
+ */
+export function createPathCopyFilter(
+  placements: SpherePlacement[],
+  sphereOf: (location: string) => number | undefined
+): PathCopyFilter {
+  const byKey = new Map<string, SpherePlacement[]>();
+  placements.forEach((placement) => {
+    const key = getSphereInventoryItemKey(placement.item, placement.location);
+    if (!key) return;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(placement);
+  });
+  const sphere = (placement: SpherePlacement) => sphereOf(placement.location) ?? Number.POSITIVE_INFINITY;
+  return (placement, bossName) => {
+    const key = getSphereInventoryItemKey(placement.item, placement.location);
+    const copies = key ? byKey.get(key) : undefined;
+    if (!key || !copies || copies.length < 2) return true;
+    return isAmongNeededCopies(sphere(placement), copies.map(sphere), getNeededCopiesForBoss(bossName, key));
+  };
+}
+
+/** The sphere order createPathCopyFilter ranks copies by: before the pare-down moved anything. */
+export function pathCopySphereOf(calculation: SphereCalculationResult): (location: string) => number | undefined {
+  const spheres = calculation.locationSpheresWithHeld ?? calculation.locationSpheres;
+  return (location) => {
+    const sphere = spheres[normalize(location)];
+    return Number.isInteger(sphere) ? sphere : undefined;
+  };
+}
+
+/**
+ * Either test: the item the boss cannot do without, or one it could turn on -
+ * and, given the run's copies, one of the copies it could be reached with.
+ */
+export function answersPathBoss(placement: SpherePlacement | undefined, bossName: string, copyFilter?: PathCopyFilter): boolean {
+  if (!placement) return false;
+  if (copyFilter && !copyFilter(placement, bossName)) return false;
   return isHardRequiredItemForBoss(placement, bossName) || isPossiblePathItemForBoss(placement, bossName);
 }
 
@@ -285,6 +373,7 @@ export function buildPathBossLocationIcons(
   const bossesByLocation = new Map<string, string[]>();
   const collectedPlacements = knowledge.placements.filter((placement) => !placement.fromHint);
   const placementsById = new Map(collectedPlacements.map((placement) => [placement.id, placement]));
+  const copyFilter = createPathCopyFilter(knowledge.placements, pathCopySphereOf(calculation));
   const occupiedLocationKeys = new Set(knowledge.placements.map((placement) => normalize(placement.location)));
   const availableLocations = unique([...calculation.sphereLocations.flatMap((locations) => locations || []), ...(relativeUnknown.availableLocations || [])]).filter(
     (location) => !occupiedLocationKeys.has(normalize(location)) && !isLocationMarked(location)
@@ -351,7 +440,7 @@ export function buildPathBossLocationIcons(
       // One boss: any hard-required item in the tree is its path item. Left
       // exactly as it was, short-circuit included - the branch model below is
       // only needed once bosses have to compete for distinct items.
-      const resolved = [...treeSourceIds].some((sourceId) => answersPathBoss(placementsById.get(sourceId), group.bosses[0]));
+      const resolved = [...treeSourceIds].some((sourceId) => answersPathBoss(placementsById.get(sourceId), group.bosses[0], copyFilter));
       if (resolved) return;
       treeAvailableLocations.forEach((location) => addBoss(location, group.bosses[0]));
       return;
@@ -379,9 +468,10 @@ export function buildPathBossLocationIcons(
         const placement = byId.get(placementId);
         return placement ? placementDependencies(placement) : [];
       },
-      isHardRequired: (placementId, slot) => answersPathBoss(byId.get(placementId), slotBoss.get(slot)!),
+      isHardRequired: (placementId, slot) => answersPathBoss(byId.get(placementId), slotBoss.get(slot)!, copyFilter),
       availableLocations: treeAvailableLocations,
-      locationDependenciesOf: locationDependencies
+      locationDependenciesOf: locationDependencies,
+      isAreaLocation: (location) => hintedAreaLocations.has(normalize(location))
     });
     const answeringBranchCounts = new Map([...copies.keys()].map((bossName) => [bossName, candidatesByBoss.get(bossName)?.length ?? 0]));
 

@@ -7,10 +7,25 @@
 export interface AreaBranchModel {
   /** Boss -> the area's own items that could be its path item. */
   candidatesByBoss: Map<string, string[]>;
-  /** Each unchecked location in the tree, and the branches it hangs off. */
-  locations: Array<{ key: string; branches: Set<string> }>;
+  /**
+   * Each unchecked location in the tree, the branches it hangs off, and
+   * whether it is in the hinted area itself.
+   */
+  locations: BranchLocation[];
   /** Branches that still have unchecked locations under them. */
   openRootIds: Set<string>;
+}
+
+/**
+ * An unchecked location in a hinted area's tree. One in the area itself can
+ * still hang off a branch - reaching it takes something found down there - but
+ * it is never only down that branch: whatever it holds is one of the area's
+ * own items, so it can be a path item the hint names.
+ */
+export interface BranchLocation {
+  key: string;
+  branches: Set<string>;
+  inArea?: boolean;
 }
 
 /**
@@ -32,8 +47,11 @@ export function buildAreaBranchModel(input: {
   isHardRequired: (placementId: string, bossName: string) => boolean;
   availableLocations: string[];
   locationDependenciesOf: (location: string) => string[];
+  /** Whether a location is in the hinted area itself, rather than only downstream of it. */
+  isAreaLocation?: (location: string) => boolean;
 }): AreaBranchModel {
   const { bosses, rootIds, placementIds, dependenciesOf, isHardRequired, availableLocations, locationDependenciesOf } = input;
+  const isAreaLocation = input.isAreaLocation ?? (() => false);
 
   // Which branches each placement hangs off, spread along the dependency edges
   // until it stops changing.
@@ -65,7 +83,11 @@ export function buildAreaBranchModel(input: {
     locationDependenciesOf(location).forEach((sourceId) => (rootsByPlacement.get(sourceId) ?? new Set<string>()).forEach((rootId) => roots.add(rootId)));
     return roots;
   };
-  const locations = availableLocations.map((location) => ({ key: location, branches: branchesFor(location) }));
+  const locations: BranchLocation[] = availableLocations.map((location) => ({
+    key: location,
+    branches: branchesFor(location),
+    inArea: isAreaLocation(location)
+  }));
   // A branch with unchecked locations still hanging off it is open: it can
   // still turn out to hold something it is not yet known to.
   const openRootIds = new Set<string>();
@@ -88,7 +110,7 @@ export function buildAreaBranchModel(input: {
 export function planPathBossIcons(
   bosses: string[],
   candidatesByBoss: Map<string, string[]>,
-  locations: Array<{ key: string; branches: Set<string> }>,
+  locations: BranchLocation[],
   openRootIds: Set<string>
 ): Map<string, string[]> {
   const plan = new Map<string, string[]>();
@@ -108,10 +130,12 @@ export function planPathBossIcons(
   // with for a boss once both are: what it holds could still be what ties the
   // other one to that boss. Private Oasis's upper floor wants the Skull Hammer
   // and the Cabana Deed - the Hammer answering Helmaroc King says nothing about
-  // whether the Deed does. The area's own locations hang off no branch, and are
-  // searched for everyone.
-  const onlyDown = (location: { branches: Set<string> }, rootIds: string[]) =>
-    location.branches.size > 0 && [...location.branches].every((rootId) => rootIds.includes(rootId));
+  // whether the Deed does. The area's own locations are searched for everyone,
+  // even one only reached through a branch: Windfall's Potion Shop wants a Spoils
+  // Bag found down the Farore's Pearl branch, and what it holds is a Windfall
+  // item all the same - the other boss's path item, for all anyone knows.
+  const onlyDown = (location: BranchLocation, rootIds: string[]) =>
+    !location.inArea && location.branches.size > 0 && [...location.branches].every((rootId) => rootIds.includes(rootId));
 
   unresolvedBosses.forEach((bossName) => {
     // A branch whose own item is already known to be required for this boss is
@@ -180,6 +204,24 @@ function getUnresolvedPathBosses(bosses: string[], candidates: Map<string, strin
 
   const paired = maxMatching(bosses);
   return bosses.filter((bossName) => maxMatching(bosses.filter((other) => other !== bossName)) === paired);
+}
+
+/**
+ * Whether one recorded copy of an item can be a boss's path item, given the
+ * sphere of every recorded copy (Infinity where the spheres can't place one)
+ * and how many copies the boss needs.
+ *
+ * A path item is one location's: taking that location's item away leaves the
+ * boss out of reach. The earliest copies are got without the later ones, so
+ * when the boss needs fewer than were found, a later copy can be taken away
+ * and the boss is still reached with the earlier ones - two Magic Meters where
+ * one is enough, and only the first is anyone's path item. Copies tied in
+ * sphere are all kept, since nothing tells which came first.
+ */
+export function isAmongNeededCopies(sphere: number, spheres: number[], needed: number | null): boolean {
+  if (!needed || needed >= spheres.length) return true;
+  const ordered = [...spheres].sort((first, second) => first - second);
+  return sphere <= ordered[needed - 1];
 }
 
 /**
